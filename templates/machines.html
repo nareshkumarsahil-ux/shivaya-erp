@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}Machines{% endblock %}
+{% block page_title %}Machines{% endblock %}
+{% block content %}
+{% if show_add and current_user_role == 'admin' %}
+<div class="panel">
+  <div class="panel-head"><h3>➕ Add Machine</h3><a class="btn btn-outline btn-sm" href="/machines">✕ Close</a></div>
+  <div class="panel-body">
+    <form method="post">
+      <div class="form-grid">
+        <div class="field full"><label>Machine Name *</label><input name="name" required placeholder="e.g. Solder Mask Printer"></div>
+        <div class="field"><label>Status</label>
+          <select name="status"><option value="idle">Idle</option><option value="running">Running</option><option value="maintenance">Maintenance</option></select>
+        </div>
+        <div class="field"><label>Current Job</label><input name="current_job" placeholder="e.g. #5"></div>
+        <div class="full"><button class="btn" type="submit">Add Machine</button></div>
+      </div>
+    </form>
+  </div>
+</div>
+{% elif current_user_role == 'admin' %}
+<div class="toolbar" style="justify-content:flex-end"><a class="btn" href="/machines?add=1">＋ Add Machine</a></div>
+{% endif %}
+
+<div class="cards" style="grid-template-columns:repeat(auto-fill,minmax(230px,1fr))">
+  {% for r in rows %}
+  <div class="stat">
+    <div class="top">
+      <span class="lbl mono">{{ r.code }} · {{ r.name }}</span>
+      <span class="ic {{'ic-mint' if r.status=='running' else 'ic-yellow' if r.status=='maintenance' else 'ic-gray'}}">
+        {{'🏭' if r.status=='running' else '🔧' if r.status=='maintenance' else '💤'}}
+      </span>
+    </div>
+    <div class="num" style="font-size:15px">
+      <span class="badge {{'b-done' if r.status=='running' else 'b-amber' if r.status=='maintenance' else 'b-gray'}}">{{ r.status|upper }}</span>
+    </div>
+    <div class="sub">Current job: {{ r.current_job or '—' }}</div>
+    <form method="post" action="/machines/{{ r.id }}/status" style="display:flex;gap:6px;margin-top:10px">
+      <select name="status" style="flex:1;padding:6px 8px;border:1px solid var(--border);border-radius:7px;font-size:12px">
+        <option value="running" {{'selected' if r.status=='running'}}>Running</option>
+        <option value="idle" {{'selected' if r.status=='idle'}}>Idle</option>
+        <option value="maintenance" {{'selected' if r.status=='maintenance'}}>Maintenance</option>
+      </select>
+      <input type="text" name="current_job" value="{{ r.current_job }}" placeholder="Job #" style="width:70px;padding:6px 8px;border:1px solid var(--border);border-radius:7px;font-size:12px">
+      <button class="btn btn-xs" type="submit">Set</button>
+    </form>
+  </div>
+  {% else %}
+  <div class="empty" style="grid-column:1/-1">No machines</div>
+  {% endfor %}
+</div>
+{% endblock %}

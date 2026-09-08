@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}Attendance{% endblock %}
+{% block page_title %}Attendance Marking{% endblock %}
+{% block content %}
+<div class="cards" style="grid-template-columns:repeat(auto-fill,minmax(150px,1fr))">
+  <div class="stat"><div class="top"><span class="lbl">PRESENT</span><span class="ic ic-mint">✅</span></div><div class="num">{{ summary.present }}</div></div>
+  <div class="stat"><div class="top"><span class="lbl">ABSENT</span><span class="ic ic-peach">❌</span></div><div class="num">{{ summary.absent }}</div></div>
+  <div class="stat"><div class="top"><span class="lbl">HALF DAY</span><span class="ic ic-yellow">🕐</span></div><div class="num">{{ summary.halfday }}</div></div>
+</div>
+
+<div class="panel">
+  <div class="panel-head">
+    <h3>📅 {{ date }}</h3>
+    <form method="get" action="/attendance" style="display:flex;gap:8px">
+      <input type="date" name="date" value="{{ date }}" style="padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px">
+      <button class="btn btn-outline btn-sm" type="submit">Load</button>
+      <a class="btn btn-outline btn-sm" href="/attendance">Today</a>
+    </form>
+  </div>
+  <form method="post" action="/attendance">
+    <input type="hidden" name="date" value="{{ date }}">
+    <div class="panel-body" style="padding:0">
+      <table>
+        <thead><tr><th>Employee</th><th>Department</th><th style="text-align:center">Present</th><th style="text-align:center">Half Day</th><th style="text-align:center">Absent</th></tr></thead>
+        <tbody>
+          {% for e in employees %}
+          <tr>
+            <td><b>{{ e.name }}</b></td>
+            <td class="muted">{{ e.department or '—' }}</td>
+            {% set cur = e.status or 'absent' %}
+            {% for s in ['present','halfday','absent'] %}
+            <td style="text-align:center">
+              <input type="radio" name="status_{{ e.id }}" value="{{ s }}" {{'checked' if cur==s}} style="accent-color:var(--amber)">
+            </td>
+            {% endfor %}
+          </tr>
+          {% else %}
+          <tr><td colspan="5"><div class="empty">No active employees</div></td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="panel-body" style="border-top:1px solid var(--border);text-align:right">
+      <button class="btn" type="submit" {{'disabled' if date > today_iso}}>💾 Save Attendance</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

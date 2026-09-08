@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}Employees{% endblock %}
+{% block page_title %}Employees{% endblock %}
+{% block content %}
+{% if show_add %}
+<div class="panel">
+  <div class="panel-head"><h3>➕ Add Employee</h3><a class="btn btn-outline btn-sm" href="/employees">✕ Close</a></div>
+  <div class="panel-body">
+    <form method="post">
+      <div class="form-grid">
+        <div class="field"><label>Employee Code *</label><input name="emp_code" required placeholder="EMP006"></div>
+        <div class="field"><label>Full Name *</label><input name="name" required placeholder="e.g. Rohit Sharma"></div>
+        <div class="field"><label>Email</label><input type="email" name="email" placeholder="name@shivaya.in"></div>
+        <div class="field"><label>Phone</label><input name="phone" placeholder="98XXXXXXXX"></div>
+        <div class="field"><label>Department</label>
+          <select name="department"><option>Production</option><option>Quality</option><option>Management</option><option>Administration</option><option>Maintenance</option></select>
+        </div>
+        <div class="field"><label>Designation</label><input name="designation" placeholder="e.g. CNC Operator"></div>
+        <div class="field"><label>Joining Date</label><input type="date" name="joining_date"></div>
+        <div class="full"><button class="btn" type="submit">Add Employee</button></div>
+      </div>
+    </form>
+  </div>
+</div>
+{% else %}
+<div class="toolbar" style="justify-content:space-between">
+  <a class="btn btn-outline btn-sm" href="/attendance">📅 Attendance Marking</a>
+  <a class="btn" href="/employees?add=1">＋ Add Employee</a>
+</div>
+{% endif %}
+
+<div class="panel">
+  <div class="panel-head"><h3>👥 Employees ({{ employees|length }})</h3></div>
+  <div class="panel-body" style="padding:0;overflow-x:auto">
+    <table>
+      <thead><tr><th>Employee</th><th>Code</th><th>Department</th><th>Designation</th><th>Phone</th><th>Today</th><th class="t-right">Present Days</th><th></th></tr></thead>
+      <tbody>
+        {% for e in employees %}
+        <tr>
+          <td><span class="avatar {{ ['','b','c','d'][loop.index0 % 4] }}">{{ e.name[0] }}</span><b>{{ e.name }}</b></td>
+          <td class="mono">{{ e.emp_code }}</td>
+          <td>{{ e.department or '—' }}</td>
+          <td class="small">{{ e.designation or '—' }}</td>
+          <td class="mono small">{{ e.phone or '—' }}</td>
+          <td>
+            {% if att.get(e.id)=='present' %}<span class="badge b-done">✓ Present</span>
+            {% elif att.get(e.id)=='halfday' %}<span class="badge b-amber">Half Day</span>
+            {% else %}<span class="badge b-pending">Absent</span>{% endif %}
+          </td>
+          <td class="t-right mono">{{ e.present_days }}</td>
+          <td class="t-right">
+            <form method="post" action="/employees/{{ e.id }}/delete" style="display:inline" onsubmit="return confirm('Remove {{ e.name }}?')">
+              <button class="btn btn-danger btn-xs" type="submit">🗑</button>
+            </form>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="8"><div class="empty">No employees yet</div></td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

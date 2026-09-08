@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+{% block title %}Party Ledger — {{ party.name }}{% endblock %}
+{% block page_title %}Party Ledger — {{ party.name }}{% endblock %}
+{% block content %}
+
+<style>
+/* ---------- print: ONLY party ledger, kuch aur nahi ---------- */
+@media print {
+  body { background:#fff !important; }
+  .sidebar, .topbar, .side-footer, .toolbar, .no-print { display:none !important; }
+  main { margin-left:0 !important; min-height:0 !important; }
+  .content { padding:0 !important; }
+  .print-only { display:block !important; }
+  .cards { display:flex !important; gap:0 !important; margin-bottom:12px !important; }
+  .stat { flex:1 !important; border:1px solid #000 !important; border-right:none !important; box-shadow:none !important; border-radius:0 !important; }
+  .stat:last-child { border-right:1px solid #000 !important; }
+  .stat .num { font-size:15px !important; }
+  .stat .sub, .stat .ic { display:none !important; }
+  .panel { border:1px solid #000 !important; box-shadow:none !important; border-radius:0 !important; }
+  .panel-head { padding:8px 12px !important; }
+  table { width:100% !important; border-collapse:collapse !important; }
+  thead th { background:#eee !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; border:1px solid #444 !important; }
+  td, th { border:1px solid #ddd !important; padding:6px 8px !important; font-size:11px !important; }
+  tr { page-break-inside:avoid; }
+  .badge { border:1px solid #999 !important; background:#fff !important; color:#000 !important; }
+  .pstats td { font-size:12px !important; }
+}
+</style>
+
+<!-- PRINT-ONLY header: sirf party se related -->
+<div class="print-only" style="display:none">
+  <div style="text-align:center;border-bottom:2.5px solid #192338;padding-bottom:10px;margin-bottom:4px">
+    <div style="font-size:22px;font-weight:800;letter-spacing:1px">SHIVAYA CIRCUIT PVT. LTD.</div>
+    <div style="font-size:13px;font-weight:700;margin-top:2px">PARTY LEDGER</div>
+  </div>
+  <table class="pstats" style="width:100%;border:none;margin:8px 0 14px">
+    <tr>
+      <td style="border:none;padding:2px 0"><b>Party:</b> {{ party.name }}</td>
+      <td style="border:none;padding:2px 0"><b>Type:</b> {{ 'Supplier' if party.ptype=='supplier' else 'Customer' }}</td>
+      <td style="border:none;padding:2px 0"><b>Credit:</b> {{ party.credit_days }} days</td>
+      <td style="border:none;padding:2px 0;text-align:right"><b>Date:</b> {{ today }}</td>
+    </tr>
+    {% if party.phone or party.gst %}
+    <tr>
+      <td style="border:none;padding:2px 0" colspan="2">{% if party.phone %}<b>Phone:</b> {{ party.phone }}{% endif %}</td>
+      <td style="border:none;padding:2px 0" colspan="2">{% if party.gst %}<b>GST:</b> {{ party.gst }}{% endif %}</td>
+    </tr>
+    {% endif %}
+  </table>
+</div>
+
+<div class="toolbar no-print">
+  <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+    <a class="btn btn-outline btn-sm" href="/parties">← Back to Parties</a>
+    <div>
+      <h2 style="font-size:17px">{{ party.name }}</h2>
+      <div class="muted small">
+        {% if party.ptype == 'supplier' %}📤 Supplier{% else %}📥 Customer{% endif %} · Credit: {{ party.credit_days }} days
+        {% if party.phone %} · 📞 {{ party.phone }}{% endif %}
+        {% if party.gst %} · GST: {{ party.gst }}{% endif %}
+      </div>
+    </div>
+  </div>
+  <button class="btn btn-outline btn-sm" onclick="window.print()">🖨️ Print</button>
+</div>
+
+<div class="cards" style="grid-template-columns:repeat(auto-fill,minmax(150px,1fr))">
+  <div class="stat">
+    <div class="top"><span class="lbl">{{ 'TOTAL PURCHASED' if party.ptype=='supplier' else 'TOTAL BILLED' }}</span><span class="ic ic-navy">🧾</span></div>
+    <div class="num" style="font-size:17px">{{ total|inr }}</div>
+    <div class="sub">{{ purchased|inr if party.ptype=='supplier' else billed|inr }} {{ 'purchase orders' if party.ptype=='supplier' else 'invoices' }}</div>
+  </div>
+  <div class="stat">
+    <div class="top"><span class="lbl">{{ 'TOTAL PAID' if party.ptype=='supplier' else 'TOTAL RECEIVED' }}</span><span class="ic ic-mint">✓</span></div>
+    <div class="num" style="font-size:17px;color:#15803d">{{ credits|inr }}</div>
+    <div class="sub">{{ paid_out|inr if party.ptype=='supplier' else received|inr }} {{ 'payments made' if party.ptype=='supplier' else 'receipts' }}</div>
+  </div>
+  <div class="stat">
+    <div class="top"><span class="lbl">{{ 'BALANCE PAYABLE' if party.ptype=='supplier' else 'BALANCE DUE' }}</span><span class="ic ic-peach">⏰</span></div>
+    <div class="num" style="font-size:17px;color:{{'#b3401c' if due>0 else '#16a34a'}}">{{ due|inr }}</div>
+    <div class="sub">
+      {% if due > 0 %}{{ 'dena hai' if party.ptype=='supplier' else 'lena hai' }} · {{ overdue_label }}
+      {% elif due < 0 %}Advance {{ (-due)|inr }} · credit hai
+      {% else %}Settled — kuch nahi baaki{% endif %}
+    </div>
+  </div>
+</div>
+
+<div class="panel">
+  <div class="panel-head"><h3>📒 Ledger Entries ({{ entries|length }})</h3></div>
+  <div class="panel-body" style="padding:0;overflow-x:auto">
+    <table>
+      <thead>
+        <tr><th>Date</th><th>Type</th><th>Ref</th><th class="t-right">Amount</th><th>Due/Status</th><th class="t-right">Running Balance</th></tr>
+      </thead>
+      <tbody>
+        {% for e in entries %}
+        <tr>
+          <td class="mono small">{{ e.date }}</td>
+          <td>
+            {% if e.type == 'Invoice' %}<span class="badge b-blue">🧾 INVOICE</span>
+            {% elif e.type == 'Receipt' %}<span class="badge b-done">📥 RECEIPT</span>
+            {% elif e.type == 'Purchase' %}<span class="badge b-amber">📦 PURCHASE</span>
+            {% else %}<span class="badge b-peach">📤 PAYMENT</span>{% endif %}
+          </td>
+          <td class="mono">{{ e.ref }}</td>
+          <td class="t-right">
+            <b style="color:{{'#16a34a' if e.amount<0 else 'inherit'}}">{{ ('+' if e.amount>0 else '−') }}{{ e.amount|abs|inr }}</b>
+          </td>
+          <td>
+            {% if e.type == 'Invoice' %}
+              {% if e.status == 'Paid' %}<span class="badge b-done">✓ Paid</span>
+              {% elif e.status == 'Overdue' or 'late' in e.status %}<span class="badge b-urgent">⚠️ {{ e.status }}</span>
+              {% elif 'left' in e.status %}<span class="badge b-blue">🕐 {{ e.status }}</span>
+              {% else %}<span class="badge b-amber">{{ e.status }}</span>{% endif %}
+            {% else %}<span class="muted small">{{ e.status }}</span>{% endif %}
+          </td>
+          <td class="t-right mono"><b>{{ e.balance|inr }}</b></td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6"><div class="empty">No entries yet — billing ya payments mein party ke saath entry karein</div></td></tr>
+        {% endfor %}
+      </tbody>
+      {% if entries %}
+      <tfoot>
+        <tr>
+          <td colspan="3" style="text-align:right"><b>{% if due < 0 %}CLOSING ADVANCE{% else %}CLOSING {{ 'PAYABLE' if party.ptype=='supplier' else 'DUE' }}{% endif %}:</b></td>
+          <td class="t-right"><b>{{ due|abs|inr }}</b></td>
+          <td></td>
+          <td class="t-right mono"><b>{{ due|inr }}</b></td>
+        </tr>
+      </tfoot>
+      {% endif %}
+    </table>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+{% block title %}Inventory{% endblock %}
+{% block page_title %}Inventory{% endblock %}
+{% block content %}
+{% if show_add %}
+<div class="panel">
+  <div class="panel-head"><h3>➕ Add Inventory Item</h3><a class="btn btn-outline btn-sm" href="/inventory">✕ Close</a></div>
+  <div class="panel-body">
+    <form method="post">
+      <div class="form-grid">
+        <div class="field full"><label>Item Name *</label><input name="name" required placeholder="e.g. FR4 Sheets 1.6mm"></div>
+        <div class="field"><label>Category</label><input name="category" placeholder="Laminate / Chemical / Tooling"></div>
+        <div class="field"><label>Unit</label>
+          <select name="unit"><option>pcs</option><option>Ltr</option><option>kg</option><option>set</option></select>
+        </div>
+        <div class="field"><label>Current Stock</label><input type="number" step="0.01" name="stock" value="0"></div>
+        <div class="field"><label>Min Stock (reorder level)</label><input type="number" step="0.01" name="min_stock" value="0"></div>
+        <div class="full"><button class="btn" type="submit">Add Item</button></div>
+      </div>
+    </form>
+  </div>
+</div>
+{% else %}
+<div class="toolbar" style="justify-content:flex-end"><a class="btn" href="/inventory?add=1">＋ Add Item</a></div>
+{% endif %}
+
+<div class="panel">
+  <div class="panel-head"><h3>🗄️ Stock Items ({{ rows|length }})</h3></div>
+  <div class="panel-body" style="padding:0;overflow-x:auto">
+    <table>
+      <thead><tr><th>Code</th><th>Item</th><th>Category</th><th class="t-right">Stock</th><th class="t-right">Min</th><th>Status</th><th style="min-width:180px">Quick Update</th></tr></thead>
+      <tbody>
+        {% for r in rows %}
+        <tr>
+          <td class="mono muted">{{ r.code }}</td>
+          <td><b>{{ r.name }}</b></td>
+          <td><span class="badge b-gray">{{ r.category or '—' }}</span></td>
+          <td class="t-right mono"><b>{{ r.stock|inr if r.unit=='pcs' else r.stock }} {{ r.unit }}</b></td>
+          <td class="t-right mono muted">{{ r.min_stock }} {{ r.unit }}</td>
+          <td>
+            {% if r.stock <= r.min_stock %}<span class="badge b-urgent">⚠️ LOW STOCK</span>
+            {% else %}<span class="badge b-done">✓ OK</span>{% endif %}
+          </td>
+          <td>
+            <form method="post" action="/inventory/{{ r.id }}/update" style="display:flex;gap:6px">
+              <input type="number" step="0.01" name="stock" value="{{ r.stock }}" style="width:80px;padding:5px 8px;border:1px solid var(--border);border-radius:7px;font-size:12px">
+              <button class="btn btn-outline btn-xs" type="submit">Save</button>
+            </form>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7"><div class="empty">No inventory items</div></td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="panel" style="margin-top:14px">
+  <div class="panel-head"><h3>📦 Material Issue — Worker Ko Stock Se Do</h3></div>
+  <div class="panel-body">
+    <form method="post" action="/material-issue/add" style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
+      <input type="hidden" name="back" value="inventory">
+      <div class="field" style="flex:1.3;min-width:180px"><label>JOB ORDER (kis order ke liye)</label>
+        <select name="order_id" required>
+          {% for o in orders_for_issue %}
+          <option value="{{ o.id }}">{{ o.order_no }} — {{ o.party }} · {{ o.product }}</option>
+          {% endfor %}
+          <option value="0">🏬 General Store (bina order)</option>
+        </select>
+      </div>
+      <div class="field" style="flex:2;min-width:180px"><label>ITEM</label>
+        <select name="item_id" required>
+          <option value="">— item chuno —</option>
+          {% for r in rows %}
+          <option value="{{ r.id }}">{{ r.name }} — {{ r.stock|gfmt }} {{ r.unit }} left</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="field" style="flex:0 0 90px"><label>QTY</label>
+        <input type="number" step="any" min="0.001" name="qty" required placeholder="0">
+      </div>
+      <div class="field" style="flex:1;min-width:140px"><label>WORKER (kisne liya)</label>
+        <select name="worker">
+          {% for w in worker_names %}<option {{'selected' if w == current_user_name}}>{{ w }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="field" style="flex:1.3;min-width:140px"><label>NOTE</label>
+        <input name="notes" placeholder="kaunse kaam ke liye">
+      </div>
+      <button class="btn" type="submit" style="background:#2563eb;color:#fff">➕ Issue</button>
+    </form>
+  </div>
+</div>
+
+<div class="panel" style="margin-top:14px">
+  <div class="panel-head"><h3>🧾 Material Issue History — Kaunsa Item Kisne Kab Liya ({{ issue_history|length }})</h3></div>
+  <div class="panel-body" style="padding:0;overflow-x:auto">
+    <table>
+      <thead><tr><th>#</th><th>Item</th><th class="t-right">Qty</th><th>Worker</th><th>Job Order</th><th>Date/Time</th><th>Note</th><th></th></tr></thead>
+      <tbody>
+        {% for mi in issue_history %}
+        <tr>
+          <td class="mono muted small">#{{ mi.id }}</td>
+          <td><b>{{ mi.item_name }}</b></td>
+          <td class="t-right mono"><b>− {{ mi.qty|gfmt }} {{ mi.unit }}</b></td>
+          <td>{{ mi.worker }}</td>
+          <td>{{ mi.order_no or 'General Store' }}</td>
+          <td class="small muted">{{ mi.taken_on }}</td>
+          <td class="small muted">{{ mi.notes or '—' }}</td>
+          <td class="t-right">
+            <form method="post" action="/material-issue/{{ mi.id }}/undo" style="display:inline"
+                  onsubmit="return confirm('Issue wapas karein? {{ mi.qty|gfmt }} {{ mi.unit }} stock mein add hoga.')">
+              <button class="btn btn-outline btn-xs" type="submit">↩ Undo</button>
+            </form>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="8"><div class="empty">Abhi koi material issue nahi — upar se entry karo.</div></td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

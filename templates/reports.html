@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}Reports{% endblock %}
+{% block page_title %}Reports{% endblock %}
+{% block content %}
+<div class="toolbar" style="justify-content:flex-end">
+  <button class="btn btn-outline btn-sm" onclick="window.print()">🖨️ Print Report</button>
+</div>
+
+<div class="cards" style="grid-template-columns:repeat(auto-fill,minmax(150px,1fr))">
+  <div class="stat"><div class="top"><span class="lbl">TOTAL JOB ORDERS</span><span class="ic ic-navy">🗂️</span></div><div class="num">{{ order_stats.total }}</div><div class="sub">{{ order_stats.done }} done · {{ order_stats.pending }} pending</div></div>
+  <div class="stat"><div class="top"><span class="lbl">TOTAL ORDER VALUE</span><span class="ic ic-blue">💰</span></div><div class="num" style="font-size:17px">{{ order_stats.total_value|inr }}</div></div>
+  <div class="stat"><div class="top"><span class="lbl">TOTAL BILLED</span><span class="ic ic-gray">🧾</span></div><div class="num" style="font-size:17px">{{ revenue.billed|inr }}</div><div class="sub">{{ revenue.collected|inr }} collected</div></div>
+  <div class="stat"><div class="top"><span class="lbl">OUTSTANDING</span><span class="ic ic-peach">⏰</span></div><div class="num" style="font-size:17px;color:#b3401c">{{ revenue.outstanding|inr }}</div></div>
+</div>
+
+<div class="grid2">
+  <div class="panel">
+    <div class="panel-head"><h3>👥 Employee Attendance Summary</h3></div>
+    <div class="panel-body" style="padding:0">
+      <table>
+        <thead><tr><th>Employee</th><th>Department</th><th class="t-right">Present</th><th class="t-right">Absent</th></tr></thead>
+        <tbody>
+          {% for a in att %}
+          <tr>
+            <td><b>{{ a.name }}</b></td>
+            <td class="muted small">{{ a.department or '—' }}</td>
+            <td class="t-right"><span class="badge b-green">{{ a.present }}</span></td>
+            <td class="t-right"><span class="badge b-red">{{ a.absent }}</span></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head"><h3>🏭 Machine Status</h3></div>
+    <div class="panel-body" style="padding:0">
+      <table>
+        <thead><tr><th>Status</th><th class="t-right">Count</th></tr></thead>
+        <tbody>
+          <tr><td><span class="badge b-done">RUNNING</span></td><td class="t-right mono"><b>{{ machine_counts.get('running',0) }}</b></td></tr>
+          <tr><td><span class="badge b-gray">IDLE</span></td><td class="t-right mono"><b>{{ machine_counts.get('idle',0) }}</b></td></tr>
+          <tr><td><span class="badge b-amber">MAINTENANCE</span></td><td class="t-right mono"><b>{{ machine_counts.get('maintenance',0) }}</b></td></tr>
+        </tbody>
+      </table>
+      <div style="padding:14px 18px;border-top:1px solid var(--border)">
+        <b class="small">⚠️ Low Stock Items:</b>
+        <div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px">
+          {% for i in inventory_low %}
+          <span class="badge b-urgent">{{ i.name }} ({{ i.stock }} {{ i.unit }})</span>
+          {% else %}
+          <span class="muted small">None — all stock OK</span>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="panel">
+  <div class="panel-head"><h3>📊 Orders by Party</h3></div>
+  <div class="panel-body" style="padding:0">
+    <table>
+      <thead><tr><th>Party</th><th class="t-right">Orders</th><th class="t-right">Total Value</th></tr></thead>
+      <tbody>
+        {% for p in orders_by_party %}
+        <tr>
+          <td><b>{{ p.party }}</b></td>
+          <td class="t-right mono">{{ p.c }}</td>
+          <td class="t-right"><b>{{ p.v|inr }}</b></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

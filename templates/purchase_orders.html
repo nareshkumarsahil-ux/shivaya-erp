@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}Purchase Orders{% endblock %}
+{% block page_title %}Purchase Orders{% endblock %}
+{% block content %}
+{% if show_add %}
+<div class="panel">
+  <div class="panel-head"><h3>➕ New Purchase Order</h3><a class="btn btn-outline btn-sm" href="/purchase-orders">✕ Close</a></div>
+  <div class="panel-body">
+    <form method="post">
+      <div class="form-grid">
+        <div class="field full"><label>Vendor / Party *</label>
+          <select name="vendor" required>
+            <option value="">— Select party —</option>
+            {% for p in all_parties %}<option value="{{ p.name }}">{{ p.name }} ({{ 'Supplier' if p.ptype=='supplier' else 'Customer' }})</option>{% endfor %}
+          </select>
+          <a class="muted small" href="/parties?add=1" style="margin-top:4px;display:inline-block">➕ New Party →</a>
+        </div>
+        <div class="field full"><label>Item Description</label><input name="item" placeholder="e.g. FR4 Sheets 1.6mm - 100 pcs"></div>
+        <div class="field"><label>Quantity</label><input name="qty" placeholder="e.g. 100 pcs"></div>
+        <div class="field"><label>Amount (₹)</label><input type="number" step="0.01" name="amount" value="0"></div>
+        <div class="field"><label>Status</label>
+          <select name="status"><option value="pending">Pending</option><option value="in_transit">In Transit</option><option value="received">Received</option></select>
+        </div>
+        <div class="full"><button class="btn" type="submit">Create PO</button></div>
+      </div>
+    </form>
+  </div>
+</div>
+{% else %}
+<div class="toolbar" style="justify-content:flex-end"><a class="btn" href="/purchase-orders?add=1">＋ New Purchase Order</a></div>
+{% endif %}
+
+<div class="panel">
+  <div class="panel-head"><h3>📦 Purchase Orders ({{ rows|length }})</h3></div>
+  <div class="panel-body" style="padding:0;overflow-x:auto">
+    <table>
+      <thead><tr><th>PO #</th><th>Vendor</th><th>Item</th><th>Qty</th><th class="t-right">Amount</th><th>Status</th><th>Date</th><th></th></tr></thead>
+      <tbody>
+        {% for r in rows %}
+        <tr>
+          <td><b class="mono">{{ r.po_no }}</b></td>
+          <td>{{ r.vendor }}</td>
+          <td class="small">{{ r.item }}</td>
+          <td class="mono">{{ r.qty }}</td>
+          <td class="t-right">{{ r.amount|inr }}</td>
+          <td><span class="badge {{'b-green' if r.status=='received' else 'b-blue' if r.status=='in_transit' else 'b-amber'}}">{{ r.status|replace('_',' ')|upper }}</span></td>
+          <td class="small">{{ r.date }}</td>
+          <td class="t-right">
+            <form method="post" action="/purchase-orders/{{ r.id }}/status" style="display:inline">
+              <select name="status" onchange="this.form.submit()" style="padding:4px 8px;border-radius:7px;border:1px solid var(--border);font-size:12px">
+                <option value="pending" {{'selected' if r.status=='pending'}}>Pending</option>
+                <option value="in_transit" {{'selected' if r.status=='in_transit'}}>In Transit</option>
+                <option value="received" {{'selected' if r.status=='received'}}>Received</option>
+                <option value="cancelled" {{'selected' if r.status=='cancelled'}}>Cancelled</option>
+              </select>
+            </form>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="8"><div class="empty">No purchase orders yet</div></td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

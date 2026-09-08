@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Quality{% endblock %}
+{% block page_title %}Quality Control{% endblock %}
+{% block content %}
+{% if show_add %}
+<div class="panel">
+  <div class="panel-head"><h3>➕ New QC Entry</h3><a class="btn btn-outline btn-sm" href="/quality">✕ Close</a></div>
+  <div class="panel-body">
+    <form method="post">
+      <div class="form-grid">
+        <div class="field full"><label>Job Order</label>
+          <select name="order_id">
+            <option value="">— Select —</option>
+            {% for o in orders %}<option value="{{ o.id }}">{{ o.order_no }} · {{ o.party }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="field full"><label>Remarks / Checklist</label><textarea name="remarks" placeholder="e.g. Visual inspection, continuity test, thickness check…"></textarea></div>
+        <div class="field"><label>Result</label>
+          <select name="result"><option value="pending">Pending</option><option value="passed">Passed</option><option value="failed">Failed</option></select>
+        </div>
+        <div class="full"><button class="btn" type="submit">Save QC Entry</button></div>
+      </div>
+    </form>
+  </div>
+</div>
+{% else %}
+<div class="toolbar" style="justify-content:flex-end"><a class="btn" href="/quality?add=1">＋ New QC Entry</a></div>
+{% endif %}
+
+<div class="panel">
+  <div class="panel-head"><h3>✅ Inspection Records ({{ rows|length }})</h3></div>
+  <div class="panel-body" style="padding:0">
+    <table>
+      <thead><tr><th>QC #</th><th>Job Order</th><th>Party</th><th>Remarks</th><th>Result</th><th>Date</th><th></th></tr></thead>
+      <tbody>
+        {% for r in rows %}
+        <tr>
+          <td><b class="mono">{{ r.qc_no }}</b></td>
+          <td class="mono">{{ r.order_no or '—' }}</td>
+          <td class="small">{{ r.party or '—' }}</td>
+          <td class="small">{{ r.remarks }}</td>
+          <td><span class="badge {{'b-green' if r.result=='passed' else 'b-red' if r.result=='failed' else 'b-amber'}}">{{ r.result|upper }}</span></td>
+          <td class="small mono">{{ r.date or '—' }}</td>
+          <td class="t-right">
+            <form method="post" action="/quality/{{ r.id }}/result" style="display:inline">
+              <select name="result" onchange="this.form.submit()" style="padding:4px 8px;border-radius:7px;border:1px solid var(--border);font-size:12px">
+                <option value="pending" {{'selected' if r.result=='pending'}}>Pending</option>
+                <option value="passed" {{'selected' if r.result=='passed'}}>Passed</option>
+                <option value="failed" {{'selected' if r.result=='failed'}}>Failed</option>
+              </select>
+            </form>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7"><div class="empty">No QC entries yet</div></td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

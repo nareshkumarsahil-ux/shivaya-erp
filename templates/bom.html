@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% block title %}BOM — {{ pmodel.name }}{% endblock %}
+{% block page_title %}Raw Material (BOM) — {{ pmodel.name }}{% endblock %}
+{% block content %}
+
+<div class="toolbar">
+  <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+    <a class="btn btn-outline btn-sm" href="/products">← Back to Finished Products</a>
+    <div>
+      <h2 style="font-size:17px">🧪 {{ pmodel.name }} <span class="mono muted small">{{ pmodel.model_code }}</span></h2>
+      <div class="muted small">Panel {{ pmodel.panel_len|gfmt }}×{{ pmodel.panel_w|gfmt }}mm · {{ pmodel.pcs_panel }} PCS/panel · {{ pmodel.panels_sheet }} panels/sheet</div>
+    </div>
+  </div>
+</div>
+
+<div class="panel" style="margin-bottom:16px">
+  <div class="panel-body" style="padding:12px 18px;background:#fef9ec">
+    <b>💡 Kaise kaam karta hai:</b> Har raw material ke liye <b>qty + "per kitne PCB" (basis)</b> set karo —
+    jaise <i>Drill Bits: 10 per 1000 PCB</i> ya <i>Laminate Sheets: 100 per 10000 PCB</i> ya <i>Masking Ink: 0.5 kg per 100 PCB</i>.
+    <br>Job Order / Produce karte waqt system aapki qty ke hisaab se hisaab lagata hai:
+    <span class="mono small">(order qty ÷ basis) × qty</span> — aur inventory se utna hi consume hota hai.
+    <br><b>Example:</b> 10000 PCB par — 100 sheet laminate, 5 kg masking, 2 Ltr lacquer, 10 drill bits.
+  </div>
+</div>
+
+<div class="panel">
+  <div class="panel-head"><h3>📦 RAW MATERIALS — KITNA USE HOGA ({{ bom_rows|length }} items)</h3></div>
+  <div class="panel-body" style="padding:0;overflow-x:auto">
+    <table>
+      <thead>
+        <tr><th>Raw Material</th><th>Qty</th><th>Per (basis)</th><th class="t-right">Stock</th><th class="t-right">10000 PCB par</th><th>Save</th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for b in bom_rows %}
+        <tr>
+          <form method="post" style="display:contents">
+          <input type="hidden" name="action" value="update">
+          <input type="hidden" name="bid" value="{{ b.id }}">
+          <td><b>{{ b.item_name }}</b> <span class="badge b-gray">{{ b.category or '—' }}</span></td>
+          <td style="min-width:110px">
+            <input type="number" step="any" min="0.0001" name="qty_per" value="{{ b.qty_per|gfmt }}"
+                   style="width:85px;padding:5px 8px;border:1px solid var(--border);border-radius:7px;font-size:12px">
+            <span class="muted small">{{ b.unit }}</span>
+          </td>
+          <td>
+            <select name="unit_pcs" style="width:130px;padding:5px 7px;border:1.5px solid var(--amber);border-radius:7px;font-size:12px;background:#fffdf3">
+              {% for bp in [10000, 1000, 100, 10, 1] %}
+              <option value="{{ bp }}" {{'selected' if (b.unit_pcs or 1000) == bp}}>per {{ bp }} PCB</option>
+              {% endfor %}
+            </select>
+          </td>
+          <td class="t-right mono">{{ b.stock|gfmt }} {{ b.unit }}</td>
+          <td class="t-right mono"><b>{{ (10000 / (b.unit_pcs or 1000) * b.qty_per)|round(2)|gfmt }} {{ b.unit }}</b></td>
+          <td><button class="btn btn-outline btn-xs" type="submit">💾 Save</button></td>
+          </form>
+          <td class="t-right">
+            <form method="post" style="display:inline" onsubmit="return confirm('Remove {{ b.item_name }} from BOM?')">
+              <input type="hidden" name="action" value="delete"><input type="hidden" name="bid" value="{{ b.id }}">
+              <button class="btn btn-danger btn-xs" type="submit">🗑</button>
+            </form>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7"><div class="empty">BOM khali hai — neeche se raw material add karein</div></td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="panel">
+  <div class="panel-head"><h3>➕ Add Raw Material to BOM (Manually)</h3></div>
+  <div class="panel-body">
+    <form method="post">
+      <input type="hidden" name="action" value="add">
+      <div class="form-grid">
+        <div class="field"><label>Raw Material (Stock se)</label>
+          <select name="item_id" required>
+            <option value="">— Select item —</option>
+            {% for it in inv_items %}
+            <option value="{{ it.id }}">{{ it.name }} · {{ it.category }} · Stock: {{ it.stock|gfmt }} {{ it.unit }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="field"><label>Kitna use hoga (qty)</label><input type="number" step="any" min="0.0001" name="qty_per" required placeholder="e.g. 10"></div>
+        <div class="field"><label>Ye qty kitne PCB ke liye (basis)</label>
+          <select name="unit_pcs" style="padding:9px 11px;border:1.5px solid var(--amber);border-radius:8px;background:#fffdf3">
+            <option value="1000" selected>per 1000 PCB</option>
+            <option value="10000">per 10000 PCB</option>
+            <option value="100">per 100 PCB</option>
+            <option value="10">per 10 PCB</option>
+            <option value="1">per 1 PCB</option>
+          </select>
+        </div>
+        <div class="field" style="display:flex;align-items:flex-end"><button class="btn" type="submit">➕ Add to BOM</button></div>
+      </div>
+    </form>
+  </div>
+</div>
+<p class="muted small">💡 Ye BOM Job Card mein use hota hai — order qty ke hisaab se requirements auto-calculate hoti hain: <b>Required = (Order Qty ÷ basis) × Qty</b>. Job Card save ya 🏭 Produce par inventory se utna hi stock deduct hota hai.</p>
+{% endblock %}

@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}Live Process Tracking{% endblock %}
+{% block page_title %}Live Process Tracking{% endblock %}
+{% block content %}
+<div class="toolbar">
+  <form class="form-inline" method="get" action="/tracking" style="display:flex;gap:10px">
+    <input class="search-input" type="text" name="q" value="{{ q }}" placeholder="Search order / party…" style="padding:8px 13px;border:1px solid var(--border);border-radius:8px;font-size:13px;width:250px">
+    <button class="btn btn-outline btn-sm" type="submit">Search</button>
+    {% if q %}<a class="btn btn-outline btn-sm" href="/tracking">Clear</a>{% endif %}
+  </form>
+  <a class="btn btn-sm" href="/orders?add=1">＋ New Job Order</a>
+</div>
+
+<div class="panel">
+  <div class="panel-body" style="padding:0;overflow-x:auto">
+    <table>
+      <thead>
+        <tr><th>Order #</th><th>Party</th><th>Board</th><th>Current Process</th><th>Status</th><th>Operator</th><th>Finished Products</th><th>Started</th><th style="min-width:220px">Move To Next</th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for o in orders %}
+        <tr style="{{'opacity:.6' if o.status=='done'}}">
+          <td><b class="mono">{{ o.order_no }}</b>
+            {% if o.priority=='urgent' and o.status=='pending' %}<span class="badge b-urgent" style="margin-left:6px">URGENT</span>{% endif %}
+          </td>
+          <td>{{ o.party }}</td>
+          <td>{{ o.board }}</td>
+          <td><span class="badge {{'b-amber' if o.current_process!='Completed' else 'b-done'}}">{{ o.current_process }}</span></td>
+          <td><span class="badge {{'b-pending' if o.status=='pending' else 'b-blue' if o.status=='scheduled' else 'b-done'}}">{{ {'pending':'Pending','scheduled':'Scheduled','done':'Done'}.get(o.status, o.status) }}</span></td>
+          <td>{{ o.operator or '—' }}</td>
+          <td class="small">{{ o.product }}</td>
+          <td class="t-right">
+            <span class="prog-label">{{ o.progress }}%</span>
+            <span class="prog" style="display:inline-block;vertical-align:middle;width:60px"><span class="fill {{'done' if o.progress>=100}}" style="width:{{ o.progress }}%"></span></span>
+          </td>
+          {% if o.status == 'pending' %}
+          <td>
+            <form method="post" action="/tracking/{{ o.id }}/move" style="display:flex;gap:6px;align-items:center">
+              <select name="next_process" style="padding:6px 8px;border:1px solid var(--border);border-radius:7px;font-size:12px">
+                {% for step in PROCESS_STEPS %}
+                  {% if PROCESS_STEPS.index(step) > o.step_idx %}
+                  <option value="{{ step }}">{{ step }}</option>
+                  {% endif %}
+                {% endfor %}
+              </select>
+              <select name="operator" style="padding:6px 8px;border:1px solid var(--border);border-radius:7px;font-size:12px">
+                <option value="">Operator…</option>
+                {% for op in operators %}<option value="{{ op.name }}" {{'selected' if op.name==o.operator}}>{{ op.name }}</option>{% endfor %}
+              </select>
+              <button class="btn btn-amber btn-xs" type="submit" title="Move to next process">→</button>
+            </form>
+          </td>
+          {% elif o.status == 'scheduled' %}
+          <td class="muted small">Not started yet</td>
+          {% else %}
+          <td class="muted small">Completed</td>
+          {% endif %}
+          <td class="t-right"><a class="btn btn-outline btn-xs" href="/tracking/{{ o.id }}/history">History</a></td>
+        </tr>
+        {% else %}
+        <tr><td colspan="10"><div class="empty">No orders found</div></td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+<p class="muted small">💡 Move karte hi process log update ho jata hai aur <b>Completed</b> select karne par order "Done" ho jata hai.</p>
+{% endblock %}

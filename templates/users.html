@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}Users & Access{% endblock %}
+{% block page_title %}Users & Access{% endblock %}
+{% block content %}
+
+{% if edit_row %}
+<div class="panel">
+  <div class="panel-head"><h3>✏️ Edit User — {{ edit_row.name }}</h3><a class="btn btn-outline btn-sm" href="/users">✕ Close</a></div>
+  <div class="panel-body">
+    <form method="post">
+      <input type="hidden" name="action" value="update">
+      <input type="hidden" name="pid" value="{{ edit_row.id }}">
+      <div class="form-grid">
+        <div class="field"><label>Username *</label><input name="username" required value="{{ edit_row.username }}"></div>
+        <div class="field"><label>Password</label><input type="text" name="password" placeholder="(khali chhodo = same rahega)"></div>
+        <div class="field"><label>Full Name</label><input name="name" value="{{ edit_row.name }}"></div>
+        <div class="field"><label>Role</label>
+          <select name="role">
+            <option value="operator" {{'selected' if edit_row.role=='operator'}}>Operator</option>
+            <option value="admin" {{'selected' if edit_row.role=='admin'}}>Admin</option>
+          </select>
+        </div>
+        <div class="full" style="display:flex;gap:10px;justify-content:flex-end">
+          <a class="btn btn-outline" href="/users">Cancel</a>
+          <button class="btn" type="submit">💾 Save Changes</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+{% elif show_add %}
+<div class="panel">
+  <div class="panel-head"><h3>➕ Create User</h3><a class="btn btn-outline btn-sm" href="/users">✕ Close</a></div>
+  <div class="panel-body">
+    <form method="post">
+      <div class="form-grid">
+        <div class="field"><label>Username *</label><input name="username" required placeholder="e.g. amit"></div>
+        <div class="field"><label>Password *</label><input type="text" name="password" required placeholder="e.g. amit123"></div>
+        <div class="field"><label>Full Name</label><input name="name" placeholder="e.g. Amit Patel"></div>
+        <div class="field"><label>Role</label>
+          <select name="role"><option value="operator">Operator</option><option value="admin">Admin</option></select>
+        </div>
+        <div class="full"><button class="btn" type="submit">Create User</button></div>
+      </div>
+    </form>
+  </div>
+</div>
+{% else %}
+<div class="toolbar" style="justify-content:flex-end"><a class="btn" href="/users?add=1">＋ Create User</a></div>
+{% endif %}
+
+<div class="panel">
+  <div class="panel-head"><h3>🔐 System Users ({{ users|length }})</h3></div>
+  <div class="panel-body" style="padding:0">
+    <table>
+      <thead><tr><th>User</th><th>Username</th><th>Role</th><th class="t-right">Actions</th></tr></thead>
+      <tbody>
+        {% for u in users %}
+        <tr>
+          <td><span class="avatar {{ 'b' if u.role=='operator' }}">{{ u.name[0] }}</span><b>{{ u.name }}</b>{% if u.id == session.get('user_id') %} <span class="muted small">(you)</span>{% endif %}</td>
+          <td class="mono">{{ u.username }}</td>
+          <td><span class="badge {{'b-amber' if u.role=='admin' else 'b-blue'}}">{{ u.role|upper }}</span></td>
+          <td class="t-right" style="white-space:nowrap">
+            <a class="btn btn-outline btn-xs" href="/users?edit={{ u.id }}">✏️ Edit</a>
+            {% if u.id != session.get('user_id') %}
+            <form method="post" action="/users/{{ u.id }}/delete" style="display:inline" onsubmit="return confirm('Remove user {{ u.username }}?')">
+              <button class="btn btn-danger btn-xs" type="submit">🗑</button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+<p class="muted small">👑 Admin: sab modules ka access · 🛠️ Operator: dashboard, tracking, operator view ka access (Users & Access sirf admin ke liye)</p>
+{% endblock %}

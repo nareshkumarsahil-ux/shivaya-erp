@@ -1,0 +1,438 @@
+{% extends "base.html" %}
+{% block title %}Cut List Optimizer{% endblock %}
+{% block page_title %}Cut List Optimizer{% endblock %}
+{% block content %}
+
+<form method="post" action="/cutlist" id="clForm">
+<div class="grid2">
+  <!-- ============ LEFT: builder forms ============ -->
+  <div>
+    <div class="panel" style="display:flex;align-items:center;gap:10px;padding:10px 14px">
+      <span class="muted small" style="white-space:nowrap">📂 Load from Finished Product…</span>
+      <select name="model_id" style="flex:1;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px">
+        <option value="">— Select saved model —</option>
+        {% for m in models %}<option value="{{ m.id }}">{{ m.name }} · Panel {{ m.panel_len|dash }}×{{ m.panel_w|dash }}mm · {{ m.pcs_panel }} PCS/panel</option>{% endfor %}
+      </select>
+      <button class="btn btn-outline btn-sm" type="submit" name="action" value="load">Load</button>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h3>🔲 PCB-PANELBUILDER</h3></div>
+      <div class="panel-body">
+        <div class="section-title" style="margin-top:0">SINGLE PCB SIZE (MM)</div>
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+          <div class="field" style="flex:1"><label>Length</label><input type="number" step="0.1" name="pcb_len" id="pcb_len" value="{{ fields.pcb_len }}" required></div>
+          <b style="color:var(--muted);margin-top:16px">×</b>
+          <div class="field" style="flex:1"><label>Width</label><input type="number" step="0.1" name="pcb_w" id="pcb_w" value="{{ fields.pcb_w }}" required></div>
+        </div>
+        <div style="display:flex;gap:12px;margin-bottom:14px">
+          <div class="field" style="flex:1"><label>PCBs Across X</label><input type="number" name="pcbs_x" id="pcbs_x" value="{{ fields.pcbs_x }}" required></div>
+          <div class="field" style="flex:1"><label>PCBs Across Y</label><input type="number" name="pcbs_y" id="pcbs_y" value="{{ fields.pcbs_y }}" required></div>
+        </div>
+        <div style="display:flex;gap:12px;margin-bottom:14px">
+          <div class="field" style="flex:1"><label>Gap X (PC to PC)</label><input type="number" step="0.1" name="gap_x" id="gap_x" value="{{ fields.gap_x }}"></div>
+          <div class="field" style="flex:1"><label>Gap Y (PC to PC)</label><input type="number" step="0.1" name="gap_y" id="gap_y" value="{{ fields.gap_y }}"></div>
+        </div>
+        <p class="muted small" style="margin:-6px 0 12px">💡 3 PCB X mein jodne par beech me 2 gaps: 40 + 2.4 + 40 + 2.4 + 40 = 124.8mm</p>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px">
+          <div class="field"><label>Border Left</label><input type="number" step="0.1" name="border_l" id="border_l" value="{{ fields.border_l }}"></div>
+          <div class="field"><label>Border Right</label><input type="number" step="0.1" name="border_r" id="border_r" value="{{ fields.border_r }}"></div>
+          <div class="field"><label>Border Top</label><input type="number" step="0.1" name="border_t" id="border_t" value="{{ fields.border_t }}"></div>
+          <div class="field"><label>Border Bottom</label><input type="number" step="0.1" name="border_b" id="border_b" value="{{ fields.border_b }}"></div>
+        </div>
+        <div class="result-line" id="livePanelLine" style="display:none"></div>
+        <div class="muted small" id="liveFormula" style="margin-top:6px"></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h3>🔗 PANEL MULTIPLIER (GANG PANEL)</h3></div>
+      <div class="panel-body">
+        <div style="display:flex;gap:12px">
+          <div class="field" style="flex:1"><label>X Multiplier</label><input type="number" name="gang_x" id="gang_x" value="{{ fields.gang_x }}" min="1"></div>
+          <div class="field" style="flex:1"><label>Y Multiplier</label><input type="number" name="gang_y" id="gang_y" value="{{ fields.gang_y }}" min="1"></div>
+        </div>
+        <p class="muted small" style="margin-top:8px">💡 Multiple panels per gang unit — gap below added between them.</p>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h3>📐 PANEL → SHEET LAYOUT</h3></div>
+      <div class="panel-body">
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px">
+          {% for p in SHEET_PRESETS %}<button type="button" class="btn btn-outline btn-xs preset-btn" data-preset="{{ p }}">{{ p }}</button>{% endfor %}
+          <button type="button" class="btn btn-outline btn-xs preset-btn" data-preset="custom">Custom</button>
+        </div>
+        <div style="display:flex;gap:12px;margin-bottom:6px">
+          <div class="field" style="flex:1"><label>SHEET LENGTH (MM)</label><input type="number" step="0.1" name="sheet_len" id="sheet_len" value="{{ fields.sheet_len }}" required></div>
+          <div class="field" style="flex:1"><label>SHEET WIDTH (MM)</label><input type="number" step="0.1" name="sheet_w" id="sheet_w" value="{{ fields.sheet_w }}" required></div>
+        </div>
+        <p class="muted small" style="margin:0 0 12px">IN INCHES: <b id="inchesLive"></b></p>
+        <div style="display:flex;gap:12px;margin-bottom:4px">
+          <div class="field" style="flex:1"><label>PANEL LENGTH (MM)</label><input type="number" step="0.1" name="panel_len" id="panel_len" value="{{ result.panel_len|gfmt if result else fields.panel_len }}"></div>
+          <div class="field" style="flex:1"><label>PANEL WIDTH (MM)</label><input type="number" step="0.1" name="panel_w" id="panel_w" value="{{ result.panel_w|gfmt if result else fields.panel_w }}"></div>
+        </div>
+        <label class="small" style="display:flex;align-items:center;gap:6px;margin-bottom:12px;cursor:pointer">
+          <input type="checkbox" name="use" value="1" id="useChk" {{'checked' if fields.use=='1'}} style="accent-color:var(--amber)"> <b>Use</b>
+          <span class="muted">Panel size is locked — computed from PCB Builder above (includes CNC margin). Untick "Use" to enter panel size manually.</span>
+        </label>
+        <div style="display:flex;gap:12px;margin-bottom:14px">
+          <div class="field" style="flex:1"><label>PANEL GAP / KERF X (MM)</label><input type="number" step="0.1" name="kerf_x" id="kerf_x" value="{{ fields.kerf_x }}"></div>
+          <div class="field" style="flex:1"><label>PANEL GAP / KERF Y (MM)</label><input type="number" step="0.1" name="kerf_y" id="kerf_y" value="{{ fields.kerf_y }}"></div>
+          <div class="field" style="flex:1"><label>NO. OF SHEETS</label><input type="number" name="sheets" id="sheets" value="{{ fields.sheets }}" min="1"></div>
+        </div>
+        <div class="result-line" id="liveSheetLine" style="display:none"></div>
+        <div style="display:flex;gap:10px;margin-top:14px">
+          <button class="btn" type="submit" name="action" value="calculate">⚙️ Calculate / Refresh</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h3>📋 APPLY TO JOB ORDER</h3></div>
+      <div class="panel-body">
+        <div style="display:flex;gap:10px;align-items:center">
+          <select name="apply_order" style="flex:1;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px">
+            <option value="">Select order…</option>
+            {% for o in orders %}<option value="{{ o.id }}">{{ o.order_no }} · {{ o.party }} ({{ o.product[:35] }})</option>{% endfor %}
+          </select>
+          <button class="btn" type="submit" name="action" value="apply_order">Apply Layout to Order</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h3>💾 SAVE TO FINISHED PRODUCT</h3></div>
+      <div class="panel-body">
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+          <select name="save_select" style="flex:1;min-width:180px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px">
+            <option value="">Select finished product…</option>
+            {% for m in models %}<option value="{{ m.id }}">{{ m.name }} (update)</option>{% endfor %}
+          </select>
+          <input type="text" name="save_name" placeholder="or new name…" style="flex:1;min-width:180px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px">
+          <button class="btn btn-amber" type="submit" name="action" value="save_model">Save Layout to Model</button>
+        </div>
+        <p class="muted small" style="margin-top:8px">💡 Save as Finished Product — Job Order for it will auto-fill from here instead of being re-entered.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ RIGHT: stats + previews ============ -->
+  <div>
+    <div class="cards" style="grid-template-columns:repeat(auto-fill,minmax(130px,1fr));margin-bottom:14px">
+      <div class="stat"><div class="top"><span class="lbl">Panels/Sheet</span></div><div class="num" id="statPPS">0</div></div>
+      <div class="stat"><div class="top"><span class="lbl">Total Panels</span></div><div class="num" id="statTP">0</div></div>
+      <div class="stat"><div class="top"><span class="lbl">PCS/Sheet</span></div><div class="num" id="statPCS">0</div></div>
+      <div class="stat"><div class="top"><span class="lbl">Total PCS</span></div><div class="num" id="statTPCS">0</div></div>
+      <div class="stat"><div class="top"><span class="lbl">Wastage</span></div><div class="num" id="statWaste" style="color:#16a34a">0%</div></div>
+      <div class="stat"><div class="top"><span class="lbl">Layout Type</span></div><div class="num" id="statLayout" style="font-size:14px">—</div></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h3>🔲 Panel outline · Individual PCB · Multiplier</h3></div>
+      <div class="panel-body" style="padding:10px">
+        <div id="svgPanel">{{ svg_panel|safe }}</div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h3 id="bestPanelsLabel">🏆 BEST LAYOUT (0 PANELS)</h3><span class="muted small" id="sheetPreviewHead"></span></div>
+      <div class="panel-body" style="padding:10px">
+        <div id="svgSheet">{{ svg_sheet|safe }}</div>
+      </div>
+    </div>
+
+    <div class="panel" id="orientPanel" style="display:none">
+      <div class="panel-head"><h3>🔄 Orientation Options</h3></div>
+      <div class="panel-body" style="padding:12px 16px">
+        <div style="display:flex;gap:12px;flex-wrap:wrap">
+          <div id="orientNormal" style="flex:1;min-width:200px;border:2px solid var(--border);border-radius:10px;padding:12px 14px;background:#fff">
+            <b>NORMAL ORIENTATION ONLY</b>
+            <div style="font-size:18px;font-weight:800;margin-top:6px" id="liveNormal">0 × 0 = 0 panels</div>
+            <div id="badgeNormal"></div>
+          </div>
+          <div id="orientRotated" style="flex:1;min-width:200px;border:2px solid var(--border);border-radius:10px;padding:12px 14px;background:#fff">
+            <b>ROTATED 90° ONLY</b>
+            <div style="font-size:18px;font-weight:800;margin-top:6px" id="liveRotated">0 × 0 = 0 panels</div>
+            <div id="badgeRotated"></div>
+          </div>
+          <div id="orientMixed" style="flex:1;min-width:260px;border:2px solid var(--border);border-radius:10px;padding:12px 14px;background:#fff">
+            <b>MIXED ROWS (BEST)</b>
+            <div style="font-size:16px;font-weight:800;margin-top:6px" id="liveMixed">0 × row of 0 + 0 × row of 0 = 0 panels</div>
+            <div id="badgeMixed"></div>
+          </div>
+        </div>
+        <p class="muted small" style="margin-top:10px">💡 Tip: mixing row orientations often beats a single uniform grid — this optimizer checks both automatically.</p>
+      </div>
+    </div>
+  </div>
+</div>
+</form>
+
+<style>
+.result-line{background:var(--bg);border:1px solid var(--border);border-radius:9px;padding:10px 13px;font-size:13px;margin-top:14px}
+.section-title{font-size:11px;letter-spacing:1.2px;text-transform:uppercase;color:var(--muted);font-weight:700;margin:4px 2px 10px}
+</style>
+<script>
+/* ================= LIVE CUT LIST COMPUTATION ================= */
+function fmtNum(v){
+  if (v === 0) return '0';
+  return (Math.round(v * 100) / 100).toString();
+}
+function num(id){ var v = parseFloat(document.getElementById(id).value); return isNaN(v) ? 0 : v; }
+function intNum(id){ return Math.round(num(id)); }
+
+function computeLive(){
+  var pcbL = num('pcb_len'), pcbW = num('pcb_w');
+  var px = intNum('pcbs_x'), py = intNum('pcbs_y');
+  var gapX = num('gap_x'), gapY = num('gap_y');
+  var bl = num('border_l'), br = num('border_r'), bt = num('border_t'), bb = num('border_b');
+  var gx = Math.max(1, intNum('gang_x')), gy = Math.max(1, intNum('gang_y'));
+  var sl = num('sheet_len'), sw = num('sheet_w');
+  var kx = num('kerf_x'), ky = num('kerf_y');
+  var sheets = Math.max(1, intNum('sheets'));
+  var useLocked = document.getElementById('useChk').checked;
+
+  if (pcbL <= 0 || pcbW <= 0 || px <= 0 || py <= 0 || sl <= 0 || sw <= 0) return;
+
+  /* --- panel size: locked (computed) or manual --- */
+  var pL, pW;
+  var manualL = num('panel_len'), manualW = num('panel_w');
+  if (useLocked || manualL <= 0 || manualW <= 0) {
+    pL = pcbL * px + gapX * (px - 1) + bl + br;
+    pW = pcbW * py + gapY * (py - 1) + bt + bb;
+    document.getElementById('panel_len').value = fmtNum(pL);
+    document.getElementById('panel_w').value = fmtNum(pW);
+  } else {
+    pL = manualL; pW = manualW;
+  }
+
+  var pcsPanel = px * py;
+  var formula = '(' + fmtNum(pcbL) + 'x' + px + ' +' + fmtNum(gapX) + 'x' + (px - 1) +
+                ' gap +' + fmtNum(bl) + '+' + fmtNum(br) + ' border=' + fmtNum(pL) + 'mm, ' +
+                fmtNum(pcbW) + 'x' + py + ' +' + fmtNum(gapY) + 'x' + (py - 1) +
+                ' gap +' + fmtNum(bt) + '+' + fmtNum(bb) + ' border=' + fmtNum(pW) + 'mm)';
+
+  /* --- gang unit --- */
+  var gl = pL * gx + kx * (gx - 1);
+  var gw = pW * gy + ky * (gy - 1);
+
+  function fits(ul, uw){
+    if (ul <= 0 || uw <= 0) return [0, 0];
+    return [Math.floor((sl + kx) / (ul + kx)), Math.floor((sw + ky) / (uw + ky))];
+  }
+
+  var nx = fits(gl, gw)[0], ny = fits(gl, gw)[1];
+  var normal = nx * ny * gx * gy;
+  var rx = fits(gw, gl)[0], ry = fits(gw, gl)[1];
+  var rotated = rx * ry * gx * gy;
+
+  /* --- mixed rows: normal rows + rotated rows on one sheet --- */
+  var perN = Math.floor((sl + kx) / (gl + kx));
+  var perR = Math.floor((sl + kx) / (gw + kx));
+  var hN = gw + ky, hR = gl + ky;
+  var maxN = hN > 0 ? Math.floor((sw + ky) / hN) : 0;
+  var maxM = hR > 0 ? Math.floor((sw + ky) / hR) : 0;
+  var mixed = 0, mN = 0, mM = 0;
+  for (var n = 0; n <= maxN; n++)
+    for (var m = 0; m <= maxM; m++) {
+      if (n === 0 && m === 0) continue;
+      var hh = n * hN + m * hR - ky;
+      if (hh <= sw + 1e-9) {
+        var p = (n * perN + m * perR) * gx * gy;
+        if (p > mixed) { mixed = p; mN = n; mM = m; }
+      }
+    }
+
+  var best, pps;
+  if (mixed > normal && mixed > rotated) { best = 'mixed'; pps = mixed; }
+  else if (rotated > normal) { best = 'rotated'; pps = rotated; }
+  else { best = 'normal'; pps = normal; }
+
+  var gx2, gy2, cl, cw;
+  if (best === 'rotated') { gx2 = rx; gy2 = ry; cl = gw; cw = gl; }
+  else { gx2 = nx; gy2 = ny; cl = gl; cw = gw; }
+  var pcsSheet = pps * pcsPanel;
+  var totalPanels = pps * sheets;
+  var totalPcs = pcsSheet * sheets;
+  var used = totalPanels * pL * pW;
+  var area = sheets * sl * sw;
+  var waste = area > 0 ? Math.round((100 * (area - used) / area) * 10) / 10 : 0;
+
+  /* --- text updates --- */
+  var pl = document.getElementById('livePanelLine');
+  pl.style.display = 'block';
+  var gangTxt = (gx > 1 || gy > 1)
+      ? ' · <span style="color:#16a34a">' + gx + '×' + gy + ' multiplier → TOTAL ' + fmtNum(gl) + '×' + fmtNum(gw) + 'mm</span>'
+      : '';
+  pl.innerHTML = '➕ <b>Panel Size: ' + fmtNum(pL) + '×' + fmtNum(pW) + 'mm · PCS/Panel: ' + pcsPanel + gangTxt + '</b>';
+  document.getElementById('liveFormula').textContent = formula;
+
+  document.getElementById('inchesLive').textContent =
+    (sl / 25.4).toFixed(1) + '″ × ' + (sw / 25.4).toFixed(1) + '″';
+
+  var sl2 = document.getElementById('liveSheetLine');
+  sl2.style.display = 'block';
+  if (best === 'mixed') {
+    sl2.innerHTML = '→ <b>Mixed: ' + mN + ' × row of ' + perN + ' (normal) + ' + mM +
+                    ' × row of ' + perR + ' (rotated) = ' + pps + ' panels/sheet</b>';
+  } else {
+    sl2.innerHTML = '→ <b>Sheet Length: ' + gx2 + ' panels · Sheet Width: ' + gy2 +
+                    ' panels · Total: ' + pps + ' panels/sheet</b>';
+  }
+
+  document.getElementById('statPPS').textContent = pps;
+  document.getElementById('statTP').textContent = totalPanels;
+  document.getElementById('statPCS').textContent = pcsSheet;
+  document.getElementById('statTPCS').textContent = totalPcs;
+  document.getElementById('statWaste').textContent = waste + '%';
+  document.getElementById('statWaste').style.color = (waste <= 35) ? '#16a34a' : '#d97706';
+  document.getElementById('statLayout').textContent =
+    (best === 'mixed') ? 'Mixed Rows (Best)' : (best === 'rotated') ? 'Rotated 90°' : 'Normal';
+  document.getElementById('bestPanelsLabel').textContent = '🏆 BEST LAYOUT (' + pps + ' PANELS)';
+
+  /* --- orientation cards --- */
+  document.getElementById('orientPanel').style.display = 'block';
+  document.getElementById('liveNormal').textContent = nx + ' × ' + ny + ' = ' + normal + ' panels';
+  document.getElementById('liveRotated').textContent = rx + ' × ' + ry + ' = ' + rotated + ' panels';
+  document.getElementById('liveMixed').textContent = mN + ' × row of ' + perN + ' (normal) + ' +
+      mM + ' × row of ' + perR + ' (rotated) = ' + mixed + ' panels';
+  var on = document.getElementById('orientNormal'), or = document.getElementById('orientRotated'),
+      om = document.getElementById('orientMixed');
+  var bn = document.getElementById('badgeNormal'), br2 = document.getElementById('badgeRotated'),
+      bm = document.getElementById('badgeMixed');
+  function mark(el, badge, isBest){
+    el.style.borderColor = isBest ? '#f59e0b' : 'var(--border)';
+    el.style.background = isBest ? '#fffdf3' : '#fff';
+    badge.innerHTML = isBest ? '<span class="badge b-urgent" style="margin-top:6px">✓ BEST</span>' : '';
+  }
+  mark(on, bn, best === 'normal');
+  mark(or, br2, best === 'rotated');
+  mark(om, bm, best === 'mixed');
+
+  /* --- SVG previews --- */
+  document.getElementById('svgPanel').innerHTML = svgPanel(pcbL, pcbW, px, py, gapX, gapY, bl, br, bt, bb, pL, pW, pcsPanel, gx, gy, kx, ky);
+  document.getElementById('svgSheet').innerHTML = svgSheet(sl, sw, cl, cw, gx2, gy2, gx, gy, kx, ky, pps, waste, best, mN, mM, perN, perR, gl, gw);
+  var sheetHead = document.getElementById('sheetPreviewHead');
+  if (sheetHead) sheetHead.textContent = (best === 'mixed') ? '🔲 Normal rows · Rotated rows' : '🔲 Panel outline · Sheet';
+}
+
+function svgPanel(pcbL, pcbW, px, py, gapX, gapY, bl, br, bt, bb, pL, pW, pcsPanel, gx, gy, kx, ky){
+  var W = 430, H = 300, pad = 26;
+  var gl = pL * gx + kx * (gx - 1), gw = pW * gy + ky * (gy - 1);  /* total panel with multiplier */
+  var scale = Math.min((W - 2*pad) / gl, (H - 2*pad) / gw);
+  var P = pL * scale, Q = pW * scale;
+  var Kx = kx * scale, Ky = ky * scale;
+  var GL = gl * scale, GW = gw * scale;
+  var x0 = pad + (W - 2*pad - GL) / 2, y0 = pad + (H - 2*pad - GW) / 2;
+  var cw = pcbL * scale, ch = pcbW * scale;
+  var gxs = gapX * scale, gys = gapY * scale;
+  var bx = bl * scale, by = bt * scale;
+  var s = '<svg viewBox="0 0 ' + W + ' ' + H + '" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;display:block">';
+  var a, b, i, j;
+  for (a = 0; a < gx; a++)
+    for (b = 0; b < gy; b++) {
+      var xp = x0 + a * (P + Kx), yp = y0 + b * (Q + Ky);
+      s += '<rect x="' + xp.toFixed(1) + '" y="' + yp.toFixed(1) + '" width="' + P.toFixed(1) + '" height="' + Q.toFixed(1) + '" fill="#fdf3df" stroke="#d97706" stroke-width="2" rx="3"/>';
+      if (cw > 2.4 && ch > 2.4) {
+        for (i = 0; i < px; i++)
+          for (j = 0; j < py; j++)
+            s += '<rect x="' + (xp + bx + i*(cw+gxs)).toFixed(1) + '" y="' + (yp + by + j*(ch+gys)).toFixed(1) + '" width="' + cw.toFixed(1) + '" height="' + ch.toFixed(1) + '" fill="#fbbf24" fill-opacity="0.5" stroke="#f59e0b" stroke-width="0.8"/>';
+        if (bl || br || bt || bb)
+          s += '<rect x="' + (xp + bx).toFixed(1) + '" y="' + (yp + by).toFixed(1) + '" width="' + (px*cw + (px-1)*gxs).toFixed(1) + '" height="' + (py*ch + (py-1)*gys).toFixed(1) + '" fill="none" stroke="#9a8a5a" stroke-width="1" stroke-dasharray="4 3"/>';
+      }
+    }
+  if (gx > 1 || gy > 1) {
+    s += '<rect x="' + x0.toFixed(1) + '" y="' + y0.toFixed(1) + '" width="' + GL.toFixed(1) + '" height="' + GW.toFixed(1) + '" fill="none" stroke="#16a34a" stroke-width="1.8" stroke-dasharray="6 4" rx="5"/>';
+    s += '<text x="' + (x0 + GL/2) + '" y="' + (y0 - 6).toFixed(1) + '" text-anchor="middle" font-size="11" fill="#16a34a" font-family="Segoe UI,Arial">TOTAL WITH MULTIPLIER: ' + fmtNum(gl) + '×' + fmtNum(gw) + ' mm (' + gx + '×' + gy + ' + kerf)</text>';
+  }
+  if ((gapX > 0 || gapY > 0) && Q > 24)
+    s += '<text x="' + (x0 + P/2) + '" y="' + (y0 + Q - 10).toFixed(1) + '" text-anchor="middle" font-size="10" fill="#b45309" font-family="Segoe UI,Arial">gap ' + fmtNum(gapX) + '×' + fmtNum(gapY) + ' mm</text>';
+  var lbl = 'Panel ' + fmtNum(pL) + '×' + fmtNum(pW) + ' mm · ' + pcsPanel + ' PCBs (' + px + '×' + py + ')';
+  if (gx > 1 || gy > 1)
+    lbl += ' · ' + gx + '×' + gy + ' gang → <tspan fill="#16a34a" font-weight="700">Total ' + fmtNum(gl) + '×' + fmtNum(gw) + ' mm</tspan>';
+  s += '<text x="' + (W/2) + '" y="' + (H-6) + '" text-anchor="middle" font-size="12.5" fill="#8a8f98" font-family="Segoe UI,Arial">' + lbl + '</text>';
+  s += '</svg>';
+  return s;
+}
+
+function svgSheet(sl, sw, cl, cw, gx2, gy2, gx, gy, kx, ky, pps, waste, best, mN, mM, perN, perR, gl, gw){
+  var W = 430, H = 380, pad = 26;
+  var scale = Math.min((W - 2*pad) / sl, (H - 2*pad) / sw);
+  var S = sl * scale, T = sw * scale;
+  var x0 = pad + (W - 2*pad - S) / 2, y0 = pad + (H - 2*pad - T) / 2;
+  var Kx = kx * scale, Ky = ky * scale;
+  var s = '<svg viewBox="0 0 ' + W + ' ' + H + '" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;display:block">';
+  s += '<rect x="' + x0.toFixed(1) + '" y="' + y0.toFixed(1) + '" width="' + S.toFixed(1) + '" height="' + T.toFixed(1) + '" fill="#fffdf5" stroke="#b3ac99" stroke-width="2"/>';
+  var i, j, a, b;
+  function gangCell(cx, cy, Cl, Cw, fill, stroke){
+    s += '<rect x="' + cx.toFixed(1) + '" y="' + cy.toFixed(1) + '" width="' + Cl.toFixed(1) + '" height="' + Cw.toFixed(1) + '" fill="' + fill + '" stroke="' + stroke + '" stroke-width="1.4" rx="2"/>';
+    if (gx > 1 || gy > 1) {
+      var p = (Cl - Kx * (gx - 1)) / gx, q = (Cw - Ky * (gy - 1)) / gy;
+      for (a = 0; a < gx; a++)
+        for (b = 0; b < gy; b++)
+          s += '<rect x="' + (cx + a*(p+Kx)).toFixed(1) + '" y="' + (cy + b*(q+Ky)).toFixed(1) + '" width="' + p.toFixed(1) + '" height="' + q.toFixed(1) + '" fill="#fde68a" stroke="#f59e0b" stroke-width="0.7"/>';
+    }
+  }
+  if (best === 'mixed') {
+    var y = y0;
+    var Cl = gl * scale, Cw = gw * scale;
+    for (i = 0; i < mN; i++) {
+      for (j = 0; j < perN; j++) gangCell(x0 + j * (Cl + Kx), y, Cl, Cw, '#f7c948', '#b45309');
+      y += Cw + Ky;
+    }
+    var Cl2 = gw * scale, Cw2 = gl * scale;
+    for (i = 0; i < mM; i++) {
+      for (j = 0; j < perR; j++) gangCell(x0 + j * (Cl2 + Kx), y, Cl2, Cw2, '#93c5fd', '#1d4ed8');
+      y += Cw2 + Ky;
+    }
+    s += '<text x="' + (W/2) + '" y="' + (H-6) + '" text-anchor="middle" font-size="12.5" fill="#8a8f98" font-family="Segoe UI,Arial">Normal rows · Rotated rows — ' +
+         mN + '× row of ' + perN + ' + ' + mM + '× row of ' + perR + ' = ' + pps + ' panels · ' + waste + '% waste</text>';
+  } else {
+    var Cl = cl * scale, Cw = cw * scale;
+    for (i = 0; i < gx2; i++)
+      for (j = 0; j < gy2; j++)
+        gangCell(x0 + i * (Cl + Kx), y0 + j * (Cw + Ky), Cl, Cw, '#f7c948', '#b45309');
+    s += '<text x="' + (W/2) + '" y="' + (H-6) + '" text-anchor="middle" font-size="12.5" fill="#8a8f98" font-family="Segoe UI,Arial">Sheet ' +
+         fmtNum(sl) + '×' + fmtNum(sw) + ' mm · ' + gx2 + '×' + gy2 + ' = ' + pps + ' panels · ' + waste + '% waste</text>';
+  }
+  s += '</svg>';
+  return s;
+}
+
+/* --- bind live updates to every input --- */
+['pcb_len','pcb_w','pcbs_x','pcbs_y','gap_x','gap_y','border_l','border_r','border_t','border_b',
+ 'gang_x','gang_y','sheet_len','sheet_w','panel_len','panel_w','kerf_x','kerf_y','sheets'
+].forEach(function(id){
+  document.getElementById(id).addEventListener('input', computeLive);
+});
+
+/* Use checkbox: lock/unlock panel size */
+document.getElementById('useChk').addEventListener('change', function(){
+  var locked = this.checked;
+  document.getElementById('panel_len').readOnly = locked;
+  document.getElementById('panel_w').readOnly = locked;
+  computeLive();
+});
+
+/* sheet presets */
+document.querySelectorAll('.preset-btn').forEach(function(b){
+  b.addEventListener('click', function(){
+    var p = b.getAttribute('data-preset');
+    if (p === 'custom') return;
+    var dims = p.split('x');
+    document.getElementById('sheet_len').value = dims[0];
+    document.getElementById('sheet_w').value = dims[1];
+    computeLive();
+  });
+});
+
+/* initial lock state + first computation on load */
+(function(){
+  var locked = document.getElementById('useChk').checked;
+  document.getElementById('panel_len').readOnly = locked;
+  document.getElementById('panel_w').readOnly = locked;
+  computeLive();
+})();
+</script>
+{% endblock %}

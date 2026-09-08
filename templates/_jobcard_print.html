@@ -1,0 +1,114 @@
+{# Shared job card print sheet markup — used by jobcard.html preview and jobcard_print.html download #}
+<div class="print-sheet" id="printSheet">
+  <div class="ps-head">
+    <div class="ps-company">
+      <div class="ps-logo">SC</div>
+      <div>
+        <div class="ps-co">SHIVAYA CIRCUIT PVT. LTD.</div>
+        <div class="ps-tag">PCB Manufacturing · Job Card</div>
+      </div>
+    </div>
+    <div class="ps-jc">JOB CARD <b>#{{ order.order_no }}</b></div>
+  </div>
+
+  <div class="ps-grid">
+    <div class="ps-cell"><span class="ps-lbl">ORDER NO.</span><span class="ps-val mono" id="pr_order_no">{{ order.order_no }}</span></div>
+    <div class="ps-cell"><span class="ps-lbl">MODEL</span><span class="ps-val" id="pr_model">{{ jc.model|dash }}</span></div>
+    <div class="ps-cell"><span class="ps-lbl">PARTY MODEL</span><span class="ps-val" id="pr_party_model">{{ jc.party_model|dash }}</span></div>
+    <div class="ps-cell"><span class="ps-lbl">DATE</span><span class="ps-val" id="pr_odate">{{ jc.odate|dash }}</span></div>
+
+    <div class="ps-cell"><span class="ps-lbl">PARTY</span><span class="ps-val" id="pr_party">{{ order.party|dash }}</span></div>
+    <div class="ps-cell"><span class="ps-lbl">ORDER VIA</span><span class="ps-val" id="pr_order_via">{{ jc.order_via|dash }}{% if jc.odate %} ({{ jc.odate }}){% endif %}</span></div>
+    <div class="ps-cell"><span class="ps-lbl">DELIVERY</span><span class="ps-val" id="pr_exp_delivery">{{ jc.exp_delivery|dash }}</span></div>
+    <div class="ps-cell"><span class="ps-lbl">CREATED BY</span><span class="ps-val" id="pr_created_by">{{ jc.created_by|dash }}</span></div>
+
+    <div class="ps-cell"><span class="ps-lbl">ACTUAL PCB SIZE</span><span class="ps-val" id="pr_actual">{{ jc.actual_pcb_x|gfmt }}×{{ jc.actual_pcb_y|gfmt }}mm</span></div>
+    <div class="ps-cell"><span class="ps-lbl">ACTUAL PANEL SIZE</span><span class="ps-val" id="pr_panel">{{ jc.panel_x|gfmt }}x{{ jc.panel_y|gfmt }}mm</span></div>
+    <div class="ps-cell"><span class="ps-lbl">CNC MARGIN</span><span class="ps-val" id="pr_cnc">{{ jc.cnc_margin_x|gfmt }}x{{ jc.cnc_margin_y|gfmt }}mm</span></div>
+    <div class="ps-cell"><span class="ps-lbl">PCB IN ONE PANEL</span><span class="ps-val" id="pr_pcs_panel">{{ jc.pcs_panel }}</span></div>
+
+    <div class="ps-cell"><span class="ps-lbl">X CUTTING SIZE</span><span class="ps-val" id="pr_xcut">L-{{ jc.panel_x|gfmt }}({{ (jc.sheet_len/25.4)|round(0)|int }}″)×{{ jc.x_qty }}</span></div>
+    <div class="ps-cell"><span class="ps-lbl">Y CUTTING SIZE</span><span class="ps-val" id="pr_ycut">W-{{ jc.panel_y|gfmt }}({{ (jc.sheet_w/25.4)|round(0)|int }}″)×{{ jc.y_qty }}</span></div>
+    <div class="ps-cell"><span class="ps-lbl">PCB IN ONE SHEET</span><span class="ps-val" id="pr_pcb_sheet">{{ jc.pcs_panel * jc.panels_per_sheet }}</span></div>
+    <div class="ps-cell"><span class="ps-lbl">NO. OF SHEET</span><span class="ps-val" id="pr_sheets">{{ jc.sheets }} SHEET</span></div>
+
+    <div class="ps-cell"><span class="ps-lbl">SHEET MATERIAL</span><span class="ps-val" id="pr_sheet_material">{{ jc.sheet_material|dash }}</span></div>
+    <div class="ps-cell"><span class="ps-lbl">COPPER</span><span class="ps-val" id="pr_copper">{{ jc.copper_finish|dash }}</span></div>
+    <div class="ps-cell"><span class="ps-lbl">LEGEND</span><span class="ps-val" id="pr_legend">{{ jc.legend_printing|dash }}</span></div>
+    <div class="ps-cell"><span class="ps-lbl">FINISH</span><span class="ps-val" id="pr_finish">{{ jc.finish|dash }}</span></div>
+
+    <div class="ps-cell"><span class="ps-lbl">MASKING</span><span class="ps-val" id="pr_masking">{{ jc.masking|dash }}</span></div>
+    <div class="ps-cell"><span class="ps-lbl">TYPE</span><span class="ps-val" id="pr_type">{{ jc.pcb_type|dash }}</span></div>
+    <div class="ps-cell"><span class="ps-lbl">QTY OF PANEL</span><span class="ps-val" id="pr_qty_panel">{{ jc.qty_panel }} PANEL</span></div>
+    <div class="ps-cell"><span class="ps-lbl">NO OF PCB</span><span class="ps-val" id="pr_qty_pcs">{{ order.qty }} PCS</span></div>
+
+    <div class="ps-cell"><span class="ps-lbl">PRICE (₹)/PC</span><span class="ps-val" id="pr_price">{{ jc.price|inr }}</span></div>
+    <div class="ps-cell"><span class="ps-lbl">RATE/SQ.INCH</span><span class="ps-val" id="pr_rs_pcb">{{ jc.rs_pcb|gfmt }}</span></div>
+    <div class="ps-cell"><span class="ps-lbl">TOTAL PCB PRICE</span><span class="ps-val" id="pr_total_price">{{ (jc.price * order.qty)|inr }}</span></div>
+    <div class="ps-cell"><span class="ps-lbl">PRIORITY</span><span class="ps-val" id="pr_priority" style="font-weight:800;color:{{'#b45309' if order.priority=='urgent' else 'inherit'}}">{{ order.priority|upper }}</span></div>
+    <div class="ps-cell"><span class="ps-lbl">CHECKED BY</span><span class="ps-val" id="pr_checked_by">{{ jc.checked_by|dash }}</span></div>
+  </div>
+
+  {% if dispatch %}
+  <div class="ps-dispatch">🚚 DISPATCH: {{ dispatch.mode|upper }} · {{ dispatch.ddate }} {{ dispatch.dtime }} · by {{ dispatch.dispatched_by }}{% if dispatch.details %} · {{ dispatch.details }}{% endif %}</div>
+  {% endif %}
+  <table class="ps-proc">
+    <thead>
+      <tr>
+        <th style="width:120px">PROCESS</th>
+        <th>DATE</th><th>TIME</th><th>NAME</th>
+        <th>DATE</th><th>TIME</th><th>NAME</th>
+        <th style="width:70px">TOTAL TIME</th>
+        <th style="width:70px">QTY</th>
+        <th>NEXT</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for p in procs %}
+      <tr class="proc-{{ p.id }}">
+        <td class="ps-procname">{% if p.idx %}<span class="pnum">{{ p.idx }}.</span>{% endif %} {{ p.process }}{% if p.skipped %} <b style="color:#b3401c">⏭ SKIPPED</b>{% endif %}</td>
+        <td class="s-date">{{ p.start_date }}</td>
+        <td class="s-time">{{ p.start_time }}</td>
+        <td class="s-name">{{ p.start_name }}</td>
+        <td class="e-date">{{ p.end_date }}</td>
+        <td class="e-time">{{ p.end_time }}</td>
+        <td class="e-name">{{ p.end_name }}</td>
+        <td class="t-total">{{ p.total }}</td>
+        <td class="t-qty">{{ p.qty or '' }}</td>
+        <td class="t-next">{{ p.next_process }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <div class="ps-bottom">
+    <div class="ps-cell" style="flex:1"><span class="ps-lbl">TOTAL QUANTITY</span><span class="ps-val" id="pr_total_qty">{{ jc.total_qty }}</span></div>
+    <div class="ps-cell" style="flex:1"><span class="ps-lbl">SHORT QUANTITY OF PCB</span><span class="ps-val" id="pr_short_qty">{{ jc.short_qty }}</span></div>
+    <div class="ps-cell" style="flex:1.6"><span class="ps-lbl">REASON OF SHORT PCB</span><span class="ps-val" id="pr_short_reason">{{ jc.short_reason|dash }}</span></div>
+  </div>
+  <div class="ps-sign">
+    <span class="ps-lbl">SIGNATURE OF HANDOVER, ORDER NO. AND DATE</span>
+    <div class="ps-sign-line" id="pr_handover">{{ jc.handover_sign|dash }}</div>
+  </div>
+
+  {% if issues %}
+  <div style="margin-top:10px">
+    <span class="ps-lbl" style="display:block;margin-bottom:4px">MATERIALS ISSUED FROM STOCK (TOTAL CONSUMED)</span>
+    <table class="ps-proc" style="width:100%">
+      <thead>
+        <tr><th>ITEM</th><th style="width:80px">QTY</th><th style="width:150px">WORKER</th><th style="width:140px">DATE/TIME</th></tr>
+      </thead>
+      <tbody>
+        {% for mi in issues %}
+        <tr>
+          <td class="ps-procname">{{ mi.item_name }}</td>
+          <td class="t-qty">− {{ mi.qty|gfmt }} {{ mi.unit }}</td>
+          <td class="s-name">{{ mi.worker }}</td>
+          <td class="s-name">{{ mi.taken_on }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+</div>

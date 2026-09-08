@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+{% block content %}
+
+<div class="cards">
+  <div class="stat">
+    <div class="top"><span class="lbl">Urgent</span><span class="ic ic-yellow">⚠️</span></div>
+    <div class="num" style="color:#b45309">{{ urgent }}</div>
+    <div class="sub">Priority job orders</div>
+  </div>
+  <div class="stat">
+    <div class="top"><span class="lbl">Present Today</span><span class="ic ic-mint">👥</span></div>
+    <div class="num">{{ present }}/{{ total_emp }}</div>
+    <div class="sub">Employees on floor</div>
+  </div>
+  <div class="stat">
+    <div class="top"><span class="lbl">Active Orders</span><span class="ic ic-blue">📋</span></div>
+    <div class="num">{{ active_orders }}/{{ total_orders }}</div>
+    <div class="sub">In production</div>
+  </div>
+  <div class="stat">
+    <div class="top"><span class="lbl">Overdue</span><span class="ic ic-peach">⏰</span></div>
+    <div class="num" style="font-size:16px;color:#b3401c">{{ overdue_rev|inr }}</div>
+    <div class="sub">Pending receipts</div>
+  </div>
+  <div class="stat">
+    <div class="top"><span class="lbl">Pending Revenue</span><span class="ic ic-gray">💰</span></div>
+    <div class="num" style="font-size:16px">{{ pending_rev|inr }}</div>
+    <div class="sub">To be collected</div>
+  </div>
+  <div class="stat">
+    <div class="top"><span class="lbl">Low Stock Items</span><span class="ic ic-yellow">📉</span></div>
+    <div class="num">{{ low_stock }}</div>
+    <div class="sub">Reorder needed</div>
+  </div>
+  <div class="stat">
+    <div class="top"><span class="lbl">Job Orders</span><span class="ic ic-navy">🗂️</span></div>
+    <div class="num">{{ total_orders }}</div>
+    <div class="sub"><a href="/orders" style="color:var(--blue)">View all →</a></div>
+  </div>
+  <div class="stat">
+    <div class="top"><span class="lbl">Machines Running</span><span class="ic ic-mint">🏭</span></div>
+    <div class="num">{{ machines_running }}/{{ total_machines }}</div>
+    <div class="sub"><a href="/machines" style="color:var(--blue)">Machine status →</a></div>
+  </div>
+</div>
+
+<div class="section-title"><span class="live-dot"></span>&nbsp; LIVE PROCESS TRACKING</div>
+<div class="panel">
+  <div class="panel-head">
+    <h3>Live Process Tracking</h3>
+    <a class="btn btn-outline btn-sm" href="/tracking">Open full tracking →</a>
+  </div>
+  <div class="panel-body" style="padding:0;overflow-x:auto">
+    <table>
+      <thead>
+        <tr><th>Order #</th><th>Party</th><th>Board</th><th>Current Process</th><th>Status</th><th>Operator</th><th>Finished Products</th><th>Started</th></tr>
+      </thead>
+      <tbody>
+        {% for o in tracking %}
+        <tr>
+          <td><b class="mono">{{ o.order_no }}</b></td>
+          <td>{{ o.party }}</td>
+          <td>{{ o.board }}</td>
+          <td>
+            <span class="badge {{'b-amber' if o.current_process!='Completed' else 'b-done'}}">{{ o.current_process }}</span>
+          </td>
+          <td><span class="badge {{'b-pending' if o.status=='pending' else 'b-done'}}">{{ 'Pending' if o.status=='pending' else 'Done' }}</span></td>
+          <td>{{ o.operator or '—' }}</td>
+          <td class="small">{{ o.product }}</td>
+          <td class="t-right">
+            <span class="prog-label">{{ o.progress }}%</span>
+            <span class="prog" style="display:inline-block;vertical-align:middle"><span class="fill {{'done' if o.progress>=100}}" style="width:{{ o.progress }}%"></span></span>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="8"><div class="empty">No pending orders {% if q %}for "{{ q }}"{% endif %}</div></td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="section-title">PRODUCTION OVERVIEW</div>
+<div class="cards" style="grid-template-columns:repeat(auto-fill,minmax(190px,1fr))">
+  {% for o in overview %}
+  <div class="stat" style="padding:16px">
+    <div class="top">
+      <span class="lbl mono" style="font-size:12.5px">{{ o.order_no }} · {{ o.party[:18] }}{% if o.party|length>18 %}…{% endif %}</span>
+      {% if o.priority=='urgent' %}<span class="badge b-urgent">URGENT</span>{% endif %}
+    </div>
+    <div class="small muted" style="margin:4px 0 12px">{{ o.product }}</div>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+      <span class="prog" style="flex:1"><span class="fill {{'done' if o.progress>=100}}" style="width:{{ o.progress }}%"></span></span>
+      <span class="prog-label">{{ o.progress }}%</span>
+    </div>
+    <div class="sub">🚚 Delivery: {{ o.delivery_date or '—' }} &nbsp;·&nbsp; {{ o.qty }} pcs</div>
+  </div>
+  {% else %}
+  <div class="empty" style="grid-column:1/-1">No active orders</div>
+  {% endfor %}
+</div>
+
+{% if notices %}
+<div class="section-title">PENDING PURCHASE ORDERS</div>
+<div class="panel">
+  <div class="panel-body" style="padding:8px 18px">
+    <table>
+      {% for n in notices %}
+      <tr>
+        <td class="mono"><b>{{ n.po_no }}</b></td>
+        <td><b>{{ n.vendor }}</b><div class="muted small">{{ n.item }}</div></td>
+        <td class="t-right">{{ n.amount|inr }}</td>
+        <td><span class="badge {{'b-blue' if n.status=='in_transit' else 'b-amber'}}">{{ n.status|replace('_',' ')|upper }}</span></td>
+      </tr>
+      {% endfor %}
+    </table>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,255 @@
+{% extends "base.html" %}
+{% block title %}Operator View{% endblock %}
+{% block page_title %}Operator View{% endblock %}
+{% block content %}
+
+<style>
+.jobcard{border:1px solid var(--border);border-radius:14px;background:var(--card);box-shadow:var(--shadow);padding:16px 18px;display:flex;flex-direction:column;gap:10px}
+.jobcard.urgent{border-left:4px solid #d97706}
+.jobcard .jtop{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.jobcard .jtop .ono{font-size:17px;font-weight:800}
+.jobcard .jparty{font-size:13.5px;font-weight:600;color:var(--text)}
+.jobcard .jmeta{font-size:12.5px;color:#6b7280}
+.jobcard .jstep{margin-top:4px;padding:8px 10px;background:var(--bg2);border-radius:9px;font-size:12.5px}
+.jobcard .jstep b{color:#b45309}
+.state-badge{padding:3px 10px;border-radius:99px;font-size:11px;font-weight:700}
+.st-new{background:#e0e7ff;color:#3730a3}
+.st-work{background:#d8f4ee;color:#0f766e}
+.st-pause{background:#fde8e0;color:#b3401c}
+.st-done{background:#e5e7eb;color:#4b5563}
+.btnrow{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px}
+.hide{display:none}
+.reasonbox{margin-top:8px;padding:9px 10px;background:#fffdf3;border:1px dashed var(--amber);border-radius:9px;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.reasonbox input{padding:6px 9px;border:1px solid var(--border);border-radius:7px;font-size:12px}
+.logrow{display:flex;gap:10px;align-items:center;padding:8px 12px;border-bottom:1px solid var(--border);font-size:12.5px}
+.logrow:last-child{border-bottom:none}
+</style>
+
+<div class="panel">
+  <div class="panel-body" style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+    <div>
+      <div style="font-size:15px;font-weight:700">👷 Logged in as: <span style="color:#b45309">{{ op }}</span></div>
+      <div class="muted small">{{ designation }}</div>
+    </div>
+    {% if admin_show %}
+    <form method="post" action="/operator/switch" style="display:flex;gap:8px;align-items:center;margin-left:auto">
+      <select name="op_name" style="padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px">
+        {% for e in employees %}<option value="{{ e.name }}" {{'selected' if e.name == op}}>{{ e.name }} — {{ e.designation }}</option>{% endfor %}
+      </select>
+      <button class="btn btn-outline btn-sm" type="submit">🔄 Switch Operator</button>
+    </form>
+    {% endif %}
+  </div>
+</div>
+
+{% if admin_show %}
+<div class="panel" style="margin-bottom:16px">
+  <div class="panel-body" style="padding:10px 16px;display:flex;align-items:center;gap:10px;background:#fef9ec;border-radius:0 0 12px 12px">
+    <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
+      <input type="checkbox" id="emergencyBox" checked onchange="filterJobs()" style="width:17px;height:17px;accent-color:#d97706">
+      <b>⚠ Emergency</b> — show ALL jobs, not just my assigned steps
+    </label>
+  </div>
+</div>
+{% else %}
+<div class="panel" style="margin-bottom:16px">
+  <div class="panel-body" style="padding:10px 16px;display:flex;align-items:center;gap:10px;background:#eef6ff;border-radius:0 0 12px 12px">
+    <b>🔒 Sirf aapka assigned kaam dikh raha hai</b> — admin ne jo job/step aapko diya hai, wahi yahan aayega.
+  </div>
+</div>
+{% endif %}
+
+<div class="section-title">🛠️ JOBS AWAITING ACTION</div>
+<div class="cards" style="grid-template-columns:repeat(auto-fill,minmax(340px,1fr))">
+  {% for j in jobs %}
+  <div class="jobcard {{'urgent' if j.priority=='urgent'}}" data-mine="{{ '1' if j.mine else '0' }}">
+    <div class="jtop">
+      <span class="ono">{{ j.order_no }}</span>
+      {% if j.priority=='urgent' %}<span class="badge b-urgent">URGENT</span>{% endif %}
+      {% if j.skipped %}<span class="state-badge st-new" style="background:#e5e7eb;color:#6b7280">⏭ SKIPPED</span>
+      {% elif j.state=='new' %}<span class="state-badge st-new">NOT STARTED</span>
+      {% elif j.state=='working' %}<span class="state-badge st-work">⏱ WORKING</span>
+      {% elif j.state=='paused' %}<span class="state-badge st-pause">⏸ PAUSED</span>
+      {% elif j.state=='finished' %}<span class="state-badge st-done">✅ FINISHED</span>{% endif %}
+      <span style="margin-left:auto" class="muted small mono">{{ j.assigned_machine }} · {{ j.assigned_op }}</span>
+    </div>
+    <div class="jparty">{{ j.party }} : {{ j.product|replace(' - ', ' : ')|truncate(46) }}</div>
+    <div class="jmeta">{{ j.board }} — {{ j.qty }} pcs · 🚚 {{ j.delivery_date or '—' }}</div>
+    <div class="jstep" style="display:flex;flex-direction:column;gap:6px">
+      <div>▶ RUNNING: <b>{{ j.proc }}</b></div>
+      <div>
+        {% if j.next_none %}
+        NEXT: <b style="color:#b3401c">⏭ NONE (agla process nahi hoga)</b>
+        {% elif j.next_proc %}
+        NEXT: <b style="color:#0f766e">{{ j.next_proc }}</b>
+        {% else %}
+        NEXT: <span class="muted">— Job Card mein NEXT dropdown se select karein —</span>
+        {% endif %}
+      </div>
+    </div>
+    {% if j.state == 'paused' and j.pause_reason %}
+    <div class="jmeta" style="color:#b3401c">⏸ Reason: <b>{{ j.pause_reason }}</b></div>
+    {% endif %}
+    <div class="btnrow">
+      {% if j.dispatched %}
+      <span class="state-badge st-done" style="background:#d8f4ee;color:#0f766e">🚚 DISPATCHED — {{ j.dispatched.mode }} · {{ j.dispatched.ddate }} {{ j.dispatched.dtime }}</span>
+      {% elif j.is_dispatch_step %}
+      <button class="btn btn-sm" onclick="toggleReason('dispatch-{{ j.id }}')">🚚 Dispatch</button>
+      {% elif j.skipped %}
+      <span class="muted small">⏭ Ye process skip hai — NONE selected tha, agla process hoga</span>
+      {% elif j.state == 'new' %}
+      <form method="post" action="/operator/action"><input type="hidden" name="action" value="start">
+        <input type="hidden" name="order_id" value="{{ j.id }}"><input type="hidden" name="process" value="{{ j.proc }}">
+        <button class="btn btn-sm" type="submit">▶ Start</button></form>
+      {% elif j.state == 'working' %}
+      <button class="btn btn-outline btn-sm" onclick="toggleReason('pause-{{ j.id }}')">⏸ Pause</button>
+      <form method="post" action="/operator/action"><input type="hidden" name="action" value="finish">
+        <input type="hidden" name="order_id" value="{{ j.id }}"><input type="hidden" name="process" value="{{ j.proc }}">
+        <button class="btn btn-sm" type="submit" onclick="return confirm('Finish {{ j.proc }} for {{ j.order_no }}?')">✅ Finish</button></form>
+      <button class="btn btn-outline btn-sm" onclick="toggleReason('handover-{{ j.id }}')">🤝 Handover</button>
+      {% elif j.state == 'paused' %}
+      <form method="post" action="/operator/action"><input type="hidden" name="action" value="resume">
+        <input type="hidden" name="order_id" value="{{ j.id }}"><input type="hidden" name="process" value="{{ j.proc }}">
+        <button class="btn btn-sm" type="submit">▶ Resume</button></form>
+      <form method="post" action="/operator/action"><input type="hidden" name="action" value="finish">
+        <input type="hidden" name="order_id" value="{{ j.id }}"><input type="hidden" name="process" value="{{ j.proc }}">
+        <button class="btn btn-outline btn-sm" type="submit" onclick="return confirm('Finish {{ j.proc }} for {{ j.order_no }}?')">✅ Finish</button></form>
+      {% else %}
+      <span class="muted small">Next process ke liye Job Card dekhein</span>
+      {% endif %}
+      <a class="btn btn-outline btn-sm" href="/jobcard/{{ j.id }}">📄 Job Card</a>
+    </div>
+    <div id="pause-{{ j.id }}" class="reasonbox hide">
+      <form method="post" action="/operator/action" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;width:100%">
+        <input type="hidden" name="action" value="pause">
+        <input type="hidden" name="order_id" value="{{ j.id }}"><input type="hidden" name="process" value="{{ j.proc }}">
+        <input type="text" name="reason" placeholder="Pause reason (e.g. material loading)" required style="flex:1;min-width:150px">
+        <button class="btn btn-amber btn-sm" type="submit">⏸ Confirm Pause</button>
+      </form>
+    </div>
+    <div id="dispatch-{{ j.id }}" class="reasonbox hide">
+      <form method="post" action="/operator/action" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;width:100%">
+        <input type="hidden" name="action" value="dispatch">
+        <input type="hidden" name="order_id" value="{{ j.id }}"><input type="hidden" name="process" value="{{ j.proc }}">
+        <select name="mode" required style="padding:6px 9px;border:1px solid var(--border);border-radius:7px;font-size:12px">
+          <option value="">— Dispatch mode —</option>
+          <option value="Courier">📦 Courier</option>
+          <option value="By Hand">🤝 By Hand</option>
+          <option value="Transport">🚛 Transport</option>
+          <option value="Bus Parcel">🚌 Bus Parcel</option>
+          <option value="Speed Post">📮 Speed Post</option>
+          <option value="Other">📋 Other</option>
+        </select>
+        <input type="text" name="details" placeholder="LR No. / AWB / Driver…" style="flex:1;min-width:150px">
+        <button class="btn btn-sm" type="submit">🚚 Dispatch (auto date/time)</button>
+      </form>
+    </div>
+    <div id="handover-{{ j.id }}" class="reasonbox hide">
+      <form method="post" action="/operator/action" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;width:100%">
+        <input type="hidden" name="action" value="handover">
+        <input type="hidden" name="order_id" value="{{ j.id }}"><input type="hidden" name="process" value="{{ j.proc }}">
+        <select name="new_op" style="padding:6px 9px;border:1px solid var(--border);border-radius:7px;font-size:12px">
+          <option value="">— New worker —</option>
+          {% for e in employees %}<option value="{{ e.name }}">{{ e.name }}</option>{% endfor %}
+        </select>
+        <input type="text" name="reason" placeholder="Handover reason (e.g. shift change)" required style="flex:1;min-width:140px">
+        <input type="text" name="details" placeholder="Details (kya pending hai…)" style="flex:1;min-width:140px">
+        <button class="btn btn-amber btn-sm" type="submit">🤝 Handover</button>
+      </form>
+    </div>
+  </div>
+  {% else %}
+  <div class="empty" style="grid-column:1/-1">No active jobs 🎉</div>
+  {% endfor %}
+</div>
+
+<!-- ================= ITEM LO — STOCK SE ITEM LENA ================= -->
+<div class="panel" style="margin-top:18px">
+  <div class="panel-head"><h3>📦 ITEM LO — STOCK SE ITEM LENA HAI</h3></div>
+  <div class="panel-body">
+    <form method="post" action="/operator/issue" style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
+      <div class="field" style="flex:1.2;min-width:170px"><label>JOB ORDER (kis order ke liye)</label>
+        <select name="order_id" required>
+          <option value="">— order chuno —</option>
+          {% for j in jobs %}
+          <option value="{{ j.id }}">#{{ j.order_no }} — {{ j.proc }}{% if j.party %} · {{ j.party }}{% endif %}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="field" style="flex:1.8;min-width:190px"><label>ITEM (stock balance ke saath)</label>
+        <select name="item_id" required>
+          <option value="">— item chuno —</option>
+          {% for it in inv_items %}
+          <option value="{{ it.id }}">{{ it.name }} — {{ it.stock|gfmt }} {{ it.unit }} left</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="field" style="flex:0 0 90px"><label>QTY</label>
+        <input type="number" step="any" min="0.001" name="qty" required placeholder="0">
+      </div>
+      <div class="field" style="flex:1.2;min-width:150px"><label>NOTE (kis kaam ke liye)</label>
+        <input name="notes" placeholder="e.g. drilling ke liye">
+      </div>
+      <button class="btn" type="submit" style="background:#2563eb;color:#fff">➕ Issue Stock</button>
+    </form>
+    <div class="muted small" style="margin-top:8px">👷 Entry auto <b>{{ op }}</b> ke naam + date/time ke saath save hogi → inventory balance turant update → Job Card ke <b>MATERIAL ISSUES</b> aur Inventory ki <b>Material Issue History</b> mein dikhegi.</div>
+  </div>
+</div>
+
+<!-- ================= MY ISSUED ITEMS ================= -->
+<div class="panel" style="margin-top:14px">
+  <div class="panel-head"><h3>🧾 MY ISSUED ITEMS ({{ my_issues|length }})</h3></div>
+  <div class="panel-body" style="padding:0;overflow-x:auto">
+    <table style="width:100%;font-size:12.5px">
+      <thead><tr><th>Item</th><th class="t-right">Qty</th><th>Job Order</th><th>Date/Time</th><th>Note</th></tr></thead>
+      <tbody>
+        {% for mi in my_issues %}
+        <tr>
+          <td><b>{{ mi.item_name }}</b></td>
+          <td class="t-right mono"><b>− {{ mi.qty|gfmt }} {{ mi.unit }}</b></td>
+          <td>#{{ mi.order_id or '—' }}</td>
+          <td class="small muted">{{ mi.taken_on }}</td>
+          <td class="small muted">{{ mi.notes or '—' }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5"><div class="muted small">Abhi aapne koi item stock se nahi liya — upar se entry karo.</div></td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="panel" style="margin-top:18px">
+  <div class="panel-head"><h3>🕐 MY ACTIVITY LOG</h3></div>
+  <div class="panel-body" style="padding:0">
+    {% for l in logs %}
+    <div class="logrow">
+      <span class="mono small muted" style="min-width:130px">{{ l.ts }}</span>
+      <span class="mono">{{ '#' ~ l.order_id }}</span>
+      <b>{{ l.process }}</b>
+      <span class="badge {{'b-amber' if l.action=='pause' else 'b-urgent' if l.action=='handover' else 'b-done' if l.action=='finish' else 'b-blue'}}">{{ l.action|upper }}</span>
+      <span class="small">{{ l.operator }}</span>
+      {% if l.reason %}<span class="muted small">Reason: {{ l.reason }}</span>{% endif %}
+      {% if l.details %}<span class="muted small">{{ l.details }}</span>{% endif %}
+    </div>
+    {% else %}
+    <div class="empty">Abhi koi action nahi hua — Start dabate hi yahan log banega</div>
+    {% endfor %}
+  </div>
+</div>
+
+<script>
+function toggleReason(id){
+  var el = document.getElementById(id);
+  el.classList.toggle('hide');
+}
+function filterJobs(){
+  var showAll = document.getElementById('emergencyBox').checked;
+  document.querySelectorAll('.jobcard').forEach(function(card){
+    if (showAll) { card.style.display = 'flex'; return; }
+    card.style.display = (card.getAttribute('data-mine') === '1') ? 'flex' : 'none';
+  });
+}
+filterJobs();
+</script>
+{% endblock %}

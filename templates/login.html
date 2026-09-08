@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Login{% endblock %}
+{% block fullpage %}
+<div class="login-wrap">
+  <form class="login-card" method="post" action="/login" id="loginForm">
+    <div class="login-logo">SC</div>
+    <h1>Shivaya Circuit</h1>
+    <div class="tag">Smart ERP — PCB Manufacturing · Admin Login</div>
+    <div id="loginMsg"></div>
+    {% with msgs = get_flashed_messages(with_categories=true) %}
+      {% for cat, m in msgs %}<div class="flash {{cat}}" style="margin-bottom:14px">{{ m }}</div>{% endfor %}
+    {% endwith %}
+    <div class="field">
+      <label>Username</label>
+      <input type="text" name="username" placeholder="sahil" required autofocus>
+    </div>
+    <div class="field">
+      <label>Password</label>
+      <input type="password" name="password" placeholder="••••••••" required>
+    </div>
+    <button class="btn" type="submit" id="loginBtn">Login →</button>
+    <div class="demo-hint">Demo credentials: <b>sahil</b> / <b>admin123</b><br>Operator: <b>ramesh</b> / <b>op123</b></div>
+  </form>
+</div>
+<script>
+/* JS-based login: works even where native form submission / cookies are blocked */
+(function(){
+  var form = document.getElementById('loginForm');
+  var btn  = document.getElementById('loginBtn');
+  var msg  = document.getElementById('loginMsg');
+  form.addEventListener('submit', function(e){
+    e.preventDefault();
+    btn.disabled = true; btn.textContent = 'Logging in…';
+    var fd = new FormData(form);
+    fd.append('ajax', '1');
+    fetch('/login', {method: 'POST', body: fd})
+      .then(function(r){ return r.json(); })
+      .then(function(d){
+        if (d && d.ok && d.redirect) {
+          window.location.href = d.redirect;
+        } else {
+          msg.innerHTML = '<div class="flash error" style="margin-bottom:14px">' +
+            ((d && d.error) || 'Login failed.') + '</div>';
+          btn.disabled = false; btn.textContent = 'Login →';
+        }
+      })
+      .catch(function(){
+        form.submit();
+      });
+  });
+})();
+</script>
+{% endblock %}

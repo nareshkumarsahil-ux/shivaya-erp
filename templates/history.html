@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Process History{% endblock %}
+{% block page_title %}Process History — {{ order.order_no }}{% endblock %}
+{% block content %}
+<div class="toolbar"><a class="btn btn-outline btn-sm" href="/tracking">← Back to Tracking</a></div>
+<div class="panel" style="max-width:640px">
+  <div class="panel-head">
+    <h3>🔍 {{ order.order_no }} · {{ order.party }}</h3>
+    <span class="badge {{'b-pending' if order.status=='pending' else 'b-done'}}">{{ order.status|upper }}</span>
+  </div>
+  <div class="panel-body" style="padding:0">
+    <table>
+      <thead><tr><th>#</th><th>Process</th><th>Status</th><th>Operator</th><th>Updated</th></tr></thead>
+      <tbody>
+        {% for l in log %}
+        <tr>
+          <td class="mono muted">{{ loop.index }}</td>
+          <td><b>{{ l.process }}</b></td>
+          <td><span class="badge {{'b-done' if l.status=='done' else 'b-blue'}}">{{ l.status|upper }}</span></td>
+          <td>{{ l.operator or '—' }}</td>
+          <td class="muted small">{{ l.updated_on }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5"><div class="empty">No process history yet</div></td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

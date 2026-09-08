@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+{% block title %}Finished Products{% endblock %}
+{% block page_title %}Finished Products{% endblock %}
+{% block content %}
+<div class="toolbar">
+  <span class="muted small">💡 Cut List Optimizer se save kiye gaye layouts — yahan se load karke direct job order par apply kar sakte hain. Jab product <b>ready</b> ho jaye to <b>🏭 Produce</b> dabao — BOM ke hisaab se raw material inventory se cut hoga aur finished stock badhega.</span>
+  <div style="display:flex;gap:8px;flex-wrap:wrap">
+    <a class="btn btn-outline" href="/products?add=1">＋ Add Manually</a>
+    <a class="btn" href="/cutlist">＋ New in Cut List Optimizer</a>
+  </div>
+</div>
+
+{% if show_add or edit_model %}
+<div class="panel">
+  <div class="panel-head"><h3>{% if edit_model %}✏️ Edit Finished Product — {{ edit_model.name }}{% else %}➕ Add Finished Product Manually{% endif %}</h3><a class="btn btn-outline btn-sm" href="/products">✕ Close</a></div>
+  <div class="panel-body">
+    <form method="post" action="/products">
+      {% if edit_model %}<input type="hidden" name="edit_id" value="{{ edit_model.id }}">{% endif %}
+      <div class="form-grid">
+        <div class="field full"><label>Product Name *</label><input name="name" required placeholder="e.g. LED Driver 12W Board" value="{{ edit_model.name if edit_model else '' }}"></div>
+        <div class="field full"><label>Model Code</label><input name="model_code" placeholder="e.g. SCPL-105" value="{{ edit_model.model_code if edit_model else '' }}"></div>
+        <div class="field"><label>PCB Length (mm)</label><input type="number" step="0.1" name="pcb_len" value="{{ edit_model.pcb_len if edit_model else 40 }}"></div>
+        <div class="field"><label>PCB Width (mm)</label><input type="number" step="0.1" name="pcb_w" value="{{ edit_model.pcb_w if edit_model else 50 }}"></div>
+        <div class="field"><label>PCBs in X</label><input type="number" name="pcbs_x" value="{{ edit_model.pcbs_x if edit_model else 10 }}"></div>
+        <div class="field"><label>PCBs in Y</label><input type="number" name="pcbs_y" value="{{ edit_model.pcbs_y if edit_model else 5 }}"></div>
+        <div class="field"><label>Gap X (PC to PC)</label><input type="number" step="0.1" name="gap_x" value="{{ edit_model.gap_x if edit_model else 0 }}"></div>
+        <div class="field"><label>Gap Y (PC to PC)</label><input type="number" step="0.1" name="gap_y" value="{{ edit_model.gap_y if edit_model else 0 }}"></div>
+        <div class="field"><label>Panel Length (mm)</label><input type="number" step="0.1" name="panel_len" value="{{ edit_model.panel_len if edit_model else 400 }}"></div>
+        <div class="field"><label>Panel Width (mm)</label><input type="number" step="0.1" name="panel_w" value="{{ edit_model.panel_w if edit_model else 260 }}"></div>
+        <div class="field"><label>PCS/Panel</label><input type="number" name="pcs_panel" value="{{ edit_model.pcs_panel if edit_model else 50 }}"></div>
+        <div class="field"><label>Panels/Sheet</label><input type="number" name="panels_sheet" value="{{ edit_model.panels_sheet if edit_model else 8 }}"></div>
+        <div class="field"><label>Sheets</label><input type="number" name="sheets" value="{{ edit_model.sheets if edit_model else 1 }}"></div>
+        <div class="field"><label>Orientation</label>
+          <select name="orientation">
+            <option value="normal" {{'selected' if edit_model and edit_model.orientation=='normal'}}>Normal</option>
+            <option value="rotated" {{'selected' if edit_model and edit_model.orientation=='rotated'}}>Rotated 90°</option>
+          </select>
+        </div>
+        <div class="field"><label>Sheet Length (mm)</label><input type="number" step="1" name="sheet_len" value="{{ edit_model.sheet_len if edit_model else 1200 }}"></div>
+        <div class="field"><label>Sheet Width (mm)</label><input type="number" step="1" name="sheet_w" value="{{ edit_model.sheet_w if edit_model else 1000 }}"></div>
+        <div class="full"><button class="btn" type="submit">{% if edit_model %}💾 Update Finished Product{% else %}➕ Add Finished Product{% endif %}</button></div>
+      </div>
+    </form>
+  </div>
+</div>
+{% endif %}
+
+<div class="panel">
+  <div class="panel-head"><h3>🗂️ Saved Models ({{ models|length }})</h3></div>
+  <div class="panel-body" style="padding:0;overflow-x:auto">
+    <table>
+      <thead>
+        <tr><th>Model</th><th>PCB (mm)</th><th>PCBs</th><th>Panel (mm)</th><th class="t-right">PCS/Panel</th><th class="t-right">Panels/Sheet</th><th class="t-right">FG Stock</th><th>Created</th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for m in models %}
+        <tr>
+          <td><b>{{ m.name }}</b>{% if m.model_code %} <span class="muted small mono">{{ m.model_code }}</span>{% endif %}</td>
+          <td class="mono small">{{ m.pcb_len|gfmt }}×{{ m.pcb_w|gfmt }}</td>
+          <td class="mono small">{{ m.pcbs_x }}×{{ m.pcbs_y }}</td>
+          <td class="mono small">{{ m.panel_len|gfmt }}×{{ m.panel_w|gfmt }}</td>
+          <td class="t-right mono">{{ m.pcs_panel }}</td>
+          <td class="t-right mono">{{ m.panels_sheet }}</td>
+          <td class="t-right"><span class="badge {{'b-green' if (m.fg_stock or 0) > 0 else 'b-gray'}}">{{ m.fg_stock or 0 }} PCS</span></td>
+          <td class="small muted">{{ m.created_on }}</td>
+          <td class="t-right" style="white-space:nowrap">
+            <button type="button" class="btn btn-xs" style="background:#16a34a;color:#fff" onclick="toggleProduce({{ m.id }})">🏭 Produce</button>
+            <a class="btn btn-outline btn-xs" href="/products?edit={{ m.id }}">✏️ Edit</a>
+            <a class="btn btn-outline btn-xs" href="/cutlist?model={{ m.id }}">📂 Load</a>
+            <a class="btn btn-outline btn-xs" href="/products/{{ m.id }}/bom">🧪 BOM</a>
+            <form method="post" action="/products/{{ m.id }}/delete" style="display:inline" onsubmit="return confirm('Delete this finished product?')">
+              <button class="btn btn-danger btn-xs" type="submit">🗑</button>
+            </form>
+          </td>
+        </tr>
+        <tr id="produce-{{ m.id }}" style="display:none">
+          <td colspan="9" style="background:#f0fdf4;border-top:1px dashed #bbf7d0">
+            <form method="post" action="/products/{{ m.id }}/produce" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+              <b style="color:#166534">🏭 {{ m.name }} — Ready hua?</b>
+              <label class="small">QTY (PCS)
+                <input type="number" name="qty" min="1" value="1000" style="width:110px" required>
+              </label>
+              <button type="submit" class="btn" style="background:#16a34a;color:#fff">✅ Produce — Inventory se consume karo</button>
+              <button type="button" class="btn btn-outline btn-xs" onclick="toggleProduce({{ m.id }})">Cancel</button>
+              <div class="muted small" style="flex-basis:100%">
+                🧪 BOM (qty per item-basis):
+                {% if bom_map.get(m.id) %}
+                  {% for b in bom_map[m.id] %}<span class="badge b-blue" style="margin:2px">{{ b }}</span>{% endfor %}
+                {% else %}
+                  <span class="badge b-amber">BOM khali hai — pehle 🧪 BOM set karo</span>
+                {% endif %}
+              </div>
+            </form>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="9"><div class="empty">No finished products yet — Cut List Optimizer mein layout bana kar "Save Layout to Model" karein.</div></td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="panel" style="margin-top:14px">
+  <div class="panel-head"><h3>🏭 Production History (Finished Ready)</h3></div>
+  <div class="panel-body" style="padding:0;overflow-x:auto">
+    <table>
+      <thead>
+        <tr><th>#</th><th>Product</th><th class="t-right">Qty</th><th>Raw Materials Consumed (Inventory se)</th><th>By</th><th>Date/Time</th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for p in history %}
+        <tr>
+          <td class="mono small">#{{ p.id }}</td>
+          <td><b>{{ p.product_name }}</b></td>
+          <td class="t-right"><span class="badge b-green">{{ p.qty }} PCS</span></td>
+          <td class="small">
+            {% if p.consumed %}
+              {% for c in p.consumed %}
+                <span class="badge b-amber" style="margin:2px">− {{ c.qty_used|gfmt }} {{ c.unit }} {{ c.item_name }}</span>
+              {% endfor %}
+            {% else %}
+              <span class="muted">—</span>
+            {% endif %}
+          </td>
+          <td class="small">{{ p.made_by }}</td>
+          <td class="small muted">{{ p.created_on }}</td>
+          <td class="t-right">
+            <form method="post" action="/fg-production/{{ p.id }}/undo" style="display:inline" onsubmit="return confirm('Entry undo karein? Inventory stock wapas add hoga aur FG stock minus.')">
+              <button class="btn btn-outline btn-xs" type="submit">↩ Undo</button>
+            </form>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7"><div class="empty">Abhi koi finished product ready nahi hua — 🏭 Produce dabao.</div></td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+function toggleProduce(id){
+  var r = document.getElementById('produce-' + id);
+  if (r) r.style.display = (r.style.display === 'none' || r.style.display === '') ? 'table-row' : 'none';
+}
+</script>
+{% endblock %}

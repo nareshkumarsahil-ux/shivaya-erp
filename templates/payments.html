@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Payments & Receipts{% endblock %}
+{% block page_title %}Payments & Receipts{% endblock %}
+{% block content %}
+<div class="cards" style="grid-template-columns:1fr 1fr">
+  <div class="stat"><div class="top"><span class="lbl">TOTAL RECEIVED</span><span class="ic ic-mint">📥</span></div><div class="num" style="font-size:18px;color:#15803d">{{ totals.received|inr }}</div><div class="sub">From parties</div></div>
+  <div class="stat"><div class="top"><span class="lbl">TOTAL PAID OUT</span><span class="ic ic-peach">📤</span></div><div class="num" style="font-size:18px;color:#b3401c">{{ totals.paid|inr }}</div><div class="sub">To vendors</div></div>
+</div>
+
+{% if show_add %}
+<div class="panel">
+  <div class="panel-head"><h3>➕ New Entry</h3><a class="btn btn-outline btn-sm" href="/payments">✕ Close</a></div>
+  <div class="panel-body">
+    <form method="post">
+      <div class="form-grid">
+        <div class="field full"><label>Party *</label>
+          <select name="party" required>
+            <option value="">— Select party —</option>
+            {% for p in all_parties %}<option value="{{ p.name }}">{{ p.name }} ({{ 'Supplier' if p.ptype=='supplier' else 'Customer' }})</option>{% endfor %}
+          </select>
+          <a class="muted small" href="/parties?add=1" style="margin-top:4px;display:inline-block">➕ New Party →</a>
+        </div>
+        <div class="field"><label>Type</label>
+          <select name="ptype"><option value="receipt">Receipt (paisa aaya)</option><option value="payment">Payment (paisa diya)</option></select>
+        </div>
+        <div class="field"><label>Amount (₹) *</label><input type="number" step="0.01" name="amount" required value="0"></div>
+        <div class="field"><label>Mode</label>
+          <select name="mode"><option>Bank Transfer</option><option>UPI</option><option>Cash</option><option>Cheque</option></select>
+        </div>
+        <div class="full"><button class="btn" type="submit">Save Entry</button></div>
+      </div>
+    </form>
+  </div>
+</div>
+{% else %}
+<div class="toolbar" style="justify-content:flex-end"><a class="btn" href="/payments?add=1">＋ New Entry</a></div>
+{% endif %}
+
+<div class="panel">
+  <div class="panel-head"><h3>💸 Entries ({{ rows|length }})</h3></div>
+  <div class="panel-body" style="padding:0;overflow-x:auto">
+    <table>
+      <thead><tr><th>Ref #</th><th>Party</th><th>Type</th><th class="t-right">Amount</th><th>Mode</th><th>Date</th></tr></thead>
+      <tbody>
+        {% for r in rows %}
+        <tr>
+          <td><b class="mono">{{ r.ref_no }}</b></td>
+          <td>{{ r.party }}</td>
+          <td><span class="badge {{'b-green' if r.ptype=='receipt' else 'b-peach'}}">{{ '📥 RECEIPT' if r.ptype=='receipt' else '📤 PAYMENT' }}</span></td>
+          <td class="t-right"><b>{{ r.amount|inr }}</b></td>
+          <td>{{ r.mode }}</td>
+          <td class="small mono">{{ r.date }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6"><div class="empty">No entries yet</div></td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

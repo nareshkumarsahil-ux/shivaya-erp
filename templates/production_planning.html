@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+{% block title %}Production Planning{% endblock %}
+{% block page_title %}Production Planning{% endblock %}
+{% block content %}
+
+<div class="cards" style="grid-template-columns:repeat(auto-fill,minmax(150px,1fr))">
+  <div class="stat"><div class="top"><span class="lbl">Active Orders</span><span class="ic ic-navy">📋</span></div><div class="num">{{ active_orders }}</div><div class="sub">Chal rahe orders</div></div>
+  <div class="stat"><div class="top"><span class="lbl">Bottleneck Step</span><span class="ic ic-peach">⏳</span></div><div class="num" style="font-size:15px">{{ bottleneck }}</div><div class="sub">Sabse zyada orders yahan</div></div>
+  <div class="stat"><div class="top"><span class="lbl">Due This Week (pcs)</span><span class="ic ic-mint">📦</span></div><div class="num">{{ due_pcs }}</div><div class="sub">7 din mein deliver karna hai</div></div>
+  <div class="stat"><div class="top"><span class="lbl">Capacity Utilization</span><span class="ic ic-yellow">⚙️</span></div><div class="num">{{ utilization }}%</div><div class="sub">due pcs ÷ weekly capacity</div></div>
+</div>
+
+<div class="panel">
+  <div class="panel-head"><h3>🚧 BOTTLENECK DETECTION</h3></div>
+  <div class="panel-body" style="padding:0">
+    {% for b in bottleneck_rows %}
+    <div style="display:flex;align-items:center;gap:12px;padding:11px 16px;border-bottom:1px solid var(--border)">
+      <b style="min-width:220px">{{ b.step }}</b>
+      <span class="prog" style="flex:1"><span class="fill" style="width:{{ [100, b.c*45]|min }}%"></span></span>
+      <span class="muted small mono" style="min-width:90px;text-align:right">{{ b.c }} orders · {{ b.q }} pcs</span>
+    </div>
+    {% else %}
+    <div class="empty">Koi pending order nahi — bottleneck free ✅</div>
+    {% endfor %}
+  </div>
+</div>
+
+<div class="grid2" style="grid-template-columns:1fr 1fr;align-items:start">
+  <div class="panel">
+    <div class="panel-head"><h3>🏭 CAPACITY PLANNING</h3></div>
+    <div class="panel-body">
+      <div class="stat" style="box-shadow:none;border:1px solid var(--border)">
+        <div class="top"><span class="lbl">DAILY CAPACITY (PCS)</span><span class="ic ic-amber">🏭</span></div>
+        <div class="num">{{ DAILY_CAP }}</div>
+        <div class="sub">pcs / day</div>
+      </div>
+      <p class="muted small" style="margin:10px 0 4px">Weekly capacity: {{ WEEKLY_CAP }} pcs — Due this week: {{ due_pcs }} pcs</p>
+      <span class="prog" style="display:block"><span class="fill" style="width:{{ utilization }}%"></span></span>
+      <p class="muted small" style="margin-top:4px">Utilization: {{ utilization }}%</p>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head"><h3>📅 PRODUCTION CALENDAR — NEXT 7 DAYS</h3></div>
+    <div class="panel-body" style="display:flex;gap:8px;flex-wrap:wrap">
+      {% for d in cal %}
+      <div style="flex:1;min-width:80px;text-align:center;border:1px solid var(--border);border-radius:10px;padding:9px 6px">
+        <div class="mono small muted">{{ d.iso }}</div>
+        <div style="font-size:16px;font-weight:800">{{ d.count }}</div>
+        <div class="muted small">deliveries</div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+<div class="panel">
+  <div class="panel-head">
+    <h3>⚙️ MACHINE, SHIFT &amp; OPERATOR ASSIGNMENT</h3>
+    <button class="btn btn-sm" type="submit" form="assignForm">💾 Save Assignments</button>
+  </div>
+  <div class="panel-body" style="padding:0;overflow-x:auto">
+    <form method="post" action="/production-planning" id="assignForm">
+      <input type="hidden" name="action" value="assign">
+      <table style="min-width:950px">
+        <thead>
+          <tr><th>Order #</th><th>Party</th><th>Current Step</th><th>Machine</th><th>Shift</th><th>Operator</th><th>Planned Start</th></tr>
+        </thead>
+        <tbody>
+          {% for o in orders %}
+          <tr>
+            <td class="mono"><b>{{ o.order_no }}</b></td>
+            <td class="small">{{ o.party }}</td>
+            <td><span class="badge b-blue">{{ o.current_process }}</span></td>
+            <td>
+              <select name="machine_{{ o.id }}" style="padding:6px 8px;border:1px solid var(--border);border-radius:7px;font-size:12px">
+                <option value="Unassigned">Unassigned</option>
+                {% for m in machines %}
+                <option value="{{ m.name }}" {{'selected' if o.asm and o.asm.machine == m.name}}>{{ m.code }} · {{ m.name }}</option>
+                {% endfor %}
+              </select>
+            </td>
+            <td>
+              <select name="shift_{{ o.id }}" style="padding:6px 8px;border:1px solid var(--border);border-radius:7px;font-size:12px">
+                <option value="">—</option>
+                <option value="Day" {{'selected' if o.asm and o.asm.shift == 'Day'}}>Day</option>
+                <option value="Night" {{'selected' if o.asm and o.asm.shift == 'Night'}}>Night</option>
+              </select>
+            </td>
+            <td>
+              <select name="op_{{ o.id }}" style="padding:6px 8px;border:1px solid var(--border);border-radius:7px;font-size:12px">
+                <option value="Unassigned">Unassigned</option>
+                {% for e in employees %}
+                <option value="{{ e.name }}" {{'selected' if o.asm and o.asm.operator == e.name}}>{{ e.name }}</option>
+                {% endfor %}
+              </select>
+            </td>
+            <td><input type="date" name="start_{{ o.id }}" value="{{ o.asm.planned_start if o.asm and o.asm.planned_start else '' }}" placeholder="dd-mm-yyyy" style="padding:6px 8px;border:1px solid var(--border);border-radius:7px;font-size:12px"></td>
+          </tr>
+          {% else %}
+          <tr><td colspan="7"><div class="empty">No pending orders</div></td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </form>
+  </div>
+</div>
+
+{% if show_add %}
+<div class="panel">
+  <div class="panel-head"><h3>➕ New Plan</h3><a class="btn btn-outline btn-sm" href="/production-planning">✕ Close</a></div>
+  <div class="panel-body">
+    <form method="post">
+      <div class="form-grid">
+        <div class="field"><label>Order</label>
+          <select name="order_id">
+            <option value="">— Select —</option>
+            {% for o in orders %}<option value="{{ o.id }}">{{ o.order_no }} · {{ o.party }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="field"><label>Description</label><input name="desc" placeholder="Plan description"></div>
+        <div class="field"><label>Start Date</label><input type="date" name="start_date"></div>
+        <div class="field"><label>End Date</label><input type="date" name="end_date"></div>
+        <div class="field full" style="display:flex;justify-content:flex-end"><button class="btn" type="submit">💾 Save Plan</button></div>
+      </div>
+    </form>
+  </div>
+</div>
+{% endif %}
+
+{% if rows %}
+<div class="panel">
+  <div class="panel-head"><h3>📋 Plans ({{ rows|length }})</h3></div>
+  <div class="panel-body" style="padding:0;overflow-x:auto">
+    <table>
+      <thead><tr><th>Plan #</th><th>Order</th><th>Party</th><th>Description</th><th>Start</th><th>End</th><th>Status</th></tr></thead>
+      <tbody>
+        {% for p in rows %}
+        <tr>
+          <td class="mono">{{ p.plan_no }}</td>
+          <td class="mono">{{ p.order_no or '—' }}</td>
+          <td class="small">{{ p.party or '—' }}</td>
+          <td class="small">{{ p.desc }}</td>
+          <td class="mono small">{{ p.start_date or '—' }}</td>
+          <td class="mono small">{{ p.end_date or '—' }}</td>
+          <td><span class="badge {{'b-done' if p.status=='completed' else 'b-amber'}}">{{ p.status|upper }}</span></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
