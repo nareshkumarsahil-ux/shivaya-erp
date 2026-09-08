@@ -204,32 +204,46 @@ def logout():
 @login_required
 def dashboard():
     today = datetime.date.today().isoformat()
-    total_emp = db.query("SELECT COUNT(*) c FROM employees WHERE status='active'", one=True)["c"]
-    present = db.query("SELECT COUNT(*) c FROM attendance WHERE date=? AND status='present'", (today,), one=True)["c"]
-    active_orders = db.query("SELECT COUNT(*) c FROM orders WHERE status!='done'", one=True)["c"]
-    total_orders = db.query("SELECT COUNT(*) c FROM orders", one=True)["c"]
-    urgent = db.query("SELECT COUNT(*) c FROM orders WHERE status='pending' AND priority='urgent'", one=True)["c"]
-    overdue_rev = db.query("SELECT COALESCE(SUM(amount),0) s FROM billing WHERE status='overdue'", one=True)["s"]
-    pending_rev = db.query("SELECT COALESCE(SUM(amount),0) s FROM billing WHERE status!='paid'", one=True)["s"]
-    low_stock = db.query("SELECT COUNT(*) c FROM inventory WHERE stock <= min_stock", one=True)["c"]
-    machines_running = db.query("SELECT COUNT(*) c FROM machines WHERE status='running'", one=True)["c"]
-    total_machines = db.query("SELECT COUNT(*) c FROM machines", one=True)["c"]
-
     q = request.args.get("q", "").strip()
-    base = ("SELECT * FROM orders WHERE status IN ('pending','done') "
-            "ORDER BY CASE status WHEN 'pending' THEN 0 ELSE 1 END, id DESC LIMIT 4")
-    if q:
-        tracking = db.query(
-            "SELECT * FROM orders WHERE status IN ('pending','done') AND (order_no LIKE ? OR party LIKE ? OR product LIKE ?) "
-            "ORDER BY CASE status WHEN 'pending' THEN 0 ELSE 1 END, id DESC LIMIT 4",
-            (f"%{q}%", f"%{q}%", f"%{q}%"))
-    else:
-        tracking = db.query(base)
 
-    overview = db.query(
-        "SELECT * FROM orders WHERE status IN ('pending','done') "
-        "ORDER BY CASE status WHEN 'pending' THEN 0 ELSE 1 END, id DESC LIMIT 4")
-    notices = db.query("SELECT * FROM purchase_orders WHERE status!='received' ORDER BY id DESC LIMIT 3")
+    # 13 queries -> 1 hi round trip (turso batch) — page 10x fast
+    sqls = [
+        ("SELECT COUNT(*) c FROM employees WHERE status='active'", ()),
+        ("SELECT COUNT(*) c FROM attendance WHERE date=? AND status='present'", (today,)),
+        ("SELECT COUNT(*) c FROM orders WHERE status!='done'", ()),
+        ("SELECT COUNT(*) c FROM orders", ()),
+        ("SELECT COUNT(*) c FROM orders WHERE status='pending' AND priority='urgent'", ()),
+        ("SELECT COALESCE(SUM(amount),0) s FROM billing WHERE status='overdue'", ()),
+        ("SELECT COALESCE(SUM(amount),0) s FROM billing WHERE status!='paid'", ()),
+        ("SELECT COUNT(*) c FROM inventory WHERE stock <= min_stock", ()),
+        ("SELECT COUNT(*) c FROM machines WHERE status='running'", ()),
+        ("SELECT COUNT(*) c FROM machines", ()),
+    ]
+    if q:
+        sqls.append(("SELECT * FROM orders WHERE status IN ('pending','done') AND (order_no LIKE ? OR party LIKE ? OR product LIKE ?) "
+                     "ORDER BY CASE status WHEN 'pending' THEN 0 ELSE 1 END, id DESC LIMIT 4",
+                     (f"%{q}%", f"%{q}%", f"%{q}%")))
+    else:
+        sqls.append(("SELECT * FROM orders WHERE status IN ('pending','done') "
+                     "ORDER BY CASE status WHEN 'pending' THEN 0 ELSE 1 END, id DESC LIMIT 4", ()))
+    sqls.append(("SELECT * FROM orders WHERE status IN ('pending','done') "
+                 "ORDER BY CASE status WHEN 'pending' THEN 0 ELSE 1 END, id DESC LIMIT 4", ()))
+    sqls.append(("SELECT * FROM purchase_orders WHERE status!='received' ORDER BY id DESC LIMIT 3", ()))
+
+    rows = db.multi(sqls)
+    (total_emp, present, active_orders, total_orders, urgent,
+     overdue_rev, pending_rev, low_stock, machines_running, total_machines,
+     tracking, overview, notices) = rows
+    total_emp = total_emp[0]["c"]
+    present = present[0]["c"]
+    active_orders = active_orders[0]["c"]
+    total_orders = total_orders[0]["c"]
+    urgent = urgent[0]["c"]
+    overdue_rev = overdue_rev[0]["s"]
+    pending_rev = pending_rev[0]["s"]
+    low_stock = low_stock[0]["c"]
+    machines_running = machines_running[0]["c"]
+    total_machines = total_machines[0]["c"]
 
     return render_template("dashboard.html", active="dashboard",
                            total_emp=total_emp, present=present,
@@ -388,17 +402,22 @@ def orders():
         rows = [r for r in rows if r["status"] == "pending" and r["delivery_date"] and r["delivery_date"] < today]
     else:
         rows = [r for r in rows if r["status"] != "done"]
+    # 3 queries -> 1 round trip (turso batch)
+    dispatch_rows, models, done_rows = db.multi([
+        ("SELECT * FROM dispatch_log", ()),
+        ("SELECT * FROM product_models ORDER BY name", ()),
+        ("SELECT * FROM orders WHERE status='done' ORDER BY id DESC LIMIT 4", ()),
+    ])
     dmap = {}
-    for dr in db.query("SELECT * FROM dispatch_log"):
+    for dr in dispatch_rows:
         if dr["order_id"] not in dmap or (dmap[dr["order_id"]]["id"] or 0) < dr["id"]:
             dmap[dr["order_id"]] = dr
-    models = db.query("SELECT * FROM product_models ORDER BY name")
     cols = [[] for _ in KANBAN_COLS]
     for r in rows:
         r = dict(r)
         r["disp"] = dmap.get(r["id"])
         cols[kanban_col(r["current_process"])].append(r)
-    done = [dict(r) for r in db.query("SELECT * FROM orders WHERE status='done' ORDER BY id DESC LIMIT 4")]
+    done = [dict(r) for r in done_rows]
     for r in done:
         r["disp"] = dmap.get(r["id"])
     return render_template("orders.html", active="orders", cols=cols, done=done, q=q, filt=filt,
@@ -815,17 +834,25 @@ def products():
             flash(f"Save failed: {e}", "error")
         return redirect_with_token(url_for("products"))
     rows = db.query("SELECT m.*, o.order_no FROM product_models m LEFT JOIN orders o ON o.id=m.order_id ORDER BY m.id DESC")
-    # har finished product ke BOM ka chhota summary (Produce form ke hint ke liye)
+    # 3 queries -> 1 round trip (turso batch) — 12 alag calls ki jagah 2
+    bom_lines, prods, cons_lines = db.multi([
+        ("SELECT b.model_id, b.qty_per, b.unit_pcs, i.name, i.unit FROM bom b "
+         "JOIN inventory i ON i.id=b.item_id", ()),
+        ("SELECT * FROM fg_production ORDER BY id DESC LIMIT 8", ()),
+        ("SELECT * FROM fg_consumption WHERE prod_id IN "
+         "(SELECT id FROM fg_production ORDER BY id DESC LIMIT 8) ORDER BY id", ()),
+    ])
     bom_map = {}
-    for b in db.query("SELECT b.model_id, b.qty_per, b.unit_pcs, i.name, i.unit FROM bom b "
-                      "JOIN inventory i ON i.id=b.item_id"):
+    for b in bom_lines:
         bom_map.setdefault(b["model_id"], []).append(
             f"{b['qty_per']:g} {b['unit']} {b['name']} / {b['unit_pcs'] or 1000} PCB")
-    # production history (finished ready entries)
+    cons_by_prod = {}
+    for c in cons_lines:
+        cons_by_prod.setdefault(c["prod_id"], []).append(c)
     history = []
-    for p in db.query("SELECT * FROM fg_production ORDER BY id DESC LIMIT 8"):
+    for p in prods:
         d = dict(p)
-        d["consumed"] = db.query("SELECT * FROM fg_consumption WHERE prod_id=? ORDER BY id", (p["id"],))
+        d["consumed"] = cons_by_prod.get(p["id"], [])
         history.append(d)
     edit_model = None
     if request.args.get("edit"):
