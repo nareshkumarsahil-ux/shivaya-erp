@@ -461,6 +461,46 @@ class _TursoHTTP:
             return base64.b64decode(v.get("base64", "") or "")
         return None
 
+    def batch_fetch(self, stmts):
+        """Kai queries (SELECT wagerah) ek hi HTTP call mein — results ke saath.
+        Page render ke 10-15 queries -> 1 round trip = 10-15x fast."""
+        steps = [{"stmt": {"sql": "BEGIN", "args": [], "named_args": [], "want_rows": False}}]
+        for s in stmts:
+            sql, params = (s, []) if isinstance(s, str) else (s[0], list(s[1]) or [])
+            steps.append({
+                "condition": {"type": "ok", "step": len(steps) - 1},
+                "stmt": {"sql": sql, "args": [self._arg(p) for p in params],
+                         "named_args": [], "want_rows": True},
+            })
+        steps.append({
+            "condition": {"type": "ok", "step": len(steps) - 1},
+            "stmt": {"sql": "COMMIT", "args": [], "named_args": [], "want_rows": False},
+        })
+        data = self._request("/v1/batch", {"batch": {"steps": steps}})
+        result = data.get("result") or {}
+        step_errors = result.get("step_errors") or []
+        for i in range(len(stmts)):
+            idx = i + 1
+            if idx < len(step_errors) and step_errors[idx]:
+                err = step_errors[idx]
+                msg = err.get("message") if isinstance(err, dict) else str(err)
+                raise _TursoHTTPError("Turso batch step %d: %s" % (i, msg))
+        step_results = result.get("step_results") or []
+        out = []
+        for i in range(len(stmts)):
+            idx = i + 1
+            res = step_results[idx] if idx < len(step_results) else None
+            if res is None:
+                raise _TursoHTTPError("Turso batch step %d: no result" % i)
+            lid = res.get("last_insert_rowid")
+            out.append(_TursoResult(
+                cols=tuple((c.get("name") or "") for c in (res.get("cols") or [])),
+                rows=[tuple(self._val(cell) for cell in r) for r in (res.get("rows") or [])],
+                rowcount=int(res.get("affected_row_count") or 0),
+                lastrowid=(int(lid) if lid is not None else None),
+            ))
+        return out
+
     def execute(self, sql, params):
         data = self._request("/v1/execute", {
             "stmt": {
@@ -1225,6 +1265,24 @@ def seed_if_empty(conn):
             (c[0], c[1], c[2], c[3], c[4], c[5], iso(today)))
 
     conn.commit()
+
+
+def multi(sqls):
+    """Kai queries ka result ek hi round trip mein — [(sql, params), ...] -> [rows, ...].
+    Turso par 1 HTTP batch call (fast); sqlite par sequential (same result)."""
+    conn = get_db()
+    if conn._turso:
+        try:
+            results = _turso().batch_fetch(sqls)
+            conn.close()
+            return [_norm_rows(r.rows, r.cols) for r in results]
+        except Exception:
+            pass  # batch fail -> neeche sequential fallback
+    out = []
+    for sql, params in sqls:
+        out.append(conn.execute(sql, params).fetchall())
+    conn.close()
+    return out
 
 
 def query(sql, params=(), one=False):
