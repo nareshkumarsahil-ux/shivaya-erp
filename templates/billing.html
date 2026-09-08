@@ -8,7 +8,33 @@
   <div class="stat"><div class="top"><span class="lbl">OUTSTANDING</span><span class="ic ic-peach">⏰</span></div><div class="num" style="font-size:16px;color:#b3401c">{{ totals.pending|inr }}</div><div class="sub">Pending + overdue</div></div>
 </div>
 
-{% if show_add %}
+{% if edit_inv %}
+<div class="panel">
+  <div class="panel-head"><h3>✏️ Edit Invoice — {{ edit_inv.invoice_no }}</h3><a class="btn btn-outline btn-sm" href="/billing">✕ Close</a></div>
+  <div class="panel-body">
+    <form method="post" action="/billing/{{ edit_inv.id }}/edit">
+      <div class="form-grid">
+        <div class="field"><label>Invoice No.</label><input name="invoice_no" value="{{ edit_inv.invoice_no }}"></div>
+        <div class="field full"><label>Party *</label>
+          <select name="party" required>
+            <option value="">— Select party —</option>
+            {% for p in all_parties %}<option value="{{ p.name }}" {{'selected' if edit_inv.party == p.name}}>{{ p.name }}</option>{% endfor %}
+            {% if edit_inv.party and edit_inv.party not in party_names %}<option value="{{ edit_inv.party }}" selected>{{ edit_inv.party }} (custom)</option>{% endif %}
+          </select>
+        </div>
+        <div class="field"><label>Amount (₹) *</label><input type="number" step="0.01" name="amount" required value="{{ edit_inv.amount }}"></div>
+        <div class="field"><label>Status</label>
+          <select name="status">
+            {% for s in ['pending','paid','overdue'] %}<option value="{{ s }}" {{'selected' if edit_inv.status==s}}>{{ s|title }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="field"><label>Date</label><input type="date" name="date" value="{{ edit_inv.date }}"></div>
+        <div class="full"><button class="btn" type="submit">💾 Save Changes</button></div>
+      </div>
+    </form>
+  </div>
+</div>
+{% elif show_add %}
 <div class="panel">
   <div class="panel-head"><h3>➕ New Invoice</h3><a class="btn btn-outline btn-sm" href="/billing">✕ Close</a></div>
   <div class="panel-body">
@@ -47,7 +73,7 @@
           <td class="t-right"><b>{{ r.amount|inr }}</b></td>
           <td><span class="badge {{'b-green' if r.status=='paid' else 'b-red' if r.status=='overdue' else 'b-amber'}}">{{ r.status|upper }}</span></td>
           <td class="small mono">{{ r.date }}</td>
-          <td class="t-right">
+          <td class="t-right" style="white-space:nowrap">
             <form method="post" action="/billing/{{ r.id }}/status" style="display:inline">
               <select name="status" onchange="this.form.submit()" style="padding:4px 8px;border-radius:7px;border:1px solid var(--border);font-size:12px">
                 <option value="pending" {{'selected' if r.status=='pending'}}>Pending</option>
@@ -55,6 +81,12 @@
                 <option value="overdue" {{'selected' if r.status=='overdue'}}>Overdue</option>
               </select>
             </form>
+            {% if current_user_role == 'admin' %}
+            <a class="btn btn-outline btn-xs" href="/billing?edit={{ r.id }}" title="Invoice edit karo">✏️</a>
+            <form method="post" action="/billing/{{ r.id }}/delete" style="display:inline" onsubmit="return confirm('Invoice {{ r.invoice_no }} delete karein?')">
+              <button class="btn btn-danger btn-xs" type="submit" title="Delete">🗑</button>
+            </form>
+            {% endif %}
           </td>
         </tr>
         {% else %}

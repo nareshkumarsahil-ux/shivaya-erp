@@ -15,7 +15,7 @@ import http.client
 import urllib.parse
 
 # Schema version — bump karo jab SCHEMA/migrate badle, taaki agla deploy tables update kare.
-SCHEMA_VERSION = "2026-09-07.3"
+SCHEMA_VERSION = "2026-09-08.4"
 
 DB_PATH = os.environ.get("DB_PATH") or (
     os.path.join(tempfile.gettempdir(), "circuit.db") if os.environ.get("VERCEL") else "circuit.db"
@@ -41,7 +41,8 @@ CREATE TABLE IF NOT EXISTS employees (
     department TEXT DEFAULT '',
     designation TEXT DEFAULT '',
     joining_date TEXT DEFAULT '',
-    status TEXT DEFAULT 'active'
+    status TEXT DEFAULT 'active',
+    salary REAL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS attendance (
@@ -50,6 +51,15 @@ CREATE TABLE IF NOT EXISTS attendance (
     date TEXT NOT NULL,
     status TEXT NOT NULL DEFAULT 'present',
     UNIQUE(emp_id, date)
+);
+
+CREATE TABLE IF NOT EXISTS emp_salary (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    emp_id INTEGER NOT NULL,
+    month TEXT NOT NULL,
+    advance REAL DEFAULT 0,
+    paid INTEGER DEFAULT 0,
+    UNIQUE(emp_id, month)
 );
 
 CREATE TABLE IF NOT EXISTS bom (
@@ -243,7 +253,7 @@ CREATE TABLE IF NOT EXISTS jobcard_process (
     start_dt TEXT DEFAULT '', end_dt TEXT DEFAULT '',
     start_name TEXT DEFAULT '', end_name TEXT DEFAULT '',
     qty INTEGER DEFAULT 0, next_process TEXT DEFAULT '',
-    UNIQUE(order_id, process)
+    ord INTEGER DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS parties (
@@ -711,6 +721,50 @@ def migrate(conn):
         conn.execute("ALTER TABLE jobcard ADD COLUMN mat_code TEXT DEFAULT ''")
     if jcols and "mat_sheets" not in jcols:
         conn.execute("ALTER TABLE jobcard ADD COLUMN mat_sheets REAL DEFAULT 0")
+    # employees: salary column (attendance se salary banane ke liye)
+    ecols = [r[1] for r in conn.execute("PRAGMA table_info(employees)")]
+    if ecols and "salary" not in ecols:
+        conn.execute("ALTER TABLE employees ADD COLUMN salary REAL DEFAULT 0")
+    conn.execute("UPDATE employees SET salary=60000 WHERE emp_code='EMP001' AND salary=0")
+    conn.execute("UPDATE employees SET salary=18000 WHERE emp_code='EMP002' AND salary=0")
+    conn.execute("UPDATE employees SET salary=17000 WHERE emp_code='EMP003' AND salary=0")
+    conn.execute("UPDATE employees SET salary=16000 WHERE emp_code='EMP004' AND salary=0")
+    conn.execute("UPDATE employees SET salary=15000 WHERE emp_code='EMP005' AND salary=0")
+    conn.execute("UPDATE employees SET salary=12000 WHERE emp_code='EMP006' AND salary=0")
+    # jobcard_process: ord column + UNIQUE hatao (NEXT se nayi process rows add karne
+    # ke liye — same process dobara bhi aa sakta hai, jaise rework steps)
+    jpcols = [r[1] for r in conn.execute("PRAGMA table_info(jobcard_process)")]
+    if jpcols and "ord" not in jpcols:
+        try:
+            conn.batch([
+                ("CREATE TABLE jobcard_process_new ("
+                 "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                 "order_id INTEGER NOT NULL, process TEXT NOT NULL, "
+                 "start_dt TEXT DEFAULT '', end_dt TEXT DEFAULT '', "
+                 "start_name TEXT DEFAULT '', end_name TEXT DEFAULT '', "
+                 "qty INTEGER DEFAULT 0, next_process TEXT DEFAULT '', "
+                 "ord INTEGER DEFAULT 0)", ()),
+                ("INSERT INTO jobcard_process_new "
+                 "(id, order_id, process, start_dt, end_dt, start_name, end_name, qty, next_process, ord) "
+                 "SELECT id, order_id, process, start_dt, end_dt, start_name, end_name, qty, next_process, id*10 "
+                 "FROM jobcard_process", ()),
+                ("DROP TABLE jobcard_process", ()),
+                ("ALTER TABLE jobcard_process_new RENAME TO jobcard_process", ()),
+            ])
+        except Exception:
+            try:
+                conn.execute("ALTER TABLE jobcard_process ADD COLUMN ord INTEGER DEFAULT 0")
+            except Exception:
+                pass
+    jpcols = [r[1] for r in conn.execute("PRAGMA table_info(jobcard_process)")]
+    if jpcols and "ord" in jpcols:
+        conn.execute("UPDATE jobcard_process SET ord = id * 10 WHERE ord IS NULL OR ord = 0")
+    # pre-filled standard process rows hatao (EK HI BAAR, meta flag se):
+    # ab job card ka process table khaali rehta hai — sirf NEXT dropdown se
+    # select karke hi process lines banti hain (user requirement)
+    if conn.execute("SELECT value FROM meta WHERE key='prefill_cleanup'").fetchone() is None:
+        conn.execute("DELETE FROM jobcard_process")
+        conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('prefill_cleanup','1')")
     # backfill parties from existing names (only when parties table is empty)
     pcnt = conn.execute("SELECT COUNT(*) c FROM parties").fetchone()["c"]
     if pcnt == 0:
@@ -949,51 +1003,8 @@ def seed_jobcards(conn):
 
     conn.batch(jc_rows)   # saare jobcards 1 HTTP call mein
 
-    # --- process rows: MCPCB orders 1/2/4 -> 12 steps, FR4 order 3 -> 16 steps ---
-    def _pname(plist, idx):
-        return JC_TOOL_OPTIONS[0] if plist[idx] == JC_TOOL_SLOT else plist[idx]
-
-    def _pnext(plist, idx):
-        return "" if idx + 1 >= len(plist) else _pname(plist, idx + 1)
-
-    names = ("Ramesh Kumar", "Suresh Yadav", "Amit Patel")
-    proc_rows = []
-    for order_id, done_until, material in ((1, 11, "Aluminum MCPCB-1MM"), (2, 11, "Aluminum MCPCB-1MM")):
-        plist, _ = process_list_for(material)
-        for idx, p in enumerate(plist):
-            pname = _pname(plist, idx)
-            start_dt = end_dt = sname = ename = ""
-            qty = 0
-            if idx <= done_until:
-                sname = names[idx % 3]
-                ename = names[(idx + 1) % 3]
-                s = datetime.datetime(2026, 8, 10 + idx // 2, 9 + idx % 2, 15)
-                e = s + datetime.timedelta(hours=2 + idx % 3)
-                start_dt, end_dt = s.strftime("%Y-%m-%d %H:%M"), e.strftime("%Y-%m-%d %H:%M")
-                qty = 15000 if order_id == 1 else 15092
-            proc_rows.append((
-                "INSERT OR IGNORE INTO jobcard_process (order_id, process, start_dt, end_dt, start_name, end_name, qty, next_process) "
-                "VALUES (?,?,?,?,?,?,?,?)",
-                (order_id, pname, start_dt, end_dt, sname, ename, qty, _pnext(plist, idx))))
-
-    for order_id, material in ((3, "FR4 1.6MM"), (4, "Aluminum MCPCB-1MM")):
-        plist, _ = process_list_for(material)
-        for idx, p in enumerate(plist):
-            pname = _pname(plist, idx)
-            proc_rows.append((
-                "INSERT OR IGNORE INTO jobcard_process (order_id, process, start_dt, end_dt, start_name, end_name, qty, next_process) "
-                "VALUES (?,?,?,?,?,?,?,?)",
-                (order_id, pname, "", "", "", "", 0, _pnext(plist, idx))))
-
-    if proc_rows:
-        conn.batch(proc_rows)   # ~56 process rows -> 1 HTTP call
-
-    conn.execute("UPDATE jobcard_process SET start_dt='2026-08-26 09:30', end_dt='2026-08-26 12:00', "
-                 "start_name='Suresh Yadav', end_name='Suresh Yadav', qty=9984 WHERE order_id=3 AND process='Laminate Cutting'")
-    conn.execute("UPDATE jobcard_process SET start_dt='2026-08-27 09:15', start_name='Ramesh Kumar' "
-                 "WHERE order_id=3 AND process='CNC Drilling'")
-    conn.execute("UPDATE jobcard_process SET start_dt='2026-08-28 10:00', start_name='Suresh Yadav' "
-                 "WHERE order_id=4 AND process='Laminate Cutting'")
+    # NOTE: process rows seed NAHI hote — job card ka process table khaali start
+    # hota hai; user NEXT dropdown se select karke process lines banata hai.
     conn.commit()
 
 
@@ -1005,43 +1016,66 @@ def bom_rows_for(model_id):
         "ORDER BY i.category, i.name", (model_id,))
 
 
+def all_process_options():
+    """NEXT dropdown ke liye saare processes (dono lists + tool options) — unique, order ke saath."""
+    seen, out = [], []
+    for lst in (JC_PROCESSES, JC_PROCESSES_MCPCB):
+        for p in lst:
+            if p == JC_TOOL_SLOT:
+                continue
+            if p not in seen:
+                seen.append(p)
+                out.append(p)
+    for o in JC_TOOL_OPTIONS:
+        if o not in seen:
+            seen.append(o)
+            out.append(o)
+    return out
+
+
 def get_jc_processes(order_id):
-    """Process rows for an order (12 for MCPCB/metal, 16 for FR4), created if missing.
-    MCPCB row #7 is a dropdown slot: TOOL / CNC DRILLING / CNC DRILLING+ROUTING."""
+    """Job card ki process rows — ORDER BY ord, id.
+
+    Pehla process HAMESHA 'Laminate Cutting' (fixed) hota hai — table khaali ho
+    ya ye row missing ho to auto-create hoti hai. Baaki process lines sirf
+    NEXT dropdown se select karke banti hain (chain neeche tak chalti hai).
+    Har row par: idx (1..N), is_dropdown (sirf tool-slot wali row), options,
+    extra (non-fixed rows — editable + delete button), fixed (pehli row),
+    next_process."""
     conn = get_db()
-    mat = conn.execute("SELECT sheet_material FROM jobcard WHERE order_id=?", (order_id,)).fetchone()
-    material = mat["sheet_material"] if mat else ""
-    plist, _label = process_list_for(material)
-    existing = {r["process"]: r for r in conn.execute(
-        "SELECT * FROM jobcard_process WHERE order_id=?", (order_id,))}
+    rows = conn.execute("SELECT * FROM jobcard_process WHERE order_id=?", (order_id,)).fetchall()
+    rows = list(rows)
+    if not any((r["process"] or "") == "Laminate Cutting" for r in rows):
+        ordv = (min([(r["ord"] or 0) for r in rows] + [0]) - 10) if rows else 10
+        conn.execute("INSERT INTO jobcard_process (order_id, process, next_process, ord) VALUES (?,?,?,?)",
+                     (order_id, "Laminate Cutting", "", ordv))
+        conn.commit()
+        rows = conn.execute("SELECT * FROM jobcard_process WHERE order_id=?", (order_id,)).fetchall()
+    rows = sorted(rows, key=lambda r: ((r["ord"] or 0), r["id"]))
+    # tool-slot matching: TOOL/CNC DRILLING/CNC DRILLING+ROUTING -> dropdown row
+    std_specs = [tuple(JC_TOOL_OPTIONS) if p == JC_TOOL_SLOT else (p,) for p in JC_PROCESSES]
+    consumed = [False] * len(std_specs)
     out = []
-    for idx, p in enumerate(plist):
-        if p == JC_TOOL_SLOT:
-            r = None
-            for opt in JC_TOOL_OPTIONS:
-                if opt in existing:
-                    r = existing[opt]
-                    break
-            if r is None:
-                conn.execute("INSERT OR IGNORE INTO jobcard_process (order_id, process) VALUES (?,?)",
-                             (order_id, JC_TOOL_OPTIONS[0]))
-                r = conn.execute("SELECT * FROM jobcard_process WHERE order_id=? AND process=?",
-                                 (order_id, JC_TOOL_OPTIONS[0])).fetchone()
-        else:
-            r = existing.get(p)
-            if r is None:
-                conn.execute("INSERT OR IGNORE INTO jobcard_process (order_id, process) VALUES (?,?)", (order_id, p))
-                r = conn.execute("SELECT * FROM jobcard_process WHERE order_id=? AND process=?",
-                                 (order_id, p)).fetchone()
+    for idx, r in enumerate(rows):
         d = dict(r)
         d["idx"] = idx + 1
-        d["is_dropdown"] = (p == JC_TOOL_SLOT)
+        matched = -1
+        for si, spec in enumerate(std_specs):
+            if not consumed[si] and r["process"] in spec:
+                consumed[si] = True
+                matched = si
+                break
+        is_std = matched >= 0
+        d["is_dropdown"] = is_std and len(std_specs[matched]) > 1
         d["options"] = JC_TOOL_OPTIONS if d["is_dropdown"] else []
-        d["next_process"] = d["next_process"] or (
-            (JC_TOOL_OPTIONS[0] if plist[idx + 1] == JC_TOOL_SLOT else plist[idx + 1])
-            if idx + 1 < len(plist) else "")
+        # sirf PEHLI row (Laminate Cutting) fixed/static hai; baaki sab rows
+        # editable + deletable hain (NEXT se bani lines ko user manage kar sake)
+        d["extra"] = not (is_std and d["idx"] == 1)
+        d["fixed"] = (d["idx"] == 1 and d["process"] == "Laminate Cutting")
         out.append(d)
-    conn.commit()
+    for i, d in enumerate(out):
+        if not (d["next_process"] or "").strip() and i + 1 < len(out):
+            d["next_process"] = out[i + 1]["process"]
     conn.close()
     return out
 
@@ -1097,16 +1131,16 @@ def seed_if_empty(conn):
 
     # --- employees ---
     employees = [
-        ("EMP001", "Sahil Sharma", "sahil@shivaya.in", "9810012301", "Management", "Director", "2019-04-01", "active"),
-        ("EMP002", "Ramesh Kumar", "ramesh@shivaya.in", "9810012302", "Production", "CNC Operator", "2021-06-15", "active"),
-        ("EMP003", "Suresh Yadav", "suresh@shivaya.in", "9810012303", "Production", "Lamination Operator", "2022-01-10", "active"),
-        ("EMP004", "Amit Patel", "amit@shivaya.in", "9810012304", "Quality", "QC Inspector", "2022-09-05", "active"),
-        ("EMP005", "Vikas Singh", "vikas@shivaya.in", "9810012305", "Administration", "Admin Executive", "2023-03-20", "active"),
-        ("EMP006", "Sonu", "sonu@shivaya.in", "9810012306", "Production", "Sheet cutter Man", "2023-06-01", "active"),
+        ("EMP001", "Sahil Sharma", "sahil@shivaya.in", "9810012301", "Management", "Director", "2019-04-01", "active", 60000),
+        ("EMP002", "Ramesh Kumar", "ramesh@shivaya.in", "9810012302", "Production", "CNC Operator", "2021-06-15", "active", 18000),
+        ("EMP003", "Suresh Yadav", "suresh@shivaya.in", "9810012303", "Production", "Lamination Operator", "2022-01-10", "active", 17000),
+        ("EMP004", "Amit Patel", "amit@shivaya.in", "9810012304", "Quality", "QC Inspector", "2022-09-05", "active", 16000),
+        ("EMP005", "Vikas Singh", "vikas@shivaya.in", "9810012305", "Administration", "Admin Executive", "2023-03-20", "active", 15000),
+        ("EMP006", "Sonu", "sonu@shivaya.in", "9810012306", "Production", "Sheet cutter Man", "2023-06-01", "active", 12000),
     ]
     conn.executemany(
-        "INSERT OR IGNORE INTO employees (emp_code, name, email, phone, department, designation, joining_date, status) "
-        "VALUES (?,?,?,?,?,?,?,?)", employees)
+        "INSERT OR IGNORE INTO employees (emp_code, name, email, phone, department, designation, joining_date, status, salary) "
+        "VALUES (?,?,?,?,?,?,?,?,?)", employees)
     conn.batch([("INSERT OR REPLACE INTO attendance (emp_id, date, status) VALUES (?,?,?)",
                  (i, iso(today), "present")) for i in range(1, 6)])
 

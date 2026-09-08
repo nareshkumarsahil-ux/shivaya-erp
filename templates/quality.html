@@ -2,7 +2,34 @@
 {% block title %}Quality{% endblock %}
 {% block page_title %}Quality Control{% endblock %}
 {% block content %}
-{% if show_add %}
+{% if edit_qc %}
+<div class="panel">
+  <div class="panel-head"><h3>✏️ Edit QC Entry — {{ edit_qc.qc_no }}</h3><a class="btn btn-outline btn-sm" href="/quality">✕ Close</a></div>
+  <div class="panel-body">
+    <form method="post" action="/quality/{{ edit_qc.id }}/edit">
+      <div class="form-grid">
+        <div class="field"><label>QC No.</label><input name="qc_no" value="{{ edit_qc.qc_no }}"></div>
+        <div class="field full"><label>Job Order</label>
+          <select name="order_id">
+            <option value="">— Select —</option>
+            {% for o in orders %}<option value="{{ o.id }}" {{'selected' if edit_qc.order_id == o.id}}>{{ o.order_no }} · {{ o.party }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="field full"><label>Remarks / Checklist</label><textarea name="remarks">{{ edit_qc.remarks }}</textarea></div>
+        <div class="field"><label>Result</label>
+          <select name="result">
+            <option value="pending" {{'selected' if edit_qc.result=='pending'}}>Pending</option>
+            <option value="passed" {{'selected' if edit_qc.result=='passed'}}>Passed</option>
+            <option value="failed" {{'selected' if edit_qc.result=='failed'}}>Failed</option>
+          </select>
+        </div>
+        <div class="field"><label>Date</label><input type="date" name="date" value="{{ edit_qc.date }}"></div>
+        <div class="full"><button class="btn" type="submit">💾 Save Changes</button></div>
+      </div>
+    </form>
+  </div>
+</div>
+{% elif show_add %}
 <div class="panel">
   <div class="panel-head"><h3>➕ New QC Entry</h3><a class="btn btn-outline btn-sm" href="/quality">✕ Close</a></div>
   <div class="panel-body">
@@ -29,7 +56,7 @@
 
 <div class="panel">
   <div class="panel-head"><h3>✅ Inspection Records ({{ rows|length }})</h3></div>
-  <div class="panel-body" style="padding:0">
+  <div class="panel-body" style="padding:0;overflow-x:auto">
     <table>
       <thead><tr><th>QC #</th><th>Job Order</th><th>Party</th><th>Remarks</th><th>Result</th><th>Date</th><th></th></tr></thead>
       <tbody>
@@ -41,7 +68,7 @@
           <td class="small">{{ r.remarks }}</td>
           <td><span class="badge {{'b-green' if r.result=='passed' else 'b-red' if r.result=='failed' else 'b-amber'}}">{{ r.result|upper }}</span></td>
           <td class="small mono">{{ r.date or '—' }}</td>
-          <td class="t-right">
+          <td class="t-right" style="white-space:nowrap">
             <form method="post" action="/quality/{{ r.id }}/result" style="display:inline">
               <select name="result" onchange="this.form.submit()" style="padding:4px 8px;border-radius:7px;border:1px solid var(--border);font-size:12px">
                 <option value="pending" {{'selected' if r.result=='pending'}}>Pending</option>
@@ -49,6 +76,12 @@
                 <option value="failed" {{'selected' if r.result=='failed'}}>Failed</option>
               </select>
             </form>
+            {% if current_user_role == 'admin' %}
+            <a class="btn btn-outline btn-xs" href="/quality?edit={{ r.id }}" title="QC edit karo">✏️</a>
+            <form method="post" action="/quality/{{ r.id }}/delete" style="display:inline" onsubmit="return confirm('QC {{ r.qc_no }} delete karein?')">
+              <button class="btn btn-danger btn-xs" type="submit" title="Delete">🗑</button>
+            </form>
+            {% endif %}
           </td>
         </tr>
         {% else %}

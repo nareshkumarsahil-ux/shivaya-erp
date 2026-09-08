@@ -4,7 +4,9 @@ Run: python3 app.py  → http://0.0.0.0:8000
 Login: sahil / admin123
 """
 import os
+import re
 import datetime
+import calendar
 import io
 import csv
 from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify, Response
@@ -130,7 +132,8 @@ def inject_globals():
             "today_iso": today.isoformat(),
             "current_user_name": session.get("user_name", ""),
             "current_user_role": session.get("user_role", ""),
-            "all_parties": parties}
+            "all_parties": parties,
+            "party_names": [p["name"] for p in parties]}
 
 
 @app.template_filter("inr")
@@ -440,7 +443,45 @@ def purchase_orders():
             flash("Purchase order created.", "success")
         return redirect_with_token(url_for("purchase_orders"))
     rows = db.query("SELECT * FROM purchase_orders ORDER BY id DESC")
-    return render_template("purchase_orders.html", active="purchase", rows=rows, show_add=request.args.get("add"))
+    edit_po = None
+    eid = request.args.get("edit")
+    if eid and eid.isdigit():
+        edit_po = db.query("SELECT * FROM purchase_orders WHERE id=?", (int(eid),), one=True)
+    return render_template("purchase_orders.html", active="purchase", rows=rows,
+                           show_add=request.args.get("add"), edit_po=edit_po)
+
+
+@app.route("/purchase-orders/<int:po_id>/edit", methods=["POST"])
+@login_required
+def po_edit(po_id):
+    f = request.form
+    po_no = (f.get("po_no") or "").strip()
+    vendor = (f.get("vendor") or "").strip()
+    if not vendor:
+        flash("Vendor zaroori hai.", "error")
+        return redirect_with_token(url_for("purchase_orders", edit=po_id))
+    try:
+        db.execute(
+            "UPDATE purchase_orders SET po_no=?, vendor=?, item=?, qty=?, amount=?, status=?, date=? WHERE id=?",
+            (po_no, vendor, (f.get("item") or "").strip(), (f.get("qty") or "").strip(),
+             float(f.get("amount", 0) or 0), f.get("status", "pending"),
+             f.get("date") or datetime.date.today().isoformat(), po_id))
+        flash(f"PO {po_no} update ho gaya ✅", "success")
+    except Exception as e:
+        flash(f"Update failed: {e}", "error")
+    return redirect_with_token(url_for("purchase_orders"))
+
+
+@app.route("/purchase-orders/<int:po_id>/delete", methods=["POST"])
+@login_required
+def po_delete(po_id):
+    po = db.query("SELECT * FROM purchase_orders WHERE id=?", (po_id,), one=True)
+    if not po:
+        flash("Purchase order nahi mila.", "error")
+    else:
+        db.execute("DELETE FROM purchase_orders WHERE id=?", (po_id,))
+        flash(f"PO {po['po_no']} delete ho gaya 🗑", "success")
+    return redirect_with_token(url_for("purchase_orders"))
 
 
 @app.route("/purchase-orders/<int:po_id>/status", methods=["POST"])
@@ -1016,9 +1057,16 @@ def inventory():
                              "ORDER BY mi.id DESC LIMIT 30")
     orders_for_issue = db.query("SELECT id, order_no, party, product FROM orders ORDER BY id DESC")
     worker_names = [r["name"] for r in db.query("SELECT name FROM employees ORDER BY name")]
+    edit_item = None
+    if request.args.get("edit"):
+        try:
+            edit_item = db.query("SELECT * FROM inventory WHERE id=?",
+                                 (int(request.args.get("edit")),), one=True)
+        except ValueError:
+            edit_item = None
     return render_template("inventory.html", active="inventory", rows=rows, show_add=request.args.get("add"),
                            issue_history=issue_history, orders_for_issue=orders_for_issue,
-                           worker_names=worker_names)
+                           worker_names=worker_names, edit_item=edit_item)
 
 
 @app.route("/inventory/<int:item_id>/update", methods=["POST"])
@@ -1030,6 +1078,42 @@ def inventory_update(item_id):
         stock = 0
     db.execute("UPDATE inventory SET stock=?, min_stock=? WHERE id=?",
                (stock, float(request.form.get("min_stock", 0) or 0), item_id))
+    return redirect_with_token(url_for("inventory"))
+
+
+@app.route("/inventory/<int:item_id>/edit", methods=["POST"])
+@login_required
+def inventory_edit(item_id):
+    f = request.form
+    name = (f.get("name") or "").strip()
+    if not name:
+        flash("Item name zaroori hai.", "error")
+        return redirect_with_token(url_for("inventory", edit=item_id))
+    try:
+        db.execute("UPDATE inventory SET code=?, name=?, category=?, stock=?, min_stock=?, unit=? WHERE id=?",
+                   ((f.get("code") or "").strip(), name, (f.get("category") or "").strip(),
+                    float(f.get("stock", 0) or 0), float(f.get("min_stock", 0) or 0),
+                    (f.get("unit") or "pcs").strip(), item_id))
+        flash(f"'{name}' update ho gaya ✅", "success")
+    except Exception as e:
+        flash(f"Update failed: {e}", "error")
+    return redirect_with_token(url_for("inventory"))
+
+
+@app.route("/inventory/<int:item_id>/delete", methods=["POST"])
+@login_required
+def inventory_delete(item_id):
+    item = db.query("SELECT * FROM inventory WHERE id=?", (item_id,), one=True)
+    if not item:
+        flash("Item nahi mila.", "error")
+        return redirect_with_token(url_for("inventory"))
+    refs = db.query("SELECT COUNT(*) c FROM bom WHERE item_id=?", (item_id,), one=True)["c"]
+    if refs:
+        flash(f"'{item['name']}' kisi Finished Product ke BOM mein hai ({refs} jagah) — "
+              f"pehle wahan se BOM entry hatayein, tabhi delete hoga.", "error")
+        return redirect_with_token(url_for("inventory"))
+    db.execute("DELETE FROM inventory WHERE id=?", (item_id,))
+    flash(f"'{item['name']}' stock list se delete ho gaya 🗑", "success")
     return redirect_with_token(url_for("inventory"))
 
 
@@ -1050,7 +1134,12 @@ def billing():
     totals = db.query("SELECT COALESCE(SUM(amount),0) total, "
                       "COALESCE(SUM(CASE WHEN status='paid' THEN amount END),0) paid, "
                       "COALESCE(SUM(CASE WHEN status!='paid' THEN amount END),0) pending FROM billing", one=True)
-    return render_template("billing.html", active="billing", rows=rows, totals=totals, show_add=request.args.get("add"))
+    edit_inv = None
+    eid = request.args.get("edit")
+    if eid and eid.isdigit():
+        edit_inv = db.query("SELECT * FROM billing WHERE id=?", (int(eid),), one=True)
+    return render_template("billing.html", active="billing", rows=rows, totals=totals,
+                           show_add=request.args.get("add"), edit_inv=edit_inv)
 
 
 @app.route("/billing/<int:inv_id>/status", methods=["POST"])
@@ -1059,6 +1148,37 @@ def billing_status(inv_id):
     st = request.form.get("status")
     if st in ("paid", "pending", "overdue"):
         db.execute("UPDATE billing SET status=? WHERE id=?", (st, inv_id))
+    return redirect_with_token(url_for("billing"))
+
+
+@app.route("/billing/<int:inv_id>/edit", methods=["POST"])
+@login_required
+def billing_edit(inv_id):
+    f = request.form
+    invoice_no = (f.get("invoice_no") or "").strip()
+    party = (f.get("party") or "").strip()
+    if not party:
+        flash("Party zaroori hai.", "error")
+        return redirect_with_token(url_for("billing", edit=inv_id))
+    try:
+        db.execute("UPDATE billing SET invoice_no=?, party=?, amount=?, status=?, date=? WHERE id=?",
+                   (invoice_no, party, float(f.get("amount", 0) or 0), f.get("status", "pending"),
+                    f.get("date") or datetime.date.today().isoformat(), inv_id))
+        flash(f"Invoice {invoice_no} update ho gaya ✅", "success")
+    except Exception as e:
+        flash(f"Update failed: {e}", "error")
+    return redirect_with_token(url_for("billing"))
+
+
+@app.route("/billing/<int:inv_id>/delete", methods=["POST"])
+@login_required
+def billing_delete(inv_id):
+    inv = db.query("SELECT * FROM billing WHERE id=?", (inv_id,), one=True)
+    if not inv:
+        flash("Invoice nahi mila.", "error")
+    else:
+        db.execute("DELETE FROM billing WHERE id=?", (inv_id,))
+        flash(f"Invoice {inv['invoice_no']} delete ho gaya 🗑", "success")
     return redirect_with_token(url_for("billing"))
 
 
@@ -1078,7 +1198,43 @@ def payments():
     rows = db.query("SELECT * FROM payments ORDER BY id DESC")
     totals = db.query("SELECT COALESCE(SUM(CASE WHEN ptype='receipt' THEN amount END),0) received, "
                       "COALESCE(SUM(CASE WHEN ptype='payment' THEN amount END),0) paid FROM payments", one=True)
-    return render_template("payments.html", active="payments", rows=rows, totals=totals, show_add=request.args.get("add"))
+    edit_pmt = None
+    eid = request.args.get("edit")
+    if eid and eid.isdigit():
+        edit_pmt = db.query("SELECT * FROM payments WHERE id=?", (int(eid),), one=True)
+    return render_template("payments.html", active="payments", rows=rows, totals=totals,
+                           show_add=request.args.get("add"), edit_pmt=edit_pmt)
+
+
+@app.route("/payments/<int:pmt_id>/edit", methods=["POST"])
+@login_required
+def payment_edit(pmt_id):
+    f = request.form
+    ref_no = (f.get("ref_no") or "").strip()
+    party = (f.get("party") or "").strip()
+    if not party:
+        flash("Party zaroori hai.", "error")
+        return redirect_with_token(url_for("payments", edit=pmt_id))
+    try:
+        db.execute("UPDATE payments SET ref_no=?, party=?, ptype=?, amount=?, mode=?, date=? WHERE id=?",
+                   (ref_no, party, f.get("ptype", "receipt"), float(f.get("amount", 0) or 0),
+                    f.get("mode", "Bank"), f.get("date") or datetime.date.today().isoformat(), pmt_id))
+        flash(f"Entry {ref_no} update ho gaya ✅", "success")
+    except Exception as e:
+        flash(f"Update failed: {e}", "error")
+    return redirect_with_token(url_for("payments"))
+
+
+@app.route("/payments/<int:pmt_id>/delete", methods=["POST"])
+@login_required
+def payment_delete(pmt_id):
+    pmt = db.query("SELECT * FROM payments WHERE id=?", (pmt_id,), one=True)
+    if not pmt:
+        flash("Entry nahi mila.", "error")
+    else:
+        db.execute("DELETE FROM payments WHERE id=?", (pmt_id,))
+        flash(f"Entry {pmt['ref_no']} delete ho gaya 🗑", "success")
+    return redirect_with_token(url_for("payments"))
 
 
 # ---------------------------------------------------------------- employees
@@ -1089,20 +1245,49 @@ def employees():
         f = request.form
         try:
             db.execute(
-                "INSERT INTO employees (emp_code, name, email, phone, department, designation, joining_date, status) VALUES (?,?,?,?,?,?,?,?)",
+                "INSERT INTO employees (emp_code, name, email, phone, department, designation, joining_date, status, salary) "
+                "VALUES (?,?,?,?,?,?,?,?,?)",
                 (f.get("emp_code", "").strip(), f.get("name", "").strip(), f.get("email", "").strip(),
                  f.get("phone", "").strip(), f.get("department", "").strip(), f.get("designation", "").strip(),
-                 f.get("joining_date", "") or datetime.date.today().isoformat(), "active"))
+                 f.get("joining_date", "") or datetime.date.today().isoformat(), "active",
+                 float(f.get("salary", 0) or 0)))
             flash("Employee added.", "success")
         except Exception as e:
             flash(f"Could not add employee: {e}", "error")
         return redirect_with_token(url_for("employees"))
-    rows = db.query("SELECT e.*, (SELECT COUNT(*) FROM attendance a WHERE a.emp_id=e.id AND a.status='present') AS present_days "
-                    "FROM employees e ORDER BY e.id")
+    cur_month = datetime.date.today().strftime("%Y-%m") + "%"
+    rows = db.query("SELECT e.*, (SELECT COUNT(*) FROM attendance a WHERE a.emp_id=e.id AND a.status='present' "
+                    "AND a.date LIKE ?) AS present_days FROM employees e ORDER BY e.id", (cur_month,))
     today = datetime.date.today().isoformat()
     att = {r["emp_id"]: r["status"] for r in db.query("SELECT emp_id, status FROM attendance WHERE date=?", (today,))}
+    edit_emp = None
+    eid = request.args.get("edit")
+    if eid and eid.isdigit():
+        edit_emp = db.query("SELECT * FROM employees WHERE id=?", (int(eid),), one=True)
     return render_template("employees.html", active="employees", employees=rows, att=att,
-                           show_add=request.args.get("add"))
+                           show_add=request.args.get("add"), edit_emp=edit_emp)
+
+
+@app.route("/employees/<int:emp_id>/edit", methods=["POST"])
+@login_required
+def employee_edit(emp_id):
+    f = request.form
+    name = (f.get("name") or "").strip()
+    if not name:
+        flash("Name zaroori hai.", "error")
+        return redirect_with_token(url_for("employees", edit=emp_id))
+    try:
+        db.execute(
+            "UPDATE employees SET emp_code=?, name=?, email=?, phone=?, department=?, designation=?, "
+            "joining_date=?, status=?, salary=? WHERE id=?",
+            ((f.get("emp_code") or "").strip(), name, (f.get("email") or "").strip(),
+             (f.get("phone") or "").strip(), (f.get("department") or "").strip(),
+             (f.get("designation") or "").strip(), (f.get("joining_date") or "").strip(),
+             f.get("status", "active"), float(f.get("salary", 0) or 0), emp_id))
+        flash(f"'{name}' update ho gaya ✅", "success")
+    except Exception as e:
+        flash(f"Update failed: {e}", "error")
+    return redirect_with_token(url_for("employees"))
 
 
 @app.route("/employees/<int:emp_id>/delete", methods=["POST"])
@@ -1110,9 +1295,47 @@ def employees():
 @admin_required
 def employee_delete(emp_id):
     db.execute("DELETE FROM attendance WHERE emp_id=?", (emp_id,))
+    db.execute("DELETE FROM emp_salary WHERE emp_id=?", (emp_id,))
     db.execute("DELETE FROM employees WHERE id=?", (emp_id,))
     flash("Employee removed.", "success")
     return redirect_with_token(url_for("employees"))
+
+
+ATT_STATUSES = ["present", "halfday", "leave", "absent"]
+ATT_LABELS = {"present": "P", "halfday": "HD", "leave": "L", "absent": "A"}
+
+
+def _att_month_rows(month):
+    """Per employee: P/A/L/HD counts + advance + paid + salary calc (is month ka)."""
+    rows = db.query(
+        "SELECT e.id, e.name, e.emp_code, e.department, e.designation, e.salary, "
+        "COALESCE(SUM(CASE WHEN a.status='present' THEN 1 END),0) AS p, "
+        "COALESCE(SUM(CASE WHEN a.status='absent' THEN 1 END),0) AS a, "
+        "COALESCE(SUM(CASE WHEN a.status='leave' THEN 1 END),0) AS l, "
+        "COALESCE(SUM(CASE WHEN a.status='halfday' THEN 1 END),0) AS hd, "
+        "COALESCE(es.advance,0) AS advance, COALESCE(es.paid,0) AS paid "
+        "FROM employees e "
+        "LEFT JOIN attendance a ON a.emp_id=e.id AND a.date LIKE ? "
+        "LEFT JOIN emp_salary es ON es.emp_id=e.id AND es.month=? "
+        "WHERE e.status='active' GROUP BY e.id ORDER BY e.id", (month + "%", month))
+    try:
+        y, m = int(month[:4]), int(month[5:7])
+        dim = calendar.monthrange(y, m)[1]
+    except (ValueError, IndexError):
+        dim = 30
+    for r in rows:
+        sal = float(r["salary"] or 0)
+        per_day = round(sal / dim, 2) if sal and dim else 0.0
+        ded = round(per_day * (r["a"] or 0) + per_day * 0.5 * (r["hd"] or 0), 2)
+        r["per_day"] = per_day
+        r["ded"] = ded
+        r["earned"] = round(sal - ded, 2)
+        r["net"] = round(sal - ded - float(r["advance"] or 0), 2)
+    return rows, dim
+
+
+def _valid_month(m):
+    return bool(re.fullmatch(r"\d{4}-\d{2}", m or ""))
 
 
 @app.route("/attendance", methods=["GET", "POST"])
@@ -1130,20 +1353,72 @@ def attendance():
                 employees = db.query("SELECT id FROM employees WHERE status='active'")
                 for e in employees:
                     st = request.form.get(f"status_{e['id']}", "absent")
+                    if st not in ATT_STATUSES:
+                        st = "absent"
                     db.execute("INSERT OR REPLACE INTO attendance (emp_id, date, status) VALUES (?,?,?)",
                                (e["id"], date_str, st))
                 flash(f"Attendance saved for {date_str}.", "success")
         except ValueError:
             flash("Invalid date.", "error")
         return redirect_with_token(url_for("attendance", date=date_str))
+    month = request.args.get("month") or datetime.date.today().strftime("%Y-%m")
+    if not _valid_month(month):
+        month = datetime.date.today().strftime("%Y-%m")
+    try:
+        d = datetime.date.fromisoformat(date_str)
+    except ValueError:
+        date_str = datetime.date.today().isoformat()
+        d = datetime.date.today()
     rows = db.query(
         "SELECT e.id, e.name, e.department, a.status FROM employees e "
         "LEFT JOIN attendance a ON a.emp_id=e.id AND a.date=? WHERE e.status='active' ORDER BY e.id", (date_str,))
-    summary = {"present": 0, "absent": 0, "halfday": 0}
+    summary = {"present": 0, "absent": 0, "halfday": 0, "leave": 0}
     for r in rows:
         if r["status"] in summary:
             summary[r["status"]] += 1
-    return render_template("attendance.html", active="employees", employees=rows, date=date_str, summary=summary)
+    sal_rows, dim = _att_month_rows(month)
+    tot = {"salary": round(sum(r["salary"] or 0 for r in sal_rows), 2),
+           "ded": round(sum(r["ded"] for r in sal_rows), 2),
+           "advance": round(sum(r["advance"] or 0 for r in sal_rows), 2),
+           "net": round(sum(r["net"] for r in sal_rows), 2)}
+    return render_template("attendance.html", active="employees", employees=rows, date=date_str,
+                           future=d > datetime.date.today(), summary=summary, month=month,
+                           sal_rows=sal_rows, days_in_month=dim, tot=tot)
+
+
+@app.route("/attendance/advance", methods=["POST"])
+@login_required
+def attendance_advance():
+    emp_id = int(request.form.get("emp_id") or 0)
+    month = request.form.get("month") or datetime.date.today().strftime("%Y-%m")
+    if not _valid_month(month):
+        month = datetime.date.today().strftime("%Y-%m")
+    try:
+        adv = float(request.form.get("advance") or 0)
+    except ValueError:
+        adv = 0.0
+    cur = db.query("SELECT paid FROM emp_salary WHERE emp_id=? AND month=?", (emp_id, month), one=True)
+    paid = cur["paid"] if cur else 0
+    db.execute("INSERT OR REPLACE INTO emp_salary (emp_id, month, advance, paid) VALUES (?,?,?,?)",
+               (emp_id, month, max(0.0, adv), paid))
+    flash("Advance update ho gaya ✅", "success")
+    return redirect_with_token(url_for("attendance", month=month))
+
+
+@app.route("/attendance/paid", methods=["POST"])
+@login_required
+def attendance_paid():
+    emp_id = int(request.form.get("emp_id") or 0)
+    month = request.form.get("month") or datetime.date.today().strftime("%Y-%m")
+    if not _valid_month(month):
+        month = datetime.date.today().strftime("%Y-%m")
+    cur = db.query("SELECT advance, paid FROM emp_salary WHERE emp_id=? AND month=?", (emp_id, month), one=True)
+    advance = cur["advance"] if cur else 0.0
+    new_paid = 0 if (cur and cur["paid"]) else 1
+    db.execute("INSERT OR REPLACE INTO emp_salary (emp_id, month, advance, paid) VALUES (?,?,?,?)",
+               (emp_id, month, advance, new_paid))
+    flash("Salary paid status update ho gaya ✅", "success")
+    return redirect_with_token(url_for("attendance", month=month))
 
 
 # ---------------------------------------------------------------- machines
@@ -1159,7 +1434,12 @@ def machines():
             flash("Machine added.", "success")
         return redirect_with_token(url_for("machines"))
     rows = db.query("SELECT * FROM machines ORDER BY id")
-    return render_template("machines.html", active="machines", rows=rows, show_add=request.args.get("add"))
+    edit_machine = None
+    eid = request.args.get("edit")
+    if eid and eid.isdigit():
+        edit_machine = db.query("SELECT * FROM machines WHERE id=?", (int(eid),), one=True)
+    return render_template("machines.html", active="machines", rows=rows,
+                           show_add=request.args.get("add"), edit_machine=edit_machine)
 
 
 @app.route("/machines/<int:m_id>/status", methods=["POST"])
@@ -1169,6 +1449,36 @@ def machine_status(m_id):
     if st in ("running", "idle", "maintenance"):
         job = request.form.get("current_job", "").strip()
         db.execute("UPDATE machines SET status=?, current_job=? WHERE id=?", (st, job, m_id))
+    return redirect_with_token(url_for("machines"))
+
+
+@app.route("/machines/<int:m_id>/edit", methods=["POST"])
+@login_required
+def machine_edit(m_id):
+    f = request.form
+    name = (f.get("name") or "").strip()
+    if not name:
+        flash("Machine name zaroori hai.", "error")
+        return redirect_with_token(url_for("machines", edit=m_id))
+    try:
+        db.execute("UPDATE machines SET code=?, name=?, status=?, current_job=? WHERE id=?",
+                   ((f.get("code") or "").strip(), name, f.get("status", "idle"),
+                    (f.get("current_job") or "").strip(), m_id))
+        flash(f"Machine '{name}' update ho gaya ✅", "success")
+    except Exception as e:
+        flash(f"Update failed: {e}", "error")
+    return redirect_with_token(url_for("machines"))
+
+
+@app.route("/machines/<int:m_id>/delete", methods=["POST"])
+@login_required
+def machine_delete(m_id):
+    m = db.query("SELECT * FROM machines WHERE id=?", (m_id,), one=True)
+    if not m:
+        flash("Machine nahi mila.", "error")
+    else:
+        db.execute("DELETE FROM machines WHERE id=?", (m_id,))
+        flash(f"Machine '{m['name']}' delete ho gaya 🗑", "success")
     return redirect_with_token(url_for("machines"))
 
 
@@ -1186,7 +1496,12 @@ def quality():
         return redirect_with_token(url_for("quality"))
     rows = db.query("SELECT q.*, o.order_no, o.party FROM quality q LEFT JOIN orders o ON o.id=q.order_id ORDER BY q.id DESC")
     orders = db.query("SELECT id, order_no, party FROM orders ORDER BY id DESC")
-    return render_template("quality.html", active="quality", rows=rows, orders=orders, show_add=request.args.get("add"))
+    edit_qc = None
+    eid = request.args.get("edit")
+    if eid and eid.isdigit():
+        edit_qc = db.query("SELECT * FROM quality WHERE id=?", (int(eid),), one=True)
+    return render_template("quality.html", active="quality", rows=rows, orders=orders,
+                           show_add=request.args.get("add"), edit_qc=edit_qc)
 
 
 @app.route("/quality/<int:qc_id>/result", methods=["POST"])
@@ -1195,6 +1510,34 @@ def quality_result(qc_id):
     r = request.form.get("result")
     if r in ("passed", "failed", "pending"):
         db.execute("UPDATE quality SET result=? WHERE id=?", (r, qc_id))
+    return redirect_with_token(url_for("quality"))
+
+
+@app.route("/quality/<int:qc_id>/edit", methods=["POST"])
+@login_required
+def quality_edit(qc_id):
+    f = request.form
+    qc_no = (f.get("qc_no") or "").strip()
+    try:
+        oid = int(f.get("order_id") or 0) or None
+    except ValueError:
+        oid = None
+    db.execute("UPDATE quality SET qc_no=?, order_id=?, remarks=?, result=?, date=? WHERE id=?",
+               (qc_no, oid, (f.get("remarks") or "").strip(), f.get("result", "pending"),
+                f.get("date") or datetime.date.today().isoformat(), qc_id))
+    flash(f"QC {qc_no} update ho gaya ✅", "success")
+    return redirect_with_token(url_for("quality"))
+
+
+@app.route("/quality/<int:qc_id>/delete", methods=["POST"])
+@login_required
+def quality_delete(qc_id):
+    qc = db.query("SELECT * FROM quality WHERE id=?", (qc_id,), one=True)
+    if not qc:
+        flash("QC entry nahi mila.", "error")
+    else:
+        db.execute("DELETE FROM quality WHERE id=?", (qc_id,))
+        flash(f"QC {qc['qc_no']} delete ho gaya 🗑", "success")
     return redirect_with_token(url_for("quality"))
 
 
@@ -1583,13 +1926,7 @@ def prep_jobcard(order_id):
     if not order:
         return None, None, None
     jc = ensure_jobcard(order_id)
-    _plist, _ = db.process_list_for(jc["sheet_material"])
-    flat_next = []
-    for p in _plist:
-        if p == db.JC_TOOL_SLOT:
-            flat_next += db.JC_TOOL_OPTIONS
-        else:
-            flat_next.append(p)
+    flat_next = db.all_process_options()
     procs = []
     raw_rows = db.get_jc_processes(order_id)
     for i, r in enumerate(raw_rows):
@@ -1642,6 +1979,7 @@ def jobcard(order_id):
     issue_total = "; ".join(f"{q:g} {u} {n}" for (n, u), q in issue_summary.items())
     worker_names = [r["name"] for r in db.query("SELECT name FROM employees ORDER BY name")]
     return render_template("jobcard.html", active="orders", order=order, jc=jc, procs=procs,
+                           flat_next=db.all_process_options(),
                            qty_pcs=qty_pcs, models=models, proc_label=proc_label, jc_logs=jc_logs,
                            dispatch=dispatch, dispatch_logs=dispatch_logs,
                            inv_items=inv_items, inv_names=inv_names,
@@ -1760,28 +2098,117 @@ def jobcard_update(order_id):
     return redirect_with_token(url_for("jobcard", order_id=order_id))
 
 
+def _dt_pair(f, d_key, t_key):
+    d, t = f.get(d_key, ""), f.get(t_key, "")
+    return f"{d} {t}".strip() if (d and t) else ""
+
+
 @app.route("/jobcard/<int:order_id>/process", methods=["POST"])
 @login_required
 def jobcard_process(order_id):
     f = request.form
-    for r in db.get_jc_processes(order_id):
+    rows = db.get_jc_processes(order_id)   # ORDER BY ord, id — extra rows included
+
+    # ---- 1) existing rows update (rename / dates / qty / NEXT) ----
+    for r in rows:
         pid = str(r["id"])
         new_proc = f.get(f"process_{pid}", "").strip()
-        if new_proc and new_proc in db.JC_TOOL_OPTIONS and new_proc != r["process"]:
+        if new_proc and new_proc != r["process"] and not r.get("fixed"):
+            if r["is_dropdown"] and new_proc not in db.JC_TOOL_OPTIONS:
+                new_proc = r["process"]  # dropdown sirf TOOL options mein
             db.execute("UPDATE jobcard_process SET process=? WHERE id=?", (new_proc, r["id"]))
-        start_d = f.get(f"start_date_{pid}", "")
-        start_t = f.get(f"start_time_{pid}", "")
-        end_d = f.get(f"end_date_{pid}", "")
-        end_t = f.get(f"end_time_{pid}", "")
-        start_dt = f"{start_d} {start_t}".strip() if (start_d and start_t) else ""
-        end_dt = f"{end_d} {end_t}".strip() if (end_d and end_t) else ""
+            r["process"] = new_proc
+        start_dt = _dt_pair(f, f"start_date_{pid}", f"start_time_{pid}")
+        end_dt = _dt_pair(f, f"end_date_{pid}", f"end_time_{pid}")
+        nxt = f.get(f"next_{pid}", "").strip()
         db.execute(
             "UPDATE jobcard_process SET start_dt=?, end_dt=?, start_name=?, end_name=?, qty=?, next_process=? WHERE id=?",
             (start_dt, end_dt, f.get(f"start_name_{pid}", "").strip(), f.get(f"end_name_{pid}", "").strip(),
-             int(f.get(f"qty_{pid}", 0) or 0), f.get(f"next_{pid}", "").strip(), r["id"]))
-    # current process: latest finished row ka NEXT (NONE = skip agla process), warna pehla unfinished
+             int(f.get(f"qty_{pid}", 0) or 0), nxt, r["id"]))
+        r["start_dt"], r["end_dt"], r["next_process"] = start_dt, end_dt, nxt
+
+    worklist = list(rows)
+
+    def insert_after(parent_pid, nd):
+        if parent_pid == 0:
+            worklist.insert(0, nd)   # starter row se aayi pehli process
+            return
+        for i, x in enumerate(worklist):
+            if x["id"] == parent_pid:
+                worklist.insert(i + 1, nd)
+                return
+        worklist.append(nd)
+
+    # ---- 2) JS se aayi nayi rows (NEXT select karne par neeche line banti hai) ----
+    # fields: add_process_<parentpid>_<k> wagerah
+    add_groups = {}
+    for key in f:
+        m = re.match(r"^add_process_(\d+)_(\d+)$", key)
+        if m and f.get(key, "").strip():
+            pid, k = int(m.group(1)), int(m.group(2))
+            add_groups[(pid, k)] = {
+                "id": None,
+                "process": f.get(key, "").strip(),
+                "start_dt": _dt_pair(f, f"add_start_date_{pid}_{k}", f"add_start_time_{pid}_{k}"),
+                "end_dt": _dt_pair(f, f"add_end_date_{pid}_{k}", f"add_end_time_{pid}_{k}"),
+                "start_name": f.get(f"add_start_name_{pid}_{k}", "").strip(),
+                "end_name": f.get(f"add_end_name_{pid}_{k}", "").strip(),
+                "qty": int(f.get(f"add_qty_{pid}_{k}", 0) or 0),
+                "next_process": f.get(f"add_next_{pid}_{k}", "").strip(),
+            }
+    starter_groups = sorted([gk for gk in add_groups if gk[0] == 0], key=lambda x: x[1])
+    normal_groups = sorted([gk for gk in add_groups if gk[0] != 0], key=lambda x: (x[0], x[1]))
+    # starter rows (pid=0) sabse pehli lines hain — k ke order mein shuru mein daalo
+    for i, gk in enumerate(starter_groups):
+        worklist.insert(i, add_groups[gk])
+    for gk in normal_groups:
+        insert_after(gk[0], add_groups[gk])
+
+    # ---- 3) chain enforcement: NEXT selected hai par agli line wahi process nahi -
+    #        to nayi line bana do (tab tak chalta rahega jab tak finish nahi) ----
+    i = 0
+    while i < len(worklist):
+        r = worklist[i]
+        nxt = (r.get("next_process") or "").strip()
+        if nxt and nxt.upper() != "NONE":
+            following = worklist[i + 1] if i + 1 < len(worklist) else None
+            if not following or following["process"] != nxt:
+                worklist.insert(i + 1, {"id": None, "process": nxt,
+                                        "start_dt": "", "end_dt": "", "start_name": "",
+                                        "end_name": "", "qty": 0, "next_process": ""})
+        i += 1
+
+    # ---- 4) ord renumber + nayi rows insert ----
+    added = 0
+    for pos, r in enumerate(worklist):
+        ordv = (pos + 1) * 10
+        if r.get("id"):
+            db.execute("UPDATE jobcard_process SET ord=? WHERE id=?", (ordv, r["id"]))
+        else:
+            db.execute(
+                "INSERT INTO jobcard_process (order_id, process, start_dt, end_dt, start_name, end_name, qty, next_process, ord) "
+                "VALUES (?,?,?,?,?,?,?,?,?)",
+                (order_id, r["process"], r["start_dt"], r["end_dt"], r["start_name"],
+                 r["end_name"], r["qty"], r["next_process"], ordv))
+            added += 1
     current = advance_current(order_id)
-    flash(f"Process table saved. Current process: {current}.", "success")
+    if added:
+        flash(f"Process table saved. {added} nayi process line add hui. Current process: {current}.", "success")
+    else:
+        flash(f"Process table saved. Current process: {current}.", "success")
+    return redirect_with_token(url_for("jobcard", order_id=order_id))
+
+
+@app.route("/jobcard/<int:order_id>/process/<int:pid>/delete", methods=["POST"])
+@login_required
+def jobcard_process_delete(order_id, pid):
+    row = next((r for r in db.get_jc_processes(order_id) if r["id"] == pid), None)
+    if row:
+        if row.get("fixed"):
+            flash("🔒 Laminate Cutting pehla fixed process hai — delete nahi ho sakta.", "error")
+            return redirect_with_token(url_for("jobcard", order_id=order_id))
+        db.execute("DELETE FROM jobcard_process WHERE id=?", (pid,))
+        flash(f"Process row '{row['process']}' hata diya 🗑", "success")
     return redirect_with_token(url_for("jobcard", order_id=order_id))
 
 

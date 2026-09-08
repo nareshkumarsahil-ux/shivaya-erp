@@ -211,19 +211,29 @@
       <tbody>
         {% for p in procs %}
         {% set cur_match = (order.current_process|lower == p.process|lower) or (p.is_dropdown and order.current_process in p.options) %}
-        <tr class="prow {{'cur-row' if cur_match}} {{'skip-row' if p.skipped}}" data-pid="{{ p.id }}">
+        <tr class="prow {{'cur-row' if cur_match}} {{'skip-row' if p.skipped}}" data-pid="{{ p.id }}" data-proc="{{ p.process }}">
           <td>
             <span class="muted small mono" style="margin-right:5px">{{ p.idx }}.</span>
             {% if cur_match %}<span class="badge b-amber" style="margin-right:4px">▶ CURRENT</span>{% endif %}
             {% if p.skipped %}<span class="badge b-gray" style="margin-right:4px">⏭ SKIPPED (NONE)</span>{% endif %}
             {% if p.is_dropdown %}
-            <select name="process_{{ p.id }}" class="pselect" style="width:calc(100% - 28px);padding:5px 7px;border:1.5px solid var(--amber);border-radius:7px;font-size:12px;font-weight:700;background:#fffdf3">
-              {% for opt in p.options %}
-              <option value="{{ opt }}" {{'selected' if p.process == opt}}>{{ opt }}</option>
-              {% endfor %}
-            </select>
+            <div style="display:flex;gap:4px;align-items:center">
+              <select name="process_{{ p.id }}" class="pselect" style="flex:1;min-width:110px;padding:5px 7px;border:1.5px solid var(--amber);border-radius:7px;font-size:12px;font-weight:700;background:#fffdf3">
+                {% for opt in p.options %}
+                <option value="{{ opt }}" {{'selected' if p.process == opt}}>{{ opt }}</option>
+                {% endfor %}
+              </select>
+              <button type="button" class="btn btn-danger btn-xs" title="Ye row delete karo"
+                      onclick="delProcRow(event, {{ order.id }}, {{ p.id }}, '{{ p.process }}')">✖</button>
+            </div>
+            {% elif p.extra %}
+            <div style="display:flex;gap:4px;align-items:center">
+              <input type="text" name="process_{{ p.id }}" value="{{ p.process }}" style="flex:1;min-width:110px;padding:5px 7px;border:1.5px solid var(--blue);border-radius:7px;font-size:12px;font-weight:700;background:#eff6ff">
+              <button type="button" class="btn btn-danger btn-xs" title="Ye row delete karo"
+                      onclick="delProcRow(event, {{ order.id }}, {{ p.id }}, '{{ p.process }}')">✖</button>
+            </div>
             {% else %}
-            <b class="small">{{ p.process }}</b>
+            <b class="small">{{ p.process }}</b>{% if p.fixed %}<span class="badge b-gray" style="margin-left:5px">🔒 FIXED</span>{% endif %}
             {% endif %}
           </td>
           <td><input type="date" name="start_date_{{ p.id }}" class="sdate" value="{{ p.start_date }}" style="width:130px;padding:5px 7px;border:1px solid var(--border);border-radius:7px;font-size:12px"></td>
@@ -250,6 +260,98 @@
   </div>
 </div>
 </form>
+
+<script>
+/* PROCESS TABLE: pehla process hamesha Laminate Cutting (FIXED) hota hai.
+   Kisi bhi row ke NEXT dropdown se process select karo -> usi row ke NICHE
+   nayi line add ho jati hai. Ye kram tab tak chalta hai jab tak job finish
+   nahi hota (NONE = ruk jao). */
+(function(){
+  var addCounter = 0;
+  function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  function inp(name, type, w, ph, val, cls){
+    return '<input type="' + type + '" name="' + name + '"' + (cls ? ' class="' + cls + '"' : '')
+         + (val !== undefined ? ' value="' + esc(val) + '"' : '')
+         + (ph ? ' placeholder="' + esc(ph) + '"' : '')
+         + ' style="' + (w || '') + 'padding:5px 7px;border:1px solid var(--border);border-radius:7px;font-size:12px">';
+  }
+  function addRowAfter(parentRow, processName){
+    var pid = parentRow.getAttribute('data-pid');
+    var k = addCounter++;
+    var tr = document.createElement('tr');
+    tr.setAttribute('data-proc', processName);
+    tr.style.background = '#fffdf3';
+    tr.innerHTML =
+      '<td><span class="muted small mono" style="margin-right:5px">➕</span><span class="badge b-blue" style="margin-right:4px">NEW</span>'
+      + '<div style="display:flex;gap:4px;align-items:center">'
+      + inp('add_process_' + pid + '_' + k, 'text', 'flex:1;min-width:110px;border-color:#93c5fd;background:#eff6ff;font-weight:700;', '', processName)
+      + "<button type=\"button\" class=\"btn btn-danger btn-xs\" onclick=\"this.closest('tr').remove()\">✖</button>"
+      + '</div></td>'
+      + '<td>' + inp('add_start_date_' + pid + '_' + k, 'date', 'width:130px') + '</td>'
+      + '<td>' + inp('add_start_time_' + pid + '_' + k, 'time', 'width:100px') + '</td>'
+      + '<td>' + inp('add_start_name_' + pid + '_' + k, 'text', 'width:130px', 'Name') + '</td>'
+      + '<td>' + inp('add_end_date_' + pid + '_' + k, 'date', 'width:130px') + '</td>'
+      + '<td>' + inp('add_end_time_' + pid + '_' + k, 'time', 'width:100px') + '</td>'
+      + '<td>' + inp('add_end_name_' + pid + '_' + k, 'text', 'width:130px', 'Name') + '</td>'
+      + '<td class="small" style="font-weight:700">—</td>'
+      + '<td>' + inp('add_qty_' + pid + '_' + k, 'number', 'width:80px') + '</td>'
+      + '<td></td>';
+    // NEXT dropdown clone karo (same options)
+    var srcSel = parentRow.querySelector('.pnext');
+    var nextSel = document.createElement('select');
+    nextSel.className = 'pnext';
+    nextSel.name = 'add_next_' + pid + '_' + k;
+    nextSel.style.cssText = 'width:170px;padding:5px 7px;border:1px solid var(--border);border-radius:7px;font-size:12px;background:#fff';
+    if (srcSel) {
+      Array.prototype.forEach.call(srcSel.options, function(o){ nextSel.appendChild(o.cloneNode(true)); });
+    }
+    nextSel.value = '';
+    tr.cells[tr.cells.length - 1].appendChild(nextSel);
+    parentRow.parentNode.insertBefore(tr, parentRow.nextSibling);
+    if (tr.scrollIntoView) tr.scrollIntoView({behavior: 'smooth', block: 'nearest'});
+    var firstTxt = tr.querySelector('input[type="text"]');
+    if (firstTxt) firstTxt.focus();
+  }
+  document.addEventListener('change', function(e){
+    var sel = e.target;
+    if (!sel.classList || !sel.classList.contains('pnext')) return;
+    var val = sel.value;
+    if (!val || val === 'NONE') return;
+    var row = sel.closest('tr');
+    if (!row) return;
+    var nextRow = row.nextElementSibling;
+    if (nextRow && nextRow.getAttribute('data-proc') === val) return; // chain pehle se sahi
+    addRowAfter(row, val);
+  });
+  // nayi line ya extra row ka process text badla -> upar wali line ka NEXT bhi wahi ho jaye
+  document.addEventListener('input', function(e){
+    var inp = e.target;
+    if (!inp.name || !(/^(add_process_\d+_\d+|process_\d+)$/.test(inp.name))) return;
+    var row = inp.closest('tr');
+    var prev = row ? row.previousElementSibling : null;
+    if (prev) {
+      var sel = prev.querySelector('.pnext');
+      if (sel) {
+        var v = inp.value;
+        var found = false;
+        Array.prototype.forEach.call(sel.options, function(o){ if (o.value === v) found = true; });
+        if (!found && v) { var o = document.createElement('option'); o.value = v; o.textContent = v; sel.appendChild(o); }
+        if (v) sel.value = v;
+      }
+    }
+  });
+})();
+function delProcRow(ev, oid, pid, name){
+  ev.preventDefault();
+  if (!window.confirm("Process row '" + name + "' delete karein?")) return;
+  var fd = new FormData();
+  var t = new URLSearchParams(window.location.search).get('token');
+  if (t) fd.append('token', t);
+  fetch('/jobcard/' + oid + '/process/' + pid + '/delete', {method: 'POST', body: fd})
+    .then(function(){ window.location.reload(); })
+    .catch(function(){ window.location.reload(); });
+}
+</script>
 
 <!-- ================= PROCESS LOG (operator actions) ================= -->
 <div class="panel no-print" style="margin-top:14px">

@@ -2,7 +2,28 @@
 {% block title %}Machines{% endblock %}
 {% block page_title %}Machines{% endblock %}
 {% block content %}
-{% if show_add and current_user_role == 'admin' %}
+{% if edit_machine %}
+<div class="panel">
+  <div class="panel-head"><h3>✏️ Edit Machine — {{ edit_machine.name }}</h3><a class="btn btn-outline btn-sm" href="/machines">✕ Close</a></div>
+  <div class="panel-body">
+    <form method="post" action="/machines/{{ edit_machine.id }}/edit">
+      <div class="form-grid">
+        <div class="field"><label>Machine Code</label><input name="code" value="{{ edit_machine.code }}"></div>
+        <div class="field full"><label>Machine Name *</label><input name="name" required value="{{ edit_machine.name }}"></div>
+        <div class="field"><label>Status</label>
+          <select name="status">
+            <option value="idle" {{'selected' if edit_machine.status=='idle'}}>Idle</option>
+            <option value="running" {{'selected' if edit_machine.status=='running'}}>Running</option>
+            <option value="maintenance" {{'selected' if edit_machine.status=='maintenance'}}>Maintenance</option>
+          </select>
+        </div>
+        <div class="field"><label>Current Job</label><input name="current_job" value="{{ edit_machine.current_job }}" placeholder="e.g. #5"></div>
+        <div class="full"><button class="btn" type="submit">💾 Save Changes</button></div>
+      </div>
+    </form>
+  </div>
+</div>
+{% elif show_add and current_user_role == 'admin' %}
 <div class="panel">
   <div class="panel-head"><h3>➕ Add Machine</h3><a class="btn btn-outline btn-sm" href="/machines">✕ Close</a></div>
   <div class="panel-body">
@@ -44,6 +65,14 @@
       <input type="text" name="current_job" value="{{ r.current_job }}" placeholder="Job #" style="width:70px;padding:6px 8px;border:1px solid var(--border);border-radius:7px;font-size:12px">
       <button class="btn btn-xs" type="submit">Set</button>
     </form>
+    {% if current_user_role == 'admin' %}
+    <div style="display:flex;gap:6px;margin-top:8px">
+      <a class="btn btn-outline btn-xs" href="/machines?edit={{ r.id }}" style="flex:1" title="Machine edit karo">✏️ Edit</a>
+      <form method="post" action="/machines/{{ r.id }}/delete" style="display:inline" onsubmit="return confirm('Machine {{ r.name }} delete karein?')">
+        <button class="btn btn-danger btn-xs" type="submit" title="Delete">🗑</button>
+      </form>
+    </div>
+    {% endif %}
   </div>
   {% else %}
   <div class="empty" style="grid-column:1/-1">No machines</div>

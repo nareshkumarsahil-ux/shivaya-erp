@@ -7,7 +7,40 @@
   <div class="stat"><div class="top"><span class="lbl">TOTAL PAID OUT</span><span class="ic ic-peach">📤</span></div><div class="num" style="font-size:18px;color:#b3401c">{{ totals.paid|inr }}</div><div class="sub">To vendors</div></div>
 </div>
 
-{% if show_add %}
+{% if edit_pmt %}
+<div class="panel">
+  <div class="panel-head"><h3>✏️ Edit Entry — {{ edit_pmt.ref_no }}</h3><a class="btn btn-outline btn-sm" href="/payments">✕ Close</a></div>
+  <div class="panel-body">
+    <form method="post" action="/payments/{{ edit_pmt.id }}/edit">
+      <div class="form-grid">
+        <div class="field"><label>Ref No.</label><input name="ref_no" value="{{ edit_pmt.ref_no }}"></div>
+        <div class="field full"><label>Party *</label>
+          <select name="party" required>
+            <option value="">— Select party —</option>
+            {% for p in all_parties %}<option value="{{ p.name }}" {{'selected' if edit_pmt.party == p.name}}>{{ p.name }} ({{ 'Supplier' if p.ptype=='supplier' else 'Customer' }})</option>{% endfor %}
+            {% if edit_pmt.party and edit_pmt.party not in party_names %}<option value="{{ edit_pmt.party }}" selected>{{ edit_pmt.party }} (custom)</option>{% endif %}
+          </select>
+        </div>
+        <div class="field"><label>Type</label>
+          <select name="ptype">
+            <option value="receipt" {{'selected' if edit_pmt.ptype=='receipt'}}>Receipt (paisa aaya)</option>
+            <option value="payment" {{'selected' if edit_pmt.ptype=='payment'}}>Payment (paisa diya)</option>
+          </select>
+        </div>
+        <div class="field"><label>Amount (₹) *</label><input type="number" step="0.01" name="amount" required value="{{ edit_pmt.amount }}"></div>
+        <div class="field"><label>Mode</label>
+          <select name="mode">
+            {% for m in ['Bank Transfer','UPI','Cash','Cheque'] %}<option {{'selected' if edit_pmt.mode == m}}>{{ m }}</option>{% endfor %}
+            {% if edit_pmt.mode and edit_pmt.mode not in ['Bank Transfer','UPI','Cash','Cheque'] %}<option selected>{{ edit_pmt.mode }}</option>{% endif %}
+          </select>
+        </div>
+        <div class="field"><label>Date</label><input type="date" name="date" value="{{ edit_pmt.date }}"></div>
+        <div class="full"><button class="btn" type="submit">💾 Save Changes</button></div>
+      </div>
+    </form>
+  </div>
+</div>
+{% elif show_add %}
 <div class="panel">
   <div class="panel-head"><h3>➕ New Entry</h3><a class="btn btn-outline btn-sm" href="/payments">✕ Close</a></div>
   <div class="panel-body">
@@ -40,7 +73,7 @@
   <div class="panel-head"><h3>💸 Entries ({{ rows|length }})</h3></div>
   <div class="panel-body" style="padding:0;overflow-x:auto">
     <table>
-      <thead><tr><th>Ref #</th><th>Party</th><th>Type</th><th class="t-right">Amount</th><th>Mode</th><th>Date</th></tr></thead>
+      <thead><tr><th>Ref #</th><th>Party</th><th>Type</th><th class="t-right">Amount</th><th>Mode</th><th>Date</th>{% if current_user_role == 'admin' %}<th></th>{% endif %}</tr></thead>
       <tbody>
         {% for r in rows %}
         <tr>
@@ -50,9 +83,17 @@
           <td class="t-right"><b>{{ r.amount|inr }}</b></td>
           <td>{{ r.mode }}</td>
           <td class="small mono">{{ r.date }}</td>
+          {% if current_user_role == 'admin' %}
+          <td class="t-right" style="white-space:nowrap">
+            <a class="btn btn-outline btn-xs" href="/payments?edit={{ r.id }}" title="Entry edit karo">✏️</a>
+            <form method="post" action="/payments/{{ r.id }}/delete" style="display:inline" onsubmit="return confirm('Entry {{ r.ref_no }} delete karein?')">
+              <button class="btn btn-danger btn-xs" type="submit" title="Delete">🗑</button>
+            </form>
+          </td>
+          {% endif %}
         </tr>
         {% else %}
-        <tr><td colspan="6"><div class="empty">No entries yet</div></td></tr>
+        <tr><td colspan="7"><div class="empty">No entries yet</div></td></tr>
         {% endfor %}
       </tbody>
     </table>

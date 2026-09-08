@@ -2,7 +2,28 @@
 {% block title %}Inventory{% endblock %}
 {% block page_title %}Inventory{% endblock %}
 {% block content %}
-{% if show_add %}
+{% if edit_item %}
+<div class="panel">
+  <div class="panel-head"><h3>✏️ Edit Inventory Item — {{ edit_item.name }}</h3><a class="btn btn-outline btn-sm" href="/inventory">✕ Close</a></div>
+  <div class="panel-body">
+    <form method="post" action="/inventory/{{ edit_item.id }}/edit">
+      <div class="form-grid">
+        <div class="field"><label>Item Code</label><input name="code" value="{{ edit_item.code }}"></div>
+        <div class="field"><label>Item Name *</label><input name="name" required value="{{ edit_item.name }}"></div>
+        <div class="field"><label>Category</label><input name="category" value="{{ edit_item.category or '' }}"></div>
+        <div class="field"><label>Unit</label>
+          <select name="unit">
+            {% for u in ['pcs','Ltr','kg','set','sheets'] %}<option {{'selected' if edit_item.unit == u}}>{{ u }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="field"><label>Current Stock</label><input type="number" step="any" name="stock" value="{{ edit_item.stock }}"></div>
+        <div class="field"><label>Min Stock (reorder level)</label><input type="number" step="any" name="min_stock" value="{{ edit_item.min_stock }}"></div>
+        <div class="full"><button class="btn" type="submit">💾 Update Item</button></div>
+      </div>
+    </form>
+  </div>
+</div>
+{% elif show_add %}
 <div class="panel">
   <div class="panel-head"><h3>➕ Add Inventory Item</h3><a class="btn btn-outline btn-sm" href="/inventory">✕ Close</a></div>
   <div class="panel-body">
@@ -13,8 +34,8 @@
         <div class="field"><label>Unit</label>
           <select name="unit"><option>pcs</option><option>Ltr</option><option>kg</option><option>set</option></select>
         </div>
-        <div class="field"><label>Current Stock</label><input type="number" step="0.01" name="stock" value="0"></div>
-        <div class="field"><label>Min Stock (reorder level)</label><input type="number" step="0.01" name="min_stock" value="0"></div>
+        <div class="field"><label>Current Stock</label><input type="number" step="any" name="stock" value="0"></div>
+        <div class="field"><label>Min Stock (reorder level)</label><input type="number" step="any" name="min_stock" value="0"></div>
         <div class="full"><button class="btn" type="submit">Add Item</button></div>
       </div>
     </form>
@@ -42,10 +63,17 @@
             {% else %}<span class="badge b-done">✓ OK</span>{% endif %}
           </td>
           <td>
-            <form method="post" action="/inventory/{{ r.id }}/update" style="display:flex;gap:6px">
-              <input type="number" step="0.01" name="stock" value="{{ r.stock }}" style="width:80px;padding:5px 8px;border:1px solid var(--border);border-radius:7px;font-size:12px">
-              <button class="btn btn-outline btn-xs" type="submit">Save</button>
-            </form>
+            <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+              <form method="post" action="/inventory/{{ r.id }}/update" style="display:flex;gap:6px">
+                <input type="number" step="any" name="stock" value="{{ r.stock }}" style="width:80px;padding:5px 8px;border:1px solid var(--border);border-radius:7px;font-size:12px">
+                <button class="btn btn-outline btn-xs" type="submit" title="Sirf stock number update">💾</button>
+              </form>
+              <a class="btn btn-outline btn-xs" href="/inventory?edit={{ r.id }}" title="Poora item edit karo">✏️ Edit</a>
+              <form method="post" action="/inventory/{{ r.id }}/delete" style="display:inline">
+                <button class="btn btn-danger btn-xs" type="submit" title="Stock list se delete"
+                        onclick="return confirm('{{ r.name }} delete karein? Ye stock list se hat jayega.')">🗑</button>
+              </form>
+            </div>
           </td>
         </tr>
         {% else %}

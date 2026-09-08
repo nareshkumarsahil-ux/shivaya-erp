@@ -1,48 +1,138 @@
 {% extends "base.html" %}
-{% block title %}Attendance{% endblock %}
-{% block page_title %}Attendance Marking{% endblock %}
+{% block title %}Attendance & Salary{% endblock %}
+{% block page_title %}Attendance & Salary{% endblock %}
 {% block content %}
-<div class="cards" style="grid-template-columns:repeat(auto-fill,minmax(150px,1fr))">
-  <div class="stat"><div class="top"><span class="lbl">PRESENT</span><span class="ic ic-mint">✅</span></div><div class="num">{{ summary.present }}</div></div>
-  <div class="stat"><div class="top"><span class="lbl">ABSENT</span><span class="ic ic-peach">❌</span></div><div class="num">{{ summary.absent }}</div></div>
-  <div class="stat"><div class="top"><span class="lbl">HALF DAY</span><span class="ic ic-yellow">🕐</span></div><div class="num">{{ summary.halfday }}</div></div>
+
+<!-- ============ DAY MARKING ============ -->
+<div class="cards" style="grid-template-columns:repeat(auto-fill,minmax(140px,1fr))">
+  <div class="stat"><div class="top"><span class="lbl">PRESENT</span><span class="ic ic-mint">✅</span></div><div class="num" style="color:#15803d">{{ summary.present }}</div></div>
+  <div class="stat"><div class="top"><span class="lbl">HALF DAY</span><span class="ic ic-yellow">🕐</span></div><div class="num" style="color:#b45309">{{ summary.halfday }}</div></div>
+  <div class="stat"><div class="top"><span class="lbl">LEAVE</span><span class="ic ic-navy">🌴</span></div><div class="num" style="color:#1d4ed8">{{ summary.leave }}</div></div>
+  <div class="stat"><div class="top"><span class="lbl">ABSENT</span><span class="ic ic-peach">❌</span></div><div class="num" style="color:#b3401c">{{ summary.absent }}</div></div>
 </div>
 
 <div class="panel">
   <div class="panel-head">
-    <h3>📅 {{ date }}</h3>
-    <form method="get" action="/attendance" style="display:flex;gap:8px">
+    <h3>📅 Mark Attendance — {{ date }}</h3>
+    <form method="get" action="/attendance" style="display:flex;gap:8px;flex-wrap:wrap">
+      <input type="hidden" name="month" value="{{ month }}">
       <input type="date" name="date" value="{{ date }}" style="padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px">
       <button class="btn btn-outline btn-sm" type="submit">Load</button>
-      <a class="btn btn-outline btn-sm" href="/attendance">Today</a>
+      <a class="btn btn-outline btn-sm" href="/attendance?month={{ month }}">Today</a>
     </form>
   </div>
   <form method="post" action="/attendance">
     <input type="hidden" name="date" value="{{ date }}">
-    <div class="panel-body" style="padding:0">
-      <table>
-        <thead><tr><th>Employee</th><th>Department</th><th style="text-align:center">Present</th><th style="text-align:center">Half Day</th><th style="text-align:center">Absent</th></tr></thead>
+    <div class="panel-body" style="padding:0;overflow-x:auto">
+      <table style="min-width:560px">
+        <thead>
+          <tr>
+            <th>Employee</th><th>Department</th>
+            <th style="text-align:center;color:#15803d">✅ P</th>
+            <th style="text-align:center;color:#b45309">🕐 HD</th>
+            <th style="text-align:center;color:#1d4ed8">🌴 L</th>
+            <th style="text-align:center;color:#b3401c">❌ A</th>
+          </tr>
+        </thead>
         <tbody>
           {% for e in employees %}
           <tr>
             <td><b>{{ e.name }}</b></td>
             <td class="muted">{{ e.department or '—' }}</td>
             {% set cur = e.status or 'absent' %}
-            {% for s in ['present','halfday','absent'] %}
+            {% for s in ['present','halfday','leave','absent'] %}
             <td style="text-align:center">
-              <input type="radio" name="status_{{ e.id }}" value="{{ s }}" {{'checked' if cur==s}} style="accent-color:var(--amber)">
+              <input type="radio" name="status_{{ e.id }}" value="{{ s }}" {{'checked' if cur==s}} style="accent-color:{{'#16a34a' if s=='present' else '#d97706' if s=='halfday' else '#2563eb' if s=='leave' else '#dc2626'}}">
             </td>
             {% endfor %}
           </tr>
           {% else %}
-          <tr><td colspan="5"><div class="empty">No active employees</div></td></tr>
+          <tr><td colspan="6"><div class="empty">No active employees</div></td></tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
-    <div class="panel-body" style="border-top:1px solid var(--border);text-align:right">
-      <button class="btn" type="submit" {{'disabled' if date > today_iso}}>💾 Save Attendance</button>
+    <div class="panel-body" style="border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap">
+      <button class="btn btn-outline btn-sm" type="button" onclick="document.querySelectorAll('input[type=radio][value=present]').forEach(r=>r.checked=true)">✅ Sabko Present</button>
+      <button class="btn" type="submit" {{'disabled' if future}}>💾 Save Attendance</button>
     </div>
   </form>
+</div>
+
+<!-- ============ MONTH SALARY ============ -->
+<div class="cards" style="grid-template-columns:repeat(auto-fill,minmax(150px,1fr))">
+  <div class="stat"><div class="top"><span class="lbl">TOTAL SALARY</span><span class="ic ic-navy">💰</span></div><div class="num" style="font-size:16px">{{ tot.salary|inr }}</div><div class="sub">{{ month }} — sab employees</div></div>
+  <div class="stat"><div class="top"><span class="lbl">CUT (A+HD)</span><span class="ic ic-peach">➖</span></div><div class="num" style="font-size:16px;color:#b3401c">{{ tot.ded|inr }}</div><div class="sub">Absent + Half Day deduction</div></div>
+  <div class="stat"><div class="top"><span class="lbl">ADVANCE LIYA</span><span class="ic ic-yellow">🤝</span></div><div class="num" style="font-size:16px;color:#b45309">{{ tot.advance|inr }}</div><div class="sub">Employees ne advance liya</div></div>
+  <div class="stat"><div class="top"><span class="lbl">NET PAYABLE</span><span class="ic ic-mint">✓</span></div><div class="num" style="font-size:16px;color:#15803d">{{ tot.net|inr }}</div><div class="sub">Salary − cut − advance</div></div>
+</div>
+
+<div class="panel">
+  <div class="panel-head">
+    <h3>🧮 Salary Sheet — {{ month }} <span class="muted small">({{ days_in_month }} days)</span></h3>
+    <form method="get" action="/attendance" style="display:flex;gap:8px;flex-wrap:wrap">
+      <input type="hidden" name="date" value="{{ date }}">
+      <input type="month" name="month" value="{{ month }}" style="padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px">
+      <button class="btn btn-outline btn-sm" type="submit">Load</button>
+    </form>
+  </div>
+  <div class="panel-body" style="padding:0;overflow-x:auto">
+    <table style="min-width:980px">
+      <thead>
+        <tr>
+          <th>Employee</th><th class="t-right">Salary</th>
+          <th class="t-center">✅P</th><th class="t-center">❌A</th><th class="t-center">🌴L</th><th class="t-center">🕐HD</th>
+          <th class="t-right">Per Day</th><th class="t-right">Cut (₹)</th>
+          <th style="min-width:150px">Advance Liya (₹)</th><th class="t-right">Net Salary</th><th>Paid</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in sal_rows %}
+        <tr>
+          <td><b>{{ r.name }}</b> <span class="muted small mono">{{ r.emp_code }}</span></td>
+          <td class="t-right mono">{{ r.salary|inr }}</td>
+          <td class="t-center">{{ r.p }}</td>
+          <td class="t-center" {{'style=color:#b3401c;font-weight:700' if r.a}}>{{ r.a }}</td>
+          <td class="t-center">{{ r.l }}</td>
+          <td class="t-center" {{'style=color:#b45309;font-weight:700' if r.hd}}>{{ r.hd }}</td>
+          <td class="t-right mono muted">{{ r.per_day|inr }}</td>
+          <td class="t-right mono" style="color:#b3401c">{% if r.ded > 0 %}−{% endif %}<b>{{ r.ded|inr }}</b></td>
+          <td>
+            <form method="post" action="/attendance/advance" style="display:flex;gap:5px;align-items:center">
+              <input type="hidden" name="emp_id" value="{{ r.id }}">
+              <input type="hidden" name="month" value="{{ month }}">
+              <input type="number" step="0.01" min="0" name="advance" value="{{ r.advance }}" style="width:100px;padding:5px 7px;border:1px solid var(--border);border-radius:7px;font-size:12px">
+              <button class="btn btn-xs" type="submit" title="Advance save karo">💾</button>
+            </form>
+          </td>
+          <td class="t-right mono"><b style="color:{{'#15803d' if r.net>=0 else '#b3401c'}}">{{ r.net|inr }}</b></td>
+          <td class="t-center">
+            {% if r.paid %}
+            <form method="post" action="/attendance/paid" style="display:inline">
+              <input type="hidden" name="emp_id" value="{{ r.id }}">
+              <input type="hidden" name="month" value="{{ month }}">
+              <button class="btn btn-xs" style="background:#16a34a" type="submit" title="Undo paid">✓ PAID</button>
+            </form>
+            {% else %}
+            <form method="post" action="/attendance/paid" style="display:inline">
+              <input type="hidden" name="emp_id" value="{{ r.id }}">
+              <input type="hidden" name="month" value="{{ month }}">
+              <button class="btn btn-outline btn-xs" type="submit" title="Salary de di">Mark Paid</button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="11"><div class="empty">No active employees — Employees page se add karo</div></td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="panel-body" style="border-top:1px solid var(--border)">
+    <p class="muted small">
+      💡 <b>Per Day = Salary ÷ {{ days_in_month }} days</b> · ❌ Absent = 1 din ka cut · 🕐 Half Day = aadha din ka cut · 🌴 Leave = paid (koi cut nahi) ·
+      <b>Net Salary = Salary − Cut − Advance liya</b>. Attendance upar date-wise mark karo — salary sheet apne aap ban jati hai.
+    </p>
+  </div>
 </div>
 {% endblock %}
