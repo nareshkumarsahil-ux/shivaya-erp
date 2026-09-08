@@ -1653,7 +1653,7 @@ def operator_view():
     designation = emp["designation"] if emp and emp["designation"] else "Production Operator"
     is_admin = session.get("user_role") == "admin"
     jobs = []
-    for o in db.query("SELECT * FROM orders WHERE status='pending' ORDER BY "
+    for o in db.query("SELECT * FROM orders WHERE status != 'done' ORDER BY "
                       "CASE priority WHEN 'urgent' THEN 0 ELSE 1 END, delivery_date, id"):
         d = dict(o)
         _order, prow = current_proc_row(o["id"])
