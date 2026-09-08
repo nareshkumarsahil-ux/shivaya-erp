@@ -85,6 +85,10 @@
           <span class="prog" style="flex:1"><span class="fill" style="width:{{ o.progress }}%"></span></span>
           <span class="prog-label">{{ o.progress }}%</span>
         </div>
+        <div style="margin-top:8px">
+          <span class="badge {{'b-done' if o.cur_status=='done' else 'b-blue' if o.cur_status=='running' else 'b-amber'}}" style="font-size:10px">{{ '✅ DONE' if o.cur_status=='done' else '⏱ RUNNING' if o.cur_status=='running' else '⏳ PENDING' }}</span>
+          <span class="muted small">{{ o.cur_proc }}</span>
+        </div>
         <div class="kdelivery">🚚 Delivery: {{ o.delivery_date or '—' }}</div>
         {% if o.disp %}<div class="muted small" style="margin-top:6px"><span class="badge b-done">🚚 DISPATCHED: {{ o.disp.mode }} · {{ o.disp.ddate }} {{ o.disp.dtime }}</span></div>{% endif %}
       </a>

@@ -45,6 +45,8 @@ def redirect_with_token(target, code=302):
 
 @app.before_request
 def token_login():
+    if request.path == "/ping":
+        return jsonify({"ok": True})  # keep-warm health check — DB touch nahi karta
     try:
         db.ensure_db()
     except Exception as _dbe:
@@ -173,6 +175,11 @@ def gfmt_filter(value):
 
 
 # ---------------------------------------------------------------- login
+@app.route("/ping")
+def ping():
+    return jsonify({"ok": True})
+
+
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
@@ -405,12 +412,34 @@ def orders():
         rows = [r for r in rows if r["status"] == "pending" and r["delivery_date"] and r["delivery_date"] < today]
     else:
         rows = [r for r in rows if r["status"] != "done"]
-    # 3 queries -> 1 round trip (turso batch)
-    dispatch_rows, models, done_rows = db.multi([
+    # 4 queries -> 1 round trip (turso batch)
+    jc_rows, dispatch_rows, models, done_rows = db.multi([
+        ("SELECT * FROM jobcard_process", ()),
         ("SELECT * FROM dispatch_log", ()),
         ("SELECT * FROM product_models ORDER BY name", ()),
         ("SELECT * FROM orders WHERE status='done' ORDER BY id DESC LIMIT 4", ()),
     ])
+    jc_map = {}
+    for pr in jc_rows:
+        jc_map.setdefault(pr["order_id"], []).append(pr)
+
+    def _jc_status(r):
+        """current process ka naam + status (done/running/pending) — work status se."""
+        cur = (r["current_process"] or "").lower()
+        plist = jc_map.get(r["id"], [])
+        prow = None
+        for pr in plist:
+            if cur and (pr["process"] or "").lower() == cur:
+                prow = pr
+                break
+        if prow is None:
+            prow = next((pr for pr in plist if not pr["end_dt"]), None)
+        if prow is None and plist:
+            prow = plist[0]
+        if prow:
+            return prow["process"], ("done" if prow["end_dt"] else "running" if prow["start_dt"] else "pending")
+        return (r["current_process"] or "—"), "pending"
+
     dmap = {}
     for dr in dispatch_rows:
         if dr["order_id"] not in dmap or (dmap[dr["order_id"]]["id"] or 0) < dr["id"]:
@@ -419,6 +448,7 @@ def orders():
     for r in rows:
         r = dict(r)
         r["disp"] = dmap.get(r["id"])
+        r["cur_proc"], r["cur_status"] = _jc_status(r)
         cols[kanban_col(r["current_process"])].append(r)
     done = [dict(r) for r in done_rows]
     for r in done:
@@ -1645,8 +1675,8 @@ def operator_view():
         d["mine"] = ((asg and asg["operator"] == op)
                      or (prow["start_name"] or "") == op
                      or (o["operator"] or "") == op)
-        if not is_admin and not d["mine"]:
-            continue  # operator ko sirf apna kaam dikhe
+        if not is_admin and not d["mine"] and (d["priority"] or "") != "urgent":
+            continue  # operator ko sirf apna kaam dikhe; 🚨 URGENT/emergency orders SABKO dikhte hain
         d["skipped"] = proc_skipped(o["id"], prow["process"])
         dl = db.query("SELECT * FROM dispatch_log WHERE order_id=? ORDER BY id DESC LIMIT 1",
                       (o["id"],), one=True)
@@ -1938,7 +1968,20 @@ def prep_jobcard(order_id):
         d["total"] = total_time_str(d["start_dt"], d["end_dt"])
         d["next_options"] = flat_next
         d["skipped"] = bool(i > 0 and (raw_rows[i - 1]["next_process"] or "").upper() == "NONE")
+        # work status: end_dt -> done, sirf start_dt -> running, kuch nahi -> pending
+        d["status"] = "done" if d["end_dt"] else ("running" if d["start_dt"] else "pending")
         procs.append(d)
+    # current process row ka status (headbar ke liye)
+    cur_name = (order["current_process"] or "").lower()
+    cur_row = None
+    for d in procs:
+        if cur_name and (cur_name == (d["process"] or "").lower()
+                         or (d.get("is_dropdown") and cur_name in [o.lower() for o in (d.get("options") or [])])):
+            cur_row = d
+            break
+    cur_status = cur_row["status"] if cur_row else ("done" if cur_name == "completed" else "pending")
+    order = dict(order)
+    order["cur_status"] = cur_status
     return order, jc, procs
 
 

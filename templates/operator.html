@@ -5,7 +5,11 @@
 
 <style>
 .jobcard{border:1px solid var(--border);border-radius:14px;background:var(--card);box-shadow:var(--shadow);padding:16px 18px;display:flex;flex-direction:column;gap:10px}
-.jobcard.urgent{border-left:4px solid #d97706}
+.jobcard.urgent{border-left:5px solid #dc2626;background:#fff7f5}
+@keyframes pulse-red{0%,100%{box-shadow:0 0 0 0 rgba(220,38,38,.22)}50%{box-shadow:0 0 0 7px rgba(220,38,38,0)}}
+.jobcard.urgent{animation:pulse-red 2s infinite}
+.sec-emergency{color:#b91c1c;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.sec-emergency .cnt{background:#dc2626;color:#fff;border-radius:99px;padding:1px 11px;font-size:12px;font-weight:800;animation:pulse-red 2s infinite}
 .jobcard .jtop{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .jobcard .jtop .ono{font-size:17px;font-weight:800}
 .jobcard .jparty{font-size:13.5px;font-weight:600;color:var(--text)}
@@ -55,13 +59,15 @@
 <div class="panel" style="margin-bottom:16px">
   <div class="panel-body" style="padding:10px 16px;display:flex;align-items:center;gap:10px;background:#eef6ff;border-radius:0 0 12px 12px">
     <b>🔒 Sirf aapka assigned kaam dikh raha hai</b> — admin ne jo job/step aapko diya hai, wahi yahan aayega.
+    <span style="color:#b91c1c">🚨 Lekin EMERGENCY (urgent) orders sabko dikhte hain.</span>
   </div>
 </div>
 {% endif %}
 
-<div class="section-title">🛠️ JOBS AWAITING ACTION</div>
-<div class="cards" style="grid-template-columns:repeat(auto-fill,minmax(340px,1fr))">
-  {% for j in jobs %}
+{% set urgent_jobs = jobs | selectattr('priority', 'equalto', 'urgent') | list %}
+{% set normal_jobs = jobs | rejectattr('priority', 'equalto', 'urgent') | list %}
+
+{% macro jobcard(j, emps) %}
   <div class="jobcard {{'urgent' if j.priority=='urgent'}}" data-mine="{{ '1' if j.mine else '0' }}">
     <div class="jtop">
       <span class="ono">{{ j.order_no }}</span>
@@ -74,6 +80,7 @@
       <span style="margin-left:auto" class="muted small mono">{{ j.assigned_machine }} · {{ j.assigned_op }}</span>
     </div>
     <div class="jparty">{{ j.party }} : {{ j.product|replace(' - ', ' : ')|truncate(46) }}</div>
+    {% if j.priority=='urgent' and not j.mine %}<div class="jmeta" style="color:#b91c1c;font-weight:700">⚠ EMERGENCY — ye aapka assigned kaam nahi hai, koi bhi operator ise utha sakta hai (assigned: {{ j.assigned_op }})</div>{% endif %}
     <div class="jmeta">{{ j.board }} — {{ j.qty }} pcs · 🚚 {{ j.delivery_date or '—' }}</div>
     <div class="jstep" style="display:flex;flex-direction:column;gap:6px">
       <div>▶ RUNNING: <b>{{ j.proc }}</b></div>
@@ -150,7 +157,7 @@
         <input type="hidden" name="order_id" value="{{ j.id }}"><input type="hidden" name="process" value="{{ j.proc }}">
         <select name="new_op" style="padding:6px 9px;border:1px solid var(--border);border-radius:7px;font-size:12px">
           <option value="">— New worker —</option>
-          {% for e in employees %}<option value="{{ e.name }}">{{ e.name }}</option>{% endfor %}
+          {% for e in emps %}<option value="{{ e.name }}">{{ e.name }}</option>{% endfor %}
         </select>
         <input type="text" name="reason" placeholder="Handover reason (e.g. shift change)" required style="flex:1;min-width:140px">
         <input type="text" name="details" placeholder="Details (kya pending hai…)" style="flex:1;min-width:140px">
@@ -158,6 +165,23 @@
       </form>
     </div>
   </div>
+{% endmacro %}
+
+<div class="section-title sec-emergency" style="margin-top:6px">🚨 EMERGENCY ORDERS — SABSE PEHLE YE KARO <span class="cnt">{{ urgent_jobs|length }}</span></div>
+{% if urgent_jobs %}
+<div class="cards" style="grid-template-columns:repeat(auto-fill,minmax(340px,1fr))">
+  {% for j in urgent_jobs %}
+  {{ jobcard(j, employees) }}
+  {% endfor %}
+</div>
+{% else %}
+<div class="empty">🎉 Abhi koi emergency order nahi hai</div>
+{% endif %}
+
+<div class="section-title" style="margin-top:24px">🛠️ JOBS AWAITING ACTION</div>
+<div class="cards" style="grid-template-columns:repeat(auto-fill,minmax(340px,1fr))">
+  {% for j in normal_jobs %}
+  {{ jobcard(j, employees) }}
   {% else %}
   <div class="empty" style="grid-column:1/-1">No active jobs 🎉</div>
   {% endfor %}

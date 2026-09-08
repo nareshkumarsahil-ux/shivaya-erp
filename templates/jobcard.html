@@ -10,6 +10,7 @@
     <h2 style="font-size:17px">{{ order.party }} — {{ jc.party_model|dash }} · {{ jc.model|dash }}</h2>
     {% if order.priority=='urgent' %}<span class="badge b-urgent">URGENT</span>{% endif %}
     <span class="badge {{'b-done' if order.status=='done' else 'b-pending'}}">{{ order.status|upper }}</span>
+    <span class="badge {{'b-done' if order.cur_status=='done' else 'b-blue' if order.cur_status=='running' else 'b-amber'}}">🛠 CURRENT: {{ order.current_process or 'No Process' }} · {{ '✅ DONE' if order.cur_status=='done' else '⏱ RUNNING' if order.cur_status=='running' else '⏳ PENDING' }}</span>
     <div style="display:flex;align-items:center;gap:8px">
       <span class="prog" style="width:90px"><span class="fill {{'done' if order.progress>=100}}" style="width:{{ order.progress }}%"></span></span>
       <span class="prog-label">{{ order.progress }}%</span>
@@ -215,6 +216,9 @@
           <td>
             <span class="muted small mono" style="margin-right:5px">{{ p.idx }}.</span>
             {% if cur_match %}<span class="badge b-amber" style="margin-right:4px">▶ CURRENT</span>{% endif %}
+            {% if p.status=='done' %}<span class="badge b-done" style="margin-right:4px">✅ DONE</span>
+            {% elif p.status=='running' %}<span class="badge b-blue" style="margin-right:4px">⏱ RUNNING</span>
+            {% else %}<span class="badge b-amber" style="margin-right:4px">⏳ PENDING</span>{% endif %}
             {% if p.skipped %}<span class="badge b-gray" style="margin-right:4px">⏭ SKIPPED (NONE)</span>{% endif %}
             {% if p.is_dropdown %}
             <div style="display:flex;gap:4px;align-items:center">

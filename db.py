@@ -1017,12 +1017,18 @@ def bom_rows_for(model_id):
 
 
 def all_process_options():
-    """NEXT dropdown ke liye saare processes (dono lists + tool options) — unique, order ke saath."""
+    """NEXT dropdown ke liye saare processes (dono lists + tool options) — unique, order ke saath.
+
+    NOTE: 'Dispatch' ko jaan-boojh kar HATA diya gaya hai — dispatch koi process
+    line nahi hai. Wo ALAG rakha gaya hai: Packing finish hone ke baad operator ko
+    🚚 Dispatch button dikhta hai, aur Job Card mein alag DISPATCH panel hai."""
     seen, out = [], []
     for lst in (JC_PROCESSES, JC_PROCESSES_MCPCB):
         for p in lst:
             if p == JC_TOOL_SLOT:
                 continue
+            if p == "Dispatch":
+                continue  # dispatch process chain ka hissa nahi — alag action hai
             if p not in seen:
                 seen.append(p)
                 out.append(p)
