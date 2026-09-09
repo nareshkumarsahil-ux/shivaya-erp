@@ -5,10 +5,90 @@
 <div class="toolbar">
   <span class="muted small">💡 Cut List Optimizer se save kiye gaye layouts — yahan se load karke direct job order par apply kar sakte hain. Jab product <b>ready</b> ho jaye to <b>🏭 Produce</b> dabao — BOM ke hisaab se raw material inventory se cut hoga aur finished stock badhega.</span>
   <div style="display:flex;gap:8px;flex-wrap:wrap">
+    <a class="btn btn-outline" href="/products?import=1">📥 Import Excel/CSV</a>
     <a class="btn btn-outline" href="/products?add=1">＋ Add Manually</a>
     <a class="btn" href="/cutlist">＋ New in Cut List Optimizer</a>
   </div>
 </div>
+
+{% if request.args.get('import') and not import_preview %}
+<div class="panel" style="border-left:4px solid #16a34a">
+  <div class="panel-head"><h3>📥 Import Finished Products — Google Sheet / Excel / CSV</h3><a class="btn btn-outline btn-sm" href="/products">✕ Close</a></div>
+  <div class="panel-body">
+    <div class="muted small" style="margin-bottom:12px">
+      1️⃣ Apni Google Sheet kholein → <b>File → Download → Microsoft Excel (.xlsx)</b> ya <b>Comma Separated Values (.csv)</b><br>
+      2️⃣ File yahan upload karo → system khud columns samajh lega (name, PCB size, panel, cutting size, multiplier, sheet, PCS...) → <b>preview</b> dikhega<br>
+      3️⃣ Check karke <b>✅ Confirm Import</b> dabao — sab products ek saath add ho jayenge
+    </div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+      <form method="post" action="/products/import" enctype="multipart/form-data" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+        <input type="file" name="file" accept=".csv,.xlsx,.xls" required style="padding:7px 9px;border:1px solid var(--border);border-radius:8px;font-size:13px">
+        <button class="btn" type="submit" style="background:#16a34a">📤 Upload &amp; Preview</button>
+      </form>
+      <a class="btn btn-outline btn-sm" href="/products/import/template">⬇️ Template CSV (columns ke naam isi tarah rakho)</a>
+    </div>
+    <div class="muted small" style="margin-top:10px">⚠️ Excel file ke liye pehla row <b>header</b> hona chahiye (column names). Agar koi column match nahi hota to import ke baad report mein dikhega — us waqt bata dena.</div>
+  </div>
+</div>
+{% endif %}
+
+{% if import_preview %}
+<div class="panel" style="border-left:4px solid var(--amber)">
+  <div class="panel-head"><h3>👁️ IMPORT PREVIEW — Check karke Confirm karo</h3><a class="btn btn-outline btn-sm" href="/products">✕ Cancel</a></div>
+  <div class="panel-body">
+    <div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:12px">
+      <span class="badge b-green">{{ import_preview.total }} rows</span>
+      <span class="badge b-blue">{{ import_preview.new_count }} naye products</span>
+      <span class="badge b-amber">{{ import_preview.upd_count }} pehle se hain</span>
+      {% if import_preview.skip_count %}<span class="badge b-urgent">{{ import_preview.skip_count }} skip (name khaali)</span>{% endif %}
+    </div>
+
+    <div class="section-title" style="margin-top:0">COLUMN MATCHING (aapki sheet → ERP)</div>
+    <div style="overflow-x:auto;margin-bottom:14px">
+      <table style="min-width:520px;font-size:12.5px">
+        <thead><tr><th>Aapki sheet ka column</th><th>ERP field</th></tr></thead>
+        <tbody>
+          {% for h, desc, _ in import_preview.mapping %}
+          <tr>
+            <td><b>{{ h }}</b></td>
+            <td>{% if desc.1 %}<span style="color:#16a34a;font-weight:700">✅ {{ desc.0 }}</span>{% else %}<span style="color:#b91c1c">❌ ignored</span>{% endif %}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {% if import_preview.ignored %}
+    <div class="muted small" style="margin-bottom:14px">⚠️ Ignored columns: <b>{{ import_preview.ignored|join(', ') }}</b> — inka data import nahi hoga. Chahiye to bata dena.</div>
+    {% endif %}
+
+    <div class="section-title">DATA PREVIEW (pehli {{ import_preview.preview|length }} rows)</div>
+    <div style="overflow-x:auto;margin-bottom:14px">
+      <table style="min-width:640px;font-size:12px">
+        <thead><tr>
+          {% for pf in import_preview.preview_fields %}<th>{{ {'name':'Name','model_code':'Code','pcb_len':'PCB L','pcb_w':'PCB W','pcbs_x':'PCBs X','pcbs_y':'PCBs Y','gap_x':'Gap X','gap_y':'Gap Y','border_l':'B L','border_r':'B R','border_t':'B T','border_b':'B B','gang_x':'Gang X','gang_y':'Gang Y','sheet_len':'Sheet L','sheet_w':'Sheet W','panel_len':'Panel L','panel_w':'Panel W','cutting_len':'Cut L','cutting_w':'Cut W','kerf_x':'Kerf X','kerf_y':'Kerf Y','cnc_margin_x':'CNC X','cnc_margin_y':'CNC Y','pcs_panel':'PCS/Panel','panels_sheet':'Panels/Sheet','sheets':'Sheets','x_qty':'X Qty','y_qty':'Y Qty','orientation':'Orient'}.get(pf, pf) }}</th>{% endfor %}
+        </tr></thead>
+        <tbody>
+          {% for row in import_preview.preview %}
+          <tr>{% for pf in import_preview.preview_fields %}
+            <td>{{ '%g'|format(row.get(pf)) if row.get(pf) is number else (row.get(pf) or '') }}</td>{% endfor %}
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <form method="post" action="/products/import/confirm" style="display:flex;gap:14px;align-items:center;flex-wrap:wrap">
+      <input type="hidden" name="batch" value="{{ import_preview.batch }}">
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
+        <input type="checkbox" name="update" value="1" checked style="width:17px;height:17px;accent-color:#16a34a">
+        <b>Same naam wale products update karo</b> (naye details se)
+      </label>
+      <button class="btn" type="submit" style="background:#16a34a" onclick="return confirm('Import confirm? {{ import_preview.new_count }} naye products add honge.')">✅ Confirm Import</button>
+    </form>
+  </div>
+</div>
+{% endif %}
 
 {% if show_add or edit_model %}
 <div class="panel">

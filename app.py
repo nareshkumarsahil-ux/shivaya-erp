@@ -1035,7 +1035,419 @@ def products():
     return render_template("products.html", active="products", models=rows,
                            bom_map=bom_map, history=history,
                            show_add=request.args.get("add"),
-                           edit_model=edit_model)
+                           edit_model=edit_model,
+                           import_preview=_import_preview(request.args.get("import_batch")))
+
+
+# ---------------------------------------------------------------- import (excel/csv)
+# Google Sheet/Excel se finished products ek saath import karne ke liye.
+# Column names flexible hain — alias matching se sahi field par map ho jaate hain.
+
+IMPORT_FIELDS = [
+    ("name", "Product Name", True),
+    ("model_code", "Model Code", False),
+    ("pcb_len", "PCB Length (mm)", False),
+    ("pcb_w", "PCB Width (mm)", False),
+    ("pcbs_x", "PCBs in X", False),
+    ("pcbs_y", "PCBs in Y", False),
+    ("gap_x", "Gap X (PC to PC)", False),
+    ("gap_y", "Gap Y (PC to PC)", False),
+    ("border_l", "Border Left", False),
+    ("border_r", "Border Right", False),
+    ("border_t", "Border Top", False),
+    ("border_b", "Border Bottom", False),
+    ("gang_x", "X Multiplier", False),
+    ("gang_y", "Y Multiplier", False),
+    ("sheet_len", "Sheet Length (mm)", False),
+    ("sheet_w", "Sheet Width (mm)", False),
+    ("panel_len", "Panel Length (mm)", False),
+    ("panel_w", "Panel Width (mm)", False),
+    ("cutting_len", "Cutting Length (mm)", False),
+    ("cutting_w", "Cutting Width (mm)", False),
+    ("kerf_x", "Kerf / Panel Gap X (mm)", False),
+    ("kerf_y", "Kerf / Panel Gap Y (mm)", False),
+    ("cnc_margin_x", "CNC Margin X (mm)", False),
+    ("cnc_margin_y", "CNC Margin Y (mm)", False),
+    ("pcs_panel", "PCS/Panel", False),
+    ("panels_sheet", "Panels/Sheet", False),
+    ("sheets", "No. of Sheets", False),
+    ("x_qty", "X Qty (Sheet Length Panels)", False),
+    ("y_qty", "Y Qty (Sheet Width Panels)", False),
+    ("orientation", "Orientation", False),
+]
+
+FIELD_ALIASES = {
+    "name": ["name", "product name", "product", "finished product", "model name",
+             "party model", "product/model", "item", "description", "particulars"],
+    "model_code": ["model code", "code", "model no", "model no.", "model number",
+                   "part no", "part no.", "product code"],
+    "pcb_len": ["pcb length", "pcb l", "pcb x", "actual pcb x", "actual pcb size x",
+                "pcb size x", "pcb length (mm)", "pcb size l", "pcb x size"],
+    "pcb_w": ["pcb width", "pcb w", "pcb y", "actual pcb y", "actual pcb size y",
+              "pcb size y", "pcb width (mm)", "pcb size w", "pcb y size"],
+    "pcbs_x": ["pcbs x", "pcbs in x", "pcb across x", "pcbs across x", "x pcs",
+               "pcs x", "pcb qty x", "pcbs along x", "pcb in x"],
+    "pcbs_y": ["pcbs y", "pcbs in y", "pcb across y", "pcbs across y", "y pcs",
+               "pcs y", "pcb qty y", "pcbs along y", "pcb in y"],
+    "gap_x": ["gap x", "pc to pc gap x", "gap x (pc to pc)", "pc gap x", "x gap"],
+    "gap_y": ["gap y", "pc to pc gap y", "gap y (pc to pc)", "pc gap y", "y gap"],
+    "border_l": ["border left", "border l", "margin left", "left border"],
+    "border_r": ["border right", "border r", "margin right", "right border"],
+    "border_t": ["border top", "border t", "margin top", "top border"],
+    "border_b": ["border bottom", "border b", "margin bottom", "bottom border"],
+    "gang_x": ["x multiplier", "multiplier x", "gang x", "panel multiplier x", "gang panel x"],
+    "gang_y": ["y multiplier", "multiplier y", "gang y", "panel multiplier y", "gang panel y"],
+    "sheet_len": ["sheet length", "sheet l", "sheet x", "sheet length (mm)",
+                  "sheet size x", "sheet size l", "sheet length mm"],
+    "sheet_w": ["sheet width", "sheet w", "sheet y", "sheet width (mm)",
+                "sheet size y", "sheet size w", "sheet width mm"],
+    "panel_len": ["panel length", "panel l", "panel x", "panel length (mm)",
+                  "panel size x", "panel size l", "panel x size"],
+    "panel_w": ["panel width", "panel w", "panel y", "panel width (mm)",
+                "panel size y", "panel size w", "panel y size"],
+    "cutting_len": ["cutting length", "cutting l", "cutting x", "cutting size x",
+                    "cut size x", "x cutting size", "cutting length (mm)", "gang length",
+                    "gang l", "cutting size l", "gang size x", "gang size l"],
+    "cutting_w": ["cutting width", "cutting w", "cutting y", "cutting size y",
+                  "cut size y", "y cutting size", "cutting width (mm)", "gang width",
+                  "gang w", "cutting size w", "gang size y", "gang size w"],
+    "kerf_x": ["kerf x", "panel gap x", "cutting gap x", "kerf x (mm)", "panel gap / kerf x (mm)"],
+    "kerf_y": ["kerf y", "panel gap y", "cutting gap y", "kerf y (mm)", "panel gap / kerf y (mm)"],
+    "cnc_margin_x": ["cnc margin x", "margin x", "cnc x", "cnc margin x (mm)"],
+    "cnc_margin_y": ["cnc margin y", "margin y", "cnc y", "cnc margin y (mm)"],
+    "pcs_panel": ["pcs/panel", "pcs per panel", "pcs panel", "pcb in one panel",
+                  "pcbs/panel", "pcbs per panel", "pcs in panel", "pcs", "pcb/panel"],
+    "panels_sheet": ["panels/sheet", "panels per sheet", "panels sheet", "panel per sheet",
+                     "panels in sheet", "panel/sheet"],
+    "sheets": ["no of sheets", "no. of sheet", "sheets", "sheet qty", "number of sheets",
+               "no of sheet", "no. of sheets", "sheets qty", "total sheets"],
+    "x_qty": ["x qty", "x cutting qty", "x panels", "sheet length panels", "qty x",
+              "panels along length", "x layout", "sheet length (panels)", "x cutting qty (panels)"],
+    "y_qty": ["y qty", "y cutting qty", "y panels", "sheet width panels", "qty y",
+              "panels along width", "y layout", "sheet width (panels)", "y cutting qty (panels)"],
+    "orientation": ["orientation", "layout", "layout type", "layout orientation", "best layout"],
+}
+
+# combined size columns: ek hi cell mein "54×54" / "328×237.9"
+PAIR_COLUMNS = {
+    "pcb size": ("pcb_len", "pcb_w"),
+    "pcb actual size": ("pcb_len", "pcb_w"),
+    "panel size": ("panel_len", "panel_w"),
+    "cutting size": ("cutting_len", "cutting_w"),
+    "gang size": ("cutting_len", "cutting_w"),
+    "sheet size": ("sheet_len", "sheet_w"),
+}
+
+
+def _norm_hdr(h):
+    s = re.sub(r"\s+", " ", (str(h) or "").strip().lower().rstrip("*").strip())
+    return s
+
+
+def _num(v):
+    """Cell value -> float. '54×54' -> [54, 54]; units/mm/pcs hatata hai;
+    '15,092' -> 15092; '12,5' -> 12.5."""
+    if v is None:
+        return 0.0
+    s = str(v).strip().lower()
+    if not s or s in ("-", "—", "na", "n/a", "none", "nil", "null"):
+        return 0.0
+    s = re.sub(r"[₹rs]", "", s)
+    s = re.sub(r"(mm|pcs|sheets?|panels?|gang|units?|nos?|pc)\b", "", s)
+    s = s.replace("×", "x").strip()
+    if "x" in s:
+        parts = [p.strip() for p in s.split("x") if p.strip()][:2]
+        return [_num(p) for p in parts]
+    s = s.replace(" ", "")
+    if "," in s:
+        if "." in s:
+            s = s.replace(",", "")
+        else:
+            head, tail = s.rsplit(",", 1)
+            if len(tail) == 3 and head.isdigit():
+                s = head + tail
+            else:
+                s = s.replace(",", ".")
+    try:
+        return float(s)
+    except ValueError:
+        return 0.0
+
+
+def _map_headers(headers):
+    """Har column header -> field mapping (dict idx -> field). Pair columns bhi."""
+    mapping = {}
+    pair_map = {_norm_hdr(k): v for k, v in PAIR_COLUMNS.items()}
+    # pass 1: exact single-field match
+    for idx, h in enumerate(headers):
+        key = _norm_hdr(h)
+        if not key:
+            continue
+        for field, aliases in FIELD_ALIASES.items():
+            if key in [a for a in aliases]:
+                mapping[idx] = field
+                break
+    # pass 2: pair (combined size) columns
+    for idx, h in enumerate(headers):
+        if idx in mapping:
+            continue
+        key = _norm_hdr(h)
+        for pk, targets in pair_map.items():
+            if key == pk or (pk in key and "x" not in key and "y" not in key):
+                mapping[idx] = ("PAIR", targets[0], targets[1], pk)
+                break
+    # pass 3: contains fallback (specific aliases only — generic words excluded)
+    for idx, h in enumerate(headers):
+        if idx in mapping:
+            continue
+        key = _norm_hdr(h)
+        best_field = None
+        for field, aliases in FIELD_ALIASES.items():
+            for a in aliases:
+                if len(a) >= 5 and (a in key or key in a):
+                    best_field = field
+                    break
+            if best_field:
+                break
+        if best_field:
+            mapping[idx] = best_field
+    return mapping
+
+
+def _parse_upload(file_storage):
+    fname = (file_storage.filename or "").lower()
+    if fname.endswith(".csv"):
+        raw = file_storage.read()
+        text = raw.decode("utf-8-sig", errors="replace")
+        try:
+            dialect = csv.Sniffer().sniff(text[:4096], delimiters=",;\t|")
+        except Exception:
+            dialect = csv.excel
+        rows = [r for r in csv.reader(io.StringIO(text), dialect)
+                if any((c or "").strip() for c in r)]
+        return rows, fname
+    if fname.endswith((".xlsx", ".xls")):
+        try:
+            from openpyxl import load_workbook
+        except ImportError:
+            raise ValueError("Excel (.xlsx) padhne ke liye openpyxl chahiye — requirements.txt mein add kar diya hai, redeploy karo. Abhi .csv use kar sakte ho.")
+        wb = load_workbook(file_storage, read_only=True, data_only=True)
+        ws = wb.active
+        rows = []
+        for row in ws.iter_rows(values_only=True):
+            cells = [("" if c is None else (str(c).strip() if isinstance(c, str) else c)) for c in row]
+            if any(cells):
+                rows.append(cells)
+        return rows, fname
+    raise ValueError("Sirf .csv ya .xlsx/.xls file upload karo.")
+
+
+TEXT_FIELDS = {"name", "model_code", "orientation"}
+
+
+def _row_to_fields(headers, mapping, row):
+    out = {}
+    for idx, h in enumerate(headers):
+        target = mapping.get(idx)
+        if target is None:
+            continue
+        val = row[idx] if idx < len(row) else ""
+        if isinstance(target, tuple) and target[0] == "PAIR":
+            nums = _num(val)
+            if isinstance(nums, list):
+                out[target[1]] = nums[0] if nums else 0.0
+                out[target[2]] = nums[1] if len(nums) > 1 else 0.0
+            else:
+                out[target[1]] = nums
+                out[target[2]] = 0.0
+        elif target in TEXT_FIELDS:
+            out[target] = str(val).strip()
+        else:
+            nums = _num(val)
+            if isinstance(nums, list):
+                nums = nums[0] if nums else 0.0
+            out[target] = nums
+    return out
+
+
+def _import_preview(batch):
+    """Staging rows se preview + mapping banao (GET confirm page ke liye)."""
+    if not batch:
+        return None
+    rows = db.query("SELECT * FROM import_staging WHERE batch=? ORDER BY row_no", (batch,))
+    if not rows:
+        return None
+    header_row = next((r for r in rows if r["row_no"] == 0), None)
+    data_rows = [r for r in rows if r["row_no"] > 0]
+    if not header_row:
+        return None
+    import json as _json
+    headers = _json.loads(header_row["data"])
+    mapping = _map_headers(headers)
+    mapped = []
+    for r in data_rows:
+        mapped.append(_row_to_fields(headers, mapping, _json.loads(r["data"])))
+    existing = {m["name"] for m in db.query("SELECT name FROM product_models")}
+    new_count = sum(1 for m in mapped if m.get("name") and m["name"] not in existing)
+    upd_count = sum(1 for m in mapped if m.get("name") and m["name"] in existing)
+    skip_count = sum(1 for m in mapped if not m.get("name"))
+    ignored = [h for idx, h in enumerate(headers) if idx not in mapping and _norm_hdr(h)]
+    return {
+        "batch": batch,
+        "total": len(mapped),
+        "new_count": new_count,
+        "upd_count": upd_count,
+        "skip_count": skip_count,
+        "mapping": [(h, _describe_mapping(mapping.get(i)), mapping.get(i)) for i, h in enumerate(headers)],
+        "ignored": ignored,
+        "preview": mapped[:6],
+        "preview_fields": [f for f, _, _ in IMPORT_FIELDS if any((m.get(f) or 0) for m in mapped)],
+    }
+
+
+def _describe_mapping(target):
+    if target is None:
+        return ("ignored", None)
+    if isinstance(target, tuple):
+        return ("✂ " + target[3].title() + " → 2 fields (L×W)", "pair")
+    for f, label, _ in IMPORT_FIELDS:
+        if f == target:
+            return (label, f)
+    return (target, f)
+
+
+@app.route("/products/import/template")
+@login_required
+def products_import_template():
+    """Template CSV download — user apna data isme paste karke upload kar sakta hai."""
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow([label for _, label, _ in IMPORT_FIELDS])
+    w.writerow(["LED Driver 12W Board", "SCPL-105", 40, 50, 10, 5, 0.5, 0.5,
+                3, 3, 1, 1, 1, 5, 1200, 1000, 328, 237.9, 328, 1195.5,
+                0, 1.5, 3, 1, 50, 3, 52, 1, 3, "rotated"])
+    w.writerow(["LED Board 8W", "SCPL-101", 54, 54, 7, 7, 0, 0,
+                0, 0, 0, 0, 1, 1, 1200, 1000, 384, 380, 0, 0,
+                2, 2, 0, 0, 49, 6, 51, 2, 2, "normal"])
+    return Response(buf.getvalue(), mimetype="text/csv",
+                    headers={"Content-Disposition": "attachment; filename=finished_products_template.csv"})
+
+
+@app.route("/products/import", methods=["POST"])
+@login_required
+def products_import():
+    if session.get("user_role") != "admin":
+        flash("Sirf admin import kar sakta hai.", "error")
+        return redirect_with_token(url_for("products"))
+    f = request.files.get("file")
+    if not f or not f.filename:
+        flash("File choose karo (Excel ya CSV).", "error")
+        return redirect_with_token(url_for("products") + "?import=1")
+    try:
+        rows, fname = _parse_upload(f)
+    except ValueError as e:
+        flash(str(e), "error")
+        return redirect_with_token(url_for("products") + "?import=1")
+    if len(rows) < 2:
+        flash("File mein sirf header hai ya khaali hai — data rows chahiye.", "error")
+        return redirect_with_token(url_for("products") + "?import=1")
+    headers = rows[0]
+    mapping = _map_headers(headers)
+    if "name" not in mapping.values():
+        flash("⚠️ 'Product Name' jaisa koi column nahi mila — header check karo (ya template download karo).",
+              "error")
+        return redirect_with_token(url_for("products") + "?import=1")
+    import json as _json
+    batch = datetime.datetime.now().strftime("%Y%m%d%H%M%S") + "-" + os.urandom(3).hex()
+    db.execute("DELETE FROM import_staging WHERE batch=?", (batch,))
+    db.execute("INSERT INTO import_staging (batch, row_no, data) VALUES (?,?,?)",
+               (batch, 0, _json.dumps([str(h) for h in headers])))
+    for i, row in enumerate(rows[1:], 1):
+        db.execute("INSERT INTO import_staging (batch, row_no, data) VALUES (?,?,?)",
+                   (batch, i, _json.dumps([("" if c is None else c) for c in row])))
+    flash(f"File padh li gayi: {len(rows) - 1} rows. Neeche check karke Confirm dabao.", "success")
+    return redirect_with_token(url_for("products", import_batch=batch))
+
+
+@app.route("/products/import/confirm", methods=["POST"])
+@login_required
+def products_import_confirm():
+    if session.get("user_role") != "admin":
+        flash("Sirf admin import kar sakta hai.", "error")
+        return redirect_with_token(url_for("products"))
+    batch = (request.form.get("batch") or "").strip()
+    do_update = request.form.get("update") == "1"
+    if not batch:
+        flash("Import session missing — dobara file upload karo.", "error")
+        return redirect_with_token(url_for("products"))
+    import json as _json
+    rows = db.query("SELECT * FROM import_staging WHERE batch=? ORDER BY row_no", (batch,))
+    header_row = next((r for r in rows if r["row_no"] == 0), None)
+    if not header_row:
+        flash("Import session missing — dobara file upload karo.", "error")
+        return redirect_with_token(url_for("products"))
+    headers = _json.loads(header_row["data"])
+    mapping = _map_headers(headers)
+    added = updated = skipped = 0
+    for r in rows:
+        if r["row_no"] == 0:
+            continue
+        fields = _row_to_fields(headers, mapping, _json.loads(r["data"]))
+        name = (str(fields.get("name") or "")).strip()
+        if not name:
+            skipped += 1
+            continue
+        existing = db.query("SELECT id FROM product_models WHERE name=?", (name,), one=True)
+        gang_x = max(1, int(fields.get("gang_x") or 1))
+        gang_y = max(1, int(fields.get("gang_y") or 1))
+        vals = (
+            (str(fields.get("model_code") or "")).strip(),
+            float(fields.get("pcb_len") or 0), float(fields.get("pcb_w") or 0),
+            int(fields.get("pcbs_x") or 0), int(fields.get("pcbs_y") or 0),
+            float(fields.get("gap_x") or 0), float(fields.get("gap_y") or 0),
+            float(fields.get("border_l") or 0), float(fields.get("border_r") or 0),
+            float(fields.get("border_t") or 0), float(fields.get("border_b") or 0),
+            gang_x, gang_y,
+            float(fields.get("sheet_len") or 0), float(fields.get("sheet_w") or 0),
+            float(fields.get("panel_len") or 0), float(fields.get("panel_w") or 0),
+            float(fields.get("cutting_len") or 0), float(fields.get("cutting_w") or 0),
+            float(fields.get("kerf_x") or 2), float(fields.get("kerf_y") or 2),
+            float(fields.get("cnc_margin_x") or 0), float(fields.get("cnc_margin_y") or 0),
+            (str(fields.get("orientation") or "normal")).strip() or "normal",
+            int(fields.get("pcs_panel") or 0), int(fields.get("panels_sheet") or 0),
+            int(fields.get("sheets") or 1),
+            max(0, int(fields.get("x_qty") or 0)), max(0, int(fields.get("y_qty") or 0)),
+        )
+        if existing:
+            if do_update:
+                db.execute(
+                    "UPDATE product_models SET model_code=?, pcb_len=?, pcb_w=?, pcbs_x=?, pcbs_y=?, gap_x=?, "
+                    "gap_y=?, border_l=?, border_r=?, border_t=?, border_b=?, gang_x=?, gang_y=?, sheet_len=?, "
+                    "sheet_w=?, panel_len=?, panel_w=?, cutting_len=?, cutting_w=?, kerf_x=?, kerf_y=?, "
+                    "cnc_margin_x=?, cnc_margin_y=?, orientation=?, pcs_panel=?, panels_sheet=?, sheets=?, "
+                    "x_qty=?, y_qty=? WHERE id=?", vals + (existing["id"],))
+                updated += 1
+            else:
+                skipped += 1
+        else:
+            db.execute(
+                "INSERT INTO product_models (name, model_code, pcb_len, pcb_w, pcbs_x, pcbs_y, gap_x, gap_y, "
+                "border_l, border_r, border_t, border_b, gang_x, gang_y, sheet_len, sheet_w, panel_len, panel_w, "
+                "cutting_len, cutting_w, kerf_x, kerf_y, cnc_margin_x, cnc_margin_y, orientation, pcs_panel, "
+                "panels_sheet, sheets, x_qty, y_qty, created_on) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                (name,) + vals + (datetime.date.today().isoformat(),))
+            added += 1
+    db.execute("DELETE FROM import_staging WHERE batch=?", (batch,))
+    msg = f"✅ Import complete: {added} naye products add hue"
+    if do_update:
+        msg += f", {updated} update hue"
+    else:
+        msg += f", {updated} pehle se the (update OFF tha) skip hue"
+    if skipped:
+        msg += f", {skipped} skip hue (name khaali)"
+    flash(msg + ".", "success")
+    return redirect_with_token(url_for("products"))
 
 
 @app.route("/products/<int:pid>/produce", methods=["POST"])
