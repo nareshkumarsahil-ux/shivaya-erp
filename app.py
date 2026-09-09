@@ -834,31 +834,43 @@ def cutlist():
                     model = None
                 if model:
                     name = name or model["name"]
+                    cutting_len = result["cutting_len"] if result["gang_active"] else result["panel_len"]
+                    cutting_w = result["cutting_w"] if result["gang_active"] else result["panel_w"]
                     db.execute(
                         "UPDATE product_models SET name=?, pcb_len=?, pcb_w=?, pcbs_x=?, pcbs_y=?, gap_x=?, gap_y=?, "
                         "border_l=?, border_r=?, border_t=?, border_b=?, gang_x=?, gang_y=?, sheet_len=?, sheet_w=?, "
-                        "panel_len=?, panel_w=?, kerf_x=?, kerf_y=?, orientation=?, pcs_panel=?, panels_sheet=?, sheets=? WHERE id=?",
+                        "panel_len=?, panel_w=?, cutting_len=?, cutting_w=?, kerf_x=?, kerf_y=?, orientation=?, "
+                        "pcs_panel=?, panels_sheet=?, sheets=?, x_qty=?, y_qty=?, cnc_margin_x=?, cnc_margin_y=? WHERE id=?",
                         (name, result["pcb_len"], result["pcb_w"], result["pcbs_x"], result["pcbs_y"],
                          result["gap_x"], result["gap_y"],
                          result["border_l"], result["border_r"], result["border_t"], result["border_b"],
                          result["gang_x"], result["gang_y"], result["sheet_len"], result["sheet_w"],
-                         result["panel_len"], result["panel_w"], result["kerf_x"], result["kerf_y"],
-                         result["best"], result["pcs_panel"], result["panels_per_sheet"], result["sheets"], model["id"]))
-                    flash(f"Model '{name}' updated.", "success")
+                         result["panel_len"], result["panel_w"], cutting_len, cutting_w,
+                         result["kerf_x"], result["kerf_y"],
+                         result["best"], result["pcs_panel"], result["panels_per_sheet"], result["sheets"],
+                         result["grid_x"], result["grid_y"],
+                         result["border_l"], result["border_t"], model["id"]))
+                    flash(f"Model '{name}' updated — saari cut list details save ho gayi.", "success")
                 else:
                     flash("Select a valid finished product.", "error")
             elif name:
+                cutting_len = result["cutting_len"] if result["gang_active"] else result["panel_len"]
+                cutting_w = result["cutting_w"] if result["gang_active"] else result["panel_w"]
                 db.execute(
                     "INSERT INTO product_models (name, pcb_len, pcb_w, pcbs_x, pcbs_y, gap_x, gap_y, border_l, "
-                    "border_r, border_t, border_b, gang_x, gang_y, sheet_len, sheet_w, panel_len, panel_w, kerf_x, "
-                    "kerf_y, orientation, pcs_panel, panels_sheet, sheets, created_on) "
-                    "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    "border_r, border_t, border_b, gang_x, gang_y, sheet_len, sheet_w, panel_len, panel_w, "
+                    "cutting_len, cutting_w, kerf_x, kerf_y, orientation, pcs_panel, panels_sheet, sheets, "
+                    "x_qty, y_qty, cnc_margin_x, cnc_margin_y, created_on) "
+                    "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                     (name, result["pcb_len"], result["pcb_w"], result["pcbs_x"], result["pcbs_y"],
                      result["gap_x"], result["gap_y"],
                      result["border_l"], result["border_r"], result["border_t"], result["border_b"],
                      result["gang_x"], result["gang_y"], result["sheet_len"], result["sheet_w"],
-                     result["panel_len"], result["panel_w"], result["kerf_x"], result["kerf_y"],
+                     result["panel_len"], result["panel_w"], cutting_len, cutting_w,
+                     result["kerf_x"], result["kerf_y"],
                      result["best"], result["pcs_panel"], result["panels_per_sheet"], result["sheets"],
+                     result["grid_x"], result["grid_y"],
+                     result["border_l"], result["border_t"],
                      datetime.date.today().isoformat()))
                 flash(f"Model '{name}' saved to Finished Products.", "success")
             else:
@@ -895,7 +907,22 @@ def cutlist():
                     val = model[k] if k in model.keys() and model[k] is not None else ""
                     fields[k] = str(val)
                 fields["use"] = "1"
-                flash(f"Loaded model '{model['name']}'.", "success")
+                # gang model: PANEL fields mein cutting size dikhao, single panel hidden base mein
+                if (model["gang_x"] or 1) > 1 or (model["gang_y"] or 1) > 1:
+                    cl = model["cutting_len"] or 0
+                    cw = model["cutting_w"] or 0
+                    if cl <= 0:
+                        cl = (model["panel_len"] or 0) * (model["gang_x"] or 1) + \
+                             (model["kerf_x"] or 0) * ((model["gang_x"] or 1) - 1)
+                    if cw <= 0:
+                        cw = (model["panel_w"] or 0) * (model["gang_y"] or 1) + \
+                             (model["kerf_y"] or 0) * ((model["gang_y"] or 1) - 1)
+                    fields["panel_len"] = f"{cl:g}"
+                    fields["panel_w"] = f"{cw:g}"
+                    fields["panel_base_len"] = f"{(model['panel_len'] or 0):g}"
+                    fields["panel_base_w"] = f"{(model['panel_w'] or 0):g}"
+                    fields["use"] = ""
+                flash(f"Loaded model '{model['name']}' — cutting size bhi load ho gaya.", "success")
         except (ValueError, TypeError):
             pass
     elif q.get("pcb_len"):

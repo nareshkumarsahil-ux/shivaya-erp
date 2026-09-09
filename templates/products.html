@@ -58,7 +58,7 @@
           <td><b>{{ m.name }}</b>{% if m.model_code %} <span class="muted small mono">{{ m.model_code }}</span>{% endif %}</td>
           <td class="mono small">{{ m.pcb_len|gfmt }}×{{ m.pcb_w|gfmt }}</td>
           <td class="mono small">{{ m.pcbs_x }}×{{ m.pcbs_y }}</td>
-          <td class="mono small">{{ m.panel_len|gfmt }}×{{ m.panel_w|gfmt }}</td>
+          <td class="mono small">{% if m.cutting_len %}<b style="color:#166534">{{ m.cutting_len|gfmt }}×{{ m.cutting_w|gfmt }}</b><div class="muted" style="font-size:10px">panel {{ m.panel_len|gfmt }}×{{ m.panel_w|gfmt }} · {{ m.gang_x }}×{{ m.gang_y }} gang</div>{% else %}{{ m.panel_len|gfmt }}×{{ m.panel_w|gfmt }}{% endif %}</td>
           <td class="t-right mono">{{ m.pcs_panel }}</td>
           <td class="t-right mono">{{ m.panels_sheet }}</td>
           <td class="t-right"><span class="badge {{'b-green' if (m.fg_stock or 0) > 0 else 'b-gray'}}">{{ m.fg_stock or 0 }} PCS</span></td>

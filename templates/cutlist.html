@@ -11,7 +11,7 @@
       <span class="muted small" style="white-space:nowrap">📂 Load from Finished Product…</span>
       <select name="model_id" style="flex:1;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px">
         <option value="">— Select saved model —</option>
-        {% for m in models %}<option value="{{ m.id }}">{{ m.name }} · Panel {{ m.panel_len|dash }}×{{ m.panel_w|dash }}mm · {{ m.pcs_panel }} PCS/panel</option>{% endfor %}
+        {% for m in models %}<option value="{{ m.id }}">{{ m.name }} · {% if m.cutting_len %}Cutting {{ m.cutting_len|gfmt }}×{{ m.cutting_w|gfmt }}mm{% else %}Panel {{ m.panel_len|gfmt }}×{{ m.panel_w|gfmt }}mm{% endif %} · {{ m.pcs_panel }} PCS/panel</option>{% endfor %}
       </select>
       <button class="btn btn-outline btn-sm" type="submit" name="action" value="load">Load</button>
     </div>

@@ -60,8 +60,12 @@
           <option value="{{ m.name }}" {{'selected' if jc.party_model == m.name}}
             data-code="{{ m.model_code }}" data-pcbx="{{ m.pcb_len|gfmt }}" data-pcby="{{ m.pcb_w|gfmt }}"
             data-panelx="{{ m.panel_len|gfmt }}" data-panely="{{ m.panel_w|gfmt }}"
+            data-cutx="{{ m.cutting_len|gfmt }}" data-cuty="{{ m.cutting_w|gfmt }}"
+            data-xq="{{ m.x_qty }}" data-yq="{{ m.y_qty }}"
+            data-cnx="{{ m.cnc_margin_x|gfmt }}" data-cny="{{ m.cnc_margin_y|gfmt }}"
+            data-qp="{{ m.panels_sheet * m.sheets }}"
             data-pcs="{{ m.pcs_panel }}" data-pps="{{ m.panels_sheet }}" data-sheets="{{ m.sheets }}"
-            data-sl="{{ m.sheet_len|gfmt }}" data-sw="{{ m.sheet_w|gfmt }}">{{ m.name }} ({{ m.panel_len|gfmt }}×{{ m.panel_w|gfmt }}mm · {{ m.pcs_panel }} PCS)</option>
+            data-sl="{{ m.sheet_len|gfmt }}" data-sw="{{ m.sheet_w|gfmt }}">{% if m.cutting_len %}{{ m.name }} (Cutting {{ m.cutting_len|gfmt }}×{{ m.cutting_w|gfmt }}mm · {{ m.pcs_panel }} PCS){% else %}{{ m.name }} ({{ m.panel_len|gfmt }}×{{ m.panel_w|gfmt }}mm · {{ m.pcs_panel }} PCS){% endif %}</option>
           {% endfor %}
           {% if pm_extra %}<option value="{{ jc.party_model }}" selected>{{ jc.party_model }} (custom)</option>{% endif %}
         </select>
@@ -726,13 +730,28 @@ document.getElementById('jc_party_model').addEventListener('change', function(){
   };
   setField('jc_actual_pcb_x', opt.getAttribute('data-pcbx'));
   setField('jc_actual_pcb_y', opt.getAttribute('data-pcby'));
-  setField('jc_panel_x', opt.getAttribute('data-panelx'));
-  setField('jc_panel_y', opt.getAttribute('data-panely'));
+  /* gang/cutting size saved ho to wahi panel size bane (cut list se aayi detail) */
+  var cutx = parseFloat(opt.getAttribute('data-cutx')) || 0;
+  var cuty = parseFloat(opt.getAttribute('data-cuty')) || 0;
+  if (cutx > 0 && cuty > 0) {
+    setField('jc_panel_x', cutx);
+    setField('jc_panel_y', cuty);
+    setField('jc_x_size', cutx);
+    setField('jc_y_size', cuty);
+  } else {
+    setField('jc_panel_x', opt.getAttribute('data-panelx'));
+    setField('jc_panel_y', opt.getAttribute('data-panely'));
+  }
+  setField('jc_x_qty', opt.getAttribute('data-xq'));
+  setField('jc_y_qty', opt.getAttribute('data-yq'));
+  setField('jc_cnc_margin_x', opt.getAttribute('data-cnx'));
+  setField('jc_cnc_margin_y', opt.getAttribute('data-cny'));
   setField('jc_pcs_panel', opt.getAttribute('data-pcs'));
   setField('jc_panels_per_sheet', opt.getAttribute('data-pps'));
   setField('jc_sheets', opt.getAttribute('data-sheets'));
   setField('jc_sheet_len', opt.getAttribute('data-sl'));
   setField('jc_sheet_w', opt.getAttribute('data-sw'));
+  setField('jc_qty_panel', opt.getAttribute('data-qp'));
   var code = opt.getAttribute('data-code') || '';
   if (code) {
     var msel = document.getElementById('jc_model');

@@ -15,7 +15,7 @@ import http.client
 import urllib.parse
 
 # Schema version — bump karo jab SCHEMA/migrate badle, taaki agla deploy tables update kare.
-SCHEMA_VERSION = "2026-09-08.4"
+SCHEMA_VERSION = "2026-09-09.1"
 
 DB_PATH = os.environ.get("DB_PATH") or (
     os.path.join(tempfile.gettempdir(), "circuit.db") if os.environ.get("VERCEL") else "circuit.db"
@@ -279,11 +279,14 @@ CREATE TABLE IF NOT EXISTS product_models (
     gang_x INTEGER DEFAULT 1, gang_y INTEGER DEFAULT 1,
     sheet_len REAL DEFAULT 0, sheet_w REAL DEFAULT 0,
     panel_len REAL DEFAULT 0, panel_w REAL DEFAULT 0,
+    cutting_len REAL DEFAULT 0, cutting_w REAL DEFAULT 0,
     kerf_x REAL DEFAULT 2, kerf_y REAL DEFAULT 2,
     orientation TEXT DEFAULT 'auto',
     pcs_panel INTEGER DEFAULT 0,
     panels_sheet INTEGER DEFAULT 0,
     sheets INTEGER DEFAULT 1,
+    x_qty INTEGER DEFAULT 1, y_qty INTEGER DEFAULT 1,
+    cnc_margin_x REAL DEFAULT 0, cnc_margin_y REAL DEFAULT 0,
     order_id INTEGER,
     created_on TEXT DEFAULT ''
 );
@@ -716,6 +719,18 @@ def migrate(conn):
         conn.execute("ALTER TABLE product_models ADD COLUMN gap_y REAL DEFAULT 0")
     if pcols and "fg_stock" not in pcols:
         conn.execute("ALTER TABLE product_models ADD COLUMN fg_stock INTEGER DEFAULT 0")
+    if pcols and "cutting_len" not in pcols:
+        conn.execute("ALTER TABLE product_models ADD COLUMN cutting_len REAL DEFAULT 0")
+    if pcols and "cutting_w" not in pcols:
+        conn.execute("ALTER TABLE product_models ADD COLUMN cutting_w REAL DEFAULT 0")
+    if pcols and "x_qty" not in pcols:
+        conn.execute("ALTER TABLE product_models ADD COLUMN x_qty INTEGER DEFAULT 1")
+    if pcols and "y_qty" not in pcols:
+        conn.execute("ALTER TABLE product_models ADD COLUMN y_qty INTEGER DEFAULT 1")
+    if pcols and "cnc_margin_x" not in pcols:
+        conn.execute("ALTER TABLE product_models ADD COLUMN cnc_margin_x REAL DEFAULT 0")
+    if pcols and "cnc_margin_y" not in pcols:
+        conn.execute("ALTER TABLE product_models ADD COLUMN cnc_margin_y REAL DEFAULT 0")
     jcols = [r[1] for r in conn.execute("PRAGMA table_info(jobcard)")]
     if jcols and "mat_code" not in jcols:
         conn.execute("ALTER TABLE jobcard ADD COLUMN mat_code TEXT DEFAULT ''")
