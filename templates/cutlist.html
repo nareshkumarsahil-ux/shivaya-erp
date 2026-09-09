@@ -21,24 +21,24 @@
       <div class="panel-body">
         <div class="section-title" style="margin-top:0">SINGLE PCB SIZE (MM)</div>
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
-          <div class="field" style="flex:1"><label>Length</label><input type="number" step="0.1" name="pcb_len" id="pcb_len" value="{{ fields.pcb_len }}" required></div>
+          <div class="field" style="flex:1"><label>Length</label><input type="number" step="0.01" name="pcb_len" id="pcb_len" value="{{ fields.pcb_len }}" required></div>
           <b style="color:var(--muted);margin-top:16px">×</b>
-          <div class="field" style="flex:1"><label>Width</label><input type="number" step="0.1" name="pcb_w" id="pcb_w" value="{{ fields.pcb_w }}" required></div>
+          <div class="field" style="flex:1"><label>Width</label><input type="number" step="0.01" name="pcb_w" id="pcb_w" value="{{ fields.pcb_w }}" required></div>
         </div>
         <div style="display:flex;gap:12px;margin-bottom:14px">
           <div class="field" style="flex:1"><label>PCBs Across X</label><input type="number" name="pcbs_x" id="pcbs_x" value="{{ fields.pcbs_x }}" required></div>
           <div class="field" style="flex:1"><label>PCBs Across Y</label><input type="number" name="pcbs_y" id="pcbs_y" value="{{ fields.pcbs_y }}" required></div>
         </div>
         <div style="display:flex;gap:12px;margin-bottom:14px">
-          <div class="field" style="flex:1"><label>Gap X (PC to PC)</label><input type="number" step="0.1" name="gap_x" id="gap_x" value="{{ fields.gap_x }}"></div>
-          <div class="field" style="flex:1"><label>Gap Y (PC to PC)</label><input type="number" step="0.1" name="gap_y" id="gap_y" value="{{ fields.gap_y }}"></div>
+          <div class="field" style="flex:1"><label>Gap X (PC to PC)</label><input type="number" step="0.01" name="gap_x" id="gap_x" value="{{ fields.gap_x }}"></div>
+          <div class="field" style="flex:1"><label>Gap Y (PC to PC)</label><input type="number" step="0.01" name="gap_y" id="gap_y" value="{{ fields.gap_y }}"></div>
         </div>
         <p class="muted small" style="margin:-6px 0 12px">💡 3 PCB X mein jodne par beech me 2 gaps: 40 + 2.4 + 40 + 2.4 + 40 = 124.8mm</p>
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px">
-          <div class="field"><label>Border Left</label><input type="number" step="0.1" name="border_l" id="border_l" value="{{ fields.border_l }}"></div>
-          <div class="field"><label>Border Right</label><input type="number" step="0.1" name="border_r" id="border_r" value="{{ fields.border_r }}"></div>
-          <div class="field"><label>Border Top</label><input type="number" step="0.1" name="border_t" id="border_t" value="{{ fields.border_t }}"></div>
-          <div class="field"><label>Border Bottom</label><input type="number" step="0.1" name="border_b" id="border_b" value="{{ fields.border_b }}"></div>
+          <div class="field"><label>Border Left</label><input type="number" step="0.01" name="border_l" id="border_l" value="{{ fields.border_l }}"></div>
+          <div class="field"><label>Border Right</label><input type="number" step="0.01" name="border_r" id="border_r" value="{{ fields.border_r }}"></div>
+          <div class="field"><label>Border Top</label><input type="number" step="0.01" name="border_t" id="border_t" value="{{ fields.border_t }}"></div>
+          <div class="field"><label>Border Bottom</label><input type="number" step="0.01" name="border_b" id="border_b" value="{{ fields.border_b }}"></div>
         </div>
         <div class="result-line" id="livePanelLine" style="display:none"></div>
         <div class="muted small" id="liveFormula" style="margin-top:6px"></div>
@@ -52,7 +52,8 @@
           <div class="field" style="flex:1"><label>X Multiplier</label><input type="number" name="gang_x" id="gang_x" value="{{ fields.gang_x }}" min="1"></div>
           <div class="field" style="flex:1"><label>Y Multiplier</label><input type="number" name="gang_y" id="gang_y" value="{{ fields.gang_y }}" min="1"></div>
         </div>
-        <p class="muted small" style="margin-top:8px">💡 Multiple panels per gang unit — gap below added between them.</p>
+        <p class="muted small" style="margin-top:8px">💡 How many panels are gang-cut together, with the panel-to-panel gap below added between them.</p>
+        <div class="result-line" id="liveCutLine" style="{{ 'display:block;' if gang_info else 'display:none;' }}">{{ gang_info.cut_html|safe if gang_info else '' }}</div>
       </div>
     </div>
 
@@ -64,21 +65,23 @@
           <button type="button" class="btn btn-outline btn-xs preset-btn" data-preset="custom">Custom</button>
         </div>
         <div style="display:flex;gap:12px;margin-bottom:6px">
-          <div class="field" style="flex:1"><label>SHEET LENGTH (MM)</label><input type="number" step="0.1" name="sheet_len" id="sheet_len" value="{{ fields.sheet_len }}" required></div>
-          <div class="field" style="flex:1"><label>SHEET WIDTH (MM)</label><input type="number" step="0.1" name="sheet_w" id="sheet_w" value="{{ fields.sheet_w }}" required></div>
+          <div class="field" style="flex:1"><label>SHEET LENGTH (MM)</label><input type="number" step="0.01" name="sheet_len" id="sheet_len" value="{{ fields.sheet_len }}" required></div>
+          <div class="field" style="flex:1"><label>SHEET WIDTH (MM)</label><input type="number" step="0.01" name="sheet_w" id="sheet_w" value="{{ fields.sheet_w }}" required></div>
         </div>
         <p class="muted small" style="margin:0 0 12px">IN INCHES: <b id="inchesLive"></b></p>
         <div style="display:flex;gap:12px;margin-bottom:4px">
-          <div class="field" style="flex:1"><label>PANEL LENGTH (MM)</label><input type="number" step="0.1" name="panel_len" id="panel_len" value="{{ result.panel_len|gfmt if result else fields.panel_len }}"></div>
-          <div class="field" style="flex:1"><label>PANEL WIDTH (MM)</label><input type="number" step="0.1" name="panel_w" id="panel_w" value="{{ result.panel_w|gfmt if result else fields.panel_w }}"></div>
+          <div class="field" style="flex:1"><label>PANEL LENGTH (MM)</label><input type="number" step="0.01" name="panel_len" id="panel_len" value="{{ '%0.2f'|format(disp_pl) if disp_pl is not none else fields.panel_len }}"></div>
+          <div class="field" style="flex:1"><label>PANEL WIDTH (MM)</label><input type="number" step="0.01" name="panel_w" id="panel_w" value="{{ '%0.2f'|format(disp_pw) if disp_pw is not none else fields.panel_w }}"></div>
         </div>
+        <input type="hidden" name="panel_base_len" id="panel_base_len" value="{{ fields.panel_base_len or '' }}">
+        <input type="hidden" name="panel_base_w" id="panel_base_w" value="{{ fields.panel_base_w or '' }}">
         <label class="small" style="display:flex;align-items:center;gap:6px;margin-bottom:12px;cursor:pointer">
           <input type="checkbox" name="use" value="1" id="useChk" {{'checked' if fields.use=='1'}} style="accent-color:var(--amber)"> <b>Use</b>
           <span class="muted">Panel size is locked — computed from PCB Builder above (includes CNC margin). Untick "Use" to enter panel size manually.</span>
         </label>
         <div style="display:flex;gap:12px;margin-bottom:14px">
-          <div class="field" style="flex:1"><label>PANEL GAP / KERF X (MM)</label><input type="number" step="0.1" name="kerf_x" id="kerf_x" value="{{ fields.kerf_x }}"></div>
-          <div class="field" style="flex:1"><label>PANEL GAP / KERF Y (MM)</label><input type="number" step="0.1" name="kerf_y" id="kerf_y" value="{{ fields.kerf_y }}"></div>
+          <div class="field" style="flex:1"><label>PANEL GAP / KERF X (MM)</label><input type="number" step="0.01" name="kerf_x" id="kerf_x" value="{{ fields.kerf_x }}"></div>
+          <div class="field" style="flex:1"><label>PANEL GAP / KERF Y (MM)</label><input type="number" step="0.01" name="kerf_y" id="kerf_y" value="{{ fields.kerf_y }}"></div>
           <div class="field" style="flex:1"><label>NO. OF SHEETS</label><input type="number" name="sheets" id="sheets" value="{{ fields.sheets }}" min="1"></div>
         </div>
         <div class="result-line" id="liveSheetLine" style="display:none"></div>
@@ -119,7 +122,7 @@
 
   <!-- ============ RIGHT: stats + previews ============ -->
   <div>
-    <div class="cards" style="grid-template-columns:repeat(auto-fill,minmax(130px,1fr));margin-bottom:14px">
+    <div class="cards cl-stats" style="grid-template-columns:repeat(auto-fill,minmax(130px,1fr))">
       <div class="stat"><div class="top"><span class="lbl">Panels/Sheet</span></div><div class="num" id="statPPS">0</div></div>
       <div class="stat"><div class="top"><span class="lbl">Total Panels</span></div><div class="num" id="statTP">0</div></div>
       <div class="stat"><div class="top"><span class="lbl">PCS/Sheet</span></div><div class="num" id="statPCS">0</div></div>
@@ -132,6 +135,19 @@
       <div class="panel-head"><h3>🔲 Panel outline · Individual PCB · Multiplier</h3></div>
       <div class="panel-body" style="padding:10px">
         <div id="svgPanel">{{ svg_panel|safe }}</div>
+      </div>
+    </div>
+
+    <div class="panel" id="gangPanel" style="{{ 'display:block;' if gang_info else 'display:none;' }}border-left:4px solid #16a34a">
+      <div class="panel-head"><h3>🔗 GANG PANEL PREVIEW (MULTIPLIER)</h3></div>
+      <div class="panel-body" style="padding:12px 16px">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px">
+          <div class="gstat"><div class="glbl">GANG SIZE (TOTAL)</div><div class="gnum" id="gangSize">{{ '%0.2f × %0.2f'|format(gang_info.gl, gang_info.gw) if gang_info else '—' }} <span class="u">mm</span></div></div>
+          <div class="gstat"><div class="glbl">PCS PER GANG</div><div class="gnum" id="gangPcs">{{ gang_info.pcs_gang if gang_info else '—' }} <span class="u">PCS</span></div></div>
+          <div class="gstat"><div class="glbl">SHEET LAYOUT (GANG)</div><div class="gnum" id="gangSheet" style="font-size:15px">{{ gang_info.layout|safe if gang_info else '—' }}</div></div>
+          <div class="gstat"><div class="glbl">PCS PER SHEET</div><div class="gnum" id="gangPcsSheet">{{ gang_info.pcs_sheet if gang_info else '—' }} <span class="u">PCS</span></div></div>
+        </div>
+        <div class="muted small" id="gangNote" style="margin-top:10px">{{ gang_info.note|safe if gang_info else '' }}</div>
       </div>
     </div>
 
@@ -172,12 +188,21 @@
 <style>
 .result-line{background:var(--bg);border:1px solid var(--border);border-radius:9px;padding:10px 13px;font-size:13px;margin-top:14px}
 .section-title{font-size:11px;letter-spacing:1.2px;text-transform:uppercase;color:var(--muted);font-weight:700;margin:4px 2px 10px}
+.gstat{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:10px 12px}
+.glbl{font-size:10px;letter-spacing:1px;color:var(--muted);font-weight:700;text-transform:uppercase}
+.gnum{font-size:17px;font-weight:800;margin-top:4px;color:#166534}
+.gnum .u{font-size:11px;color:var(--muted);font-weight:600}
+.gsize{font-size:11px;color:var(--muted);font-weight:600;margin-top:3px}
+/* stats cards FREEZE — scrolling par upar nahi jayenge (desktop 2-column view) */
+@media(min-width:1100px){
+  .cl-stats{position:sticky;top:60px;z-index:30;background:var(--bg);padding:4px 4px 12px;margin:-4px -4px 2px;border-radius:0 0 12px 12px}
+}
 </style>
 <script>
 /* ================= LIVE CUT LIST COMPUTATION ================= */
 function fmtNum(v){
-  if (v === 0) return '0';
-  return (Math.round(v * 100) / 100).toString();
+  /* 000.00 format — hamesha 2 decimal (237.9 -> 237.90) */
+  return (Math.round(v * 100) / 100).toFixed(2);
 }
 function num(id){ var v = parseFloat(document.getElementById(id).value); return isNaN(v) ? 0 : v; }
 function intNum(id){ return Math.round(num(id)); }
@@ -196,26 +221,52 @@ function computeLive(){
   if (pcbL <= 0 || pcbW <= 0 || px <= 0 || py <= 0 || sl <= 0 || sw <= 0) return;
 
   /* --- panel size: locked (computed) or manual --- */
-  var pL, pW;
+  var gangActive = (gx > 1 || gy > 1);
+  var pL, pW;               /* single panel size */
+  var unitL, unitW;         /* cutting size = sheet fitting unit */
   var manualL = num('panel_len'), manualW = num('panel_w');
   if (useLocked || manualL <= 0 || manualW <= 0) {
     pL = pcbL * px + gapX * (px - 1) + bl + br;
     pW = pcbW * py + gapY * (py - 1) + bt + bb;
-    document.getElementById('panel_len').value = fmtNum(pL);
-    document.getElementById('panel_w').value = fmtNum(pW);
   } else {
     pL = manualL; pW = manualW;
   }
 
+  if (gangActive) {
+    if (useLocked) {
+      unitL = pL * gx + kx * (gx - 1);
+      unitW = pW * gy + ky * (gy - 1);
+    } else {
+      /* visible PANEL fields = CUTTING SIZE (multiplier ke baad ka size) */
+      unitL = manualL; unitW = manualW;
+      pL = (gx > 1) ? (manualL - kx * (gx - 1)) / gx : manualL;
+      pW = (gy > 1) ? (manualW - ky * (gy - 1)) / gy : manualW;
+    }
+    document.getElementById('panel_len').value = fmtNum(unitL);
+    document.getElementById('panel_w').value = fmtNum(unitW);
+    document.getElementById('panel_base_len').value = fmtNum(pL);
+    document.getElementById('panel_base_w').value = fmtNum(pW);
+  } else {
+    var baseL = num('panel_base_len'), baseW = num('panel_base_w');
+    if (!useLocked && baseL > 0 && baseW > 0) {
+      pL = baseL; pW = baseW;   /* multiplier off: single panel wapas restore */
+    }
+    document.getElementById('panel_len').value = fmtNum(pL);
+    document.getElementById('panel_w').value = fmtNum(pW);
+    document.getElementById('panel_base_len').value = '';
+    document.getElementById('panel_base_w').value = '';
+    unitL = pL; unitW = pW;
+  }
+
   var pcsPanel = px * py;
+  var pcsUnit = pcsPanel * gx * gy;
   var formula = '(' + fmtNum(pcbL) + 'x' + px + ' +' + fmtNum(gapX) + 'x' + (px - 1) +
                 ' gap +' + fmtNum(bl) + '+' + fmtNum(br) + ' border=' + fmtNum(pL) + 'mm, ' +
                 fmtNum(pcbW) + 'x' + py + ' +' + fmtNum(gapY) + 'x' + (py - 1) +
                 ' gap +' + fmtNum(bt) + '+' + fmtNum(bb) + ' border=' + fmtNum(pW) + 'mm)';
 
-  /* --- gang unit --- */
-  var gl = pL * gx + kx * (gx - 1);
-  var gw = pW * gy + ky * (gy - 1);
+  /* --- cutting size (fitting unit) --- */
+  var gl = unitL, gw = unitW;
 
   function fits(ul, uw){
     if (ul <= 0 || uw <= 0) return [0, 0];
@@ -223,9 +274,9 @@ function computeLive(){
   }
 
   var nx = fits(gl, gw)[0], ny = fits(gl, gw)[1];
-  var normal = nx * ny * gx * gy;
+  var normal = nx * ny;
   var rx = fits(gw, gl)[0], ry = fits(gw, gl)[1];
-  var rotated = rx * ry * gx * gy;
+  var rotated = rx * ry;
 
   /* --- mixed rows: normal rows + rotated rows on one sheet --- */
   var perN = Math.floor((sl + kx) / (gl + kx));
@@ -239,7 +290,7 @@ function computeLive(){
       if (n === 0 && m === 0) continue;
       var hh = n * hN + m * hR - ky;
       if (hh <= sw + 1e-9) {
-        var p = (n * perN + m * perR) * gx * gy;
+        var p = n * perN + m * perR;
         if (p > mixed) { mixed = p; mN = n; mM = m; }
       }
     }
@@ -252,18 +303,18 @@ function computeLive(){
   var gx2, gy2, cl, cw;
   if (best === 'rotated') { gx2 = rx; gy2 = ry; cl = gw; cw = gl; }
   else { gx2 = nx; gy2 = ny; cl = gl; cw = gw; }
-  var pcsSheet = pps * pcsPanel;
+  var pcsSheet = pps * pcsUnit;
   var totalPanels = pps * sheets;
   var totalPcs = pcsSheet * sheets;
-  var used = totalPanels * pL * pW;
+  var used = totalPanels * gl * gw;
   var area = sheets * sl * sw;
   var waste = area > 0 ? Math.round((100 * (area - used) / area) * 10) / 10 : 0;
 
   /* --- text updates --- */
   var pl = document.getElementById('livePanelLine');
   pl.style.display = 'block';
-  var gangTxt = (gx > 1 || gy > 1)
-      ? ' · <span style="color:#16a34a">' + gx + '×' + gy + ' multiplier → TOTAL ' + fmtNum(gl) + '×' + fmtNum(gw) + 'mm</span>'
+  var gangTxt = gangActive
+      ? ' · <span style="color:#16a34a">' + gx + '×' + gy + ' multiplier → CUTTING SIZE ' + fmtNum(gl) + '×' + fmtNum(gw) + 'mm · ' + pcsUnit + ' PCS/unit</span>'
       : '';
   pl.innerHTML = '➕ <b>Panel Size: ' + fmtNum(pL) + '×' + fmtNum(pW) + 'mm · PCS/Panel: ' + pcsPanel + gangTxt + '</b>';
   document.getElementById('liveFormula').textContent = formula;
@@ -271,14 +322,26 @@ function computeLive(){
   document.getElementById('inchesLive').textContent =
     (sl / 25.4).toFixed(1) + '″ × ' + (sw / 25.4).toFixed(1) + '″';
 
+  /* multiplier panel ki cutting-size line */
+  var cutLine = document.getElementById('liveCutLine');
+  if (gangActive) {
+    cutLine.style.display = 'block';
+    cutLine.innerHTML = '✂ <b>Cutting Size: ' + fmtNum(gl) + ' × ' + fmtNum(gw) + 'mm - PCS/Unit: ' + pcsUnit + '</b>' +
+      '<div class="muted small" style="margin-top:3px">(' + fmtNum(pL) + ' x ' + gx + ' + ' + fmtNum(kx) + ' × ' + (gx - 1) +
+      ' = ' + fmtNum(gl) + 'mm, ' + fmtNum(pW) + ' x ' + gy + ' + ' + fmtNum(ky) + ' × ' + (gy - 1) + ' = ' + fmtNum(gw) + 'mm)</div>';
+  } else {
+    cutLine.style.display = 'none';
+  }
+
   var sl2 = document.getElementById('liveSheetLine');
   sl2.style.display = 'block';
+  var gangPre = gangActive ? '<b>' + fmtNum(gl) + ' × ' + fmtNum(gw) + ' mm</b> · ' : '';
   if (best === 'mixed') {
-    sl2.innerHTML = '→ <b>Mixed: ' + mN + ' × row of ' + perN + ' (normal) + ' + mM +
-                    ' × row of ' + perR + ' (rotated) = ' + pps + ' panels/sheet</b>';
+    sl2.innerHTML = '→ ' + gangPre + '<b>Mixed: ' + mN + ' × row of ' + perN + ' (normal) + ' + mM +
+                    ' × row of ' + perR + ' (rotated) = ' + pps + ' panels/sheet · ' + pcsSheet + ' PCS</b>';
   } else {
-    sl2.innerHTML = '→ <b>Sheet Length: ' + gx2 + ' panels · Sheet Width: ' + gy2 +
-                    ' panels · Total: ' + pps + ' panels/sheet</b>';
+    sl2.innerHTML = '→ ' + gangPre + '<b>Sheet Length: ' + gx2 + ' panels · Sheet Width: ' + gy2 +
+                    ' panels · Total: ' + pps + ' panels/sheet · ' + pcsSheet + ' PCS/sheet</b>';
   }
 
   document.getElementById('statPPS').textContent = pps;
@@ -290,6 +353,35 @@ function computeLive(){
   document.getElementById('statLayout').textContent =
     (best === 'mixed') ? 'Mixed Rows (Best)' : (best === 'rotated') ? 'Rotated 90°' : 'Normal';
   document.getElementById('bestPanelsLabel').textContent = '🏆 BEST LAYOUT (' + pps + ' PANELS)';
+
+  /* --- 🔗 GANG PANEL PREVIEW (multiplier active ho to) --- */
+  var gpEl = document.getElementById('gangPanel');
+  if (gangActive) {
+    gpEl.style.display = 'block';
+    var layTxt, gangCount;
+    if (best === 'mixed') {
+      gangCount = mN * perN + mM * perR;
+      layTxt = mN + ' row × ' + perN + ' + ' + mM + ' row × ' + perR;
+    } else if (best === 'rotated') {
+      gangCount = rx * ry;
+      layTxt = rx + ' × ' + ry;
+    } else {
+      gangCount = nx * ny;
+      layTxt = nx + ' × ' + ny;
+    }
+    document.getElementById('gangSize').innerHTML = fmtNum(gl) + ' × ' + fmtNum(gw) + ' <span class="u">mm</span>';
+    document.getElementById('gangPcs').innerHTML = pcsUnit + ' <span class="u">PCS</span>';
+    document.getElementById('gangSheet').innerHTML = '<b>' + layTxt + '</b><div class="gsize">' + fmtNum(gl) + ' × ' + fmtNum(gw) + ' mm</div>';
+    document.getElementById('gangPcsSheet').innerHTML = pcsSheet + ' <span class="u">PCS</span>';
+    document.getElementById('gangNote').innerHTML =
+      '💡 Panel ' + fmtNum(pL) + '×' + fmtNum(pW) + ' mm (' + pcsPanel + ' PCS) × ' + gx + '×' + gy +
+      ' multiplier + ' + fmtNum(kx) + '/' + fmtNum(ky) + ' mm kerf = CUTTING SIZE ' + fmtNum(gl) + '×' + fmtNum(gw) +
+      ' mm (' + pcsUnit + ' PCS/unit). Sheet ' + fmtNum(sl) + '×' + fmtNum(sw) + ' mm me <b>' + layTxt.toLowerCase() +
+      '</b> fit hoti hai — calculation isi ke hisaab se: ' + gangCount + ' × ' + pcsUnit + ' PCS = ' +
+      '<b>' + pcsSheet + ' PCS per sheet</b>.';
+  } else {
+    gpEl.style.display = 'none';
+  }
 
   /* --- orientation cards --- */
   document.getElementById('orientPanel').style.display = 'block';
@@ -312,7 +404,7 @@ function computeLive(){
 
   /* --- SVG previews --- */
   document.getElementById('svgPanel').innerHTML = svgPanel(pcbL, pcbW, px, py, gapX, gapY, bl, br, bt, bb, pL, pW, pcsPanel, gx, gy, kx, ky);
-  document.getElementById('svgSheet').innerHTML = svgSheet(sl, sw, cl, cw, gx2, gy2, gx, gy, kx, ky, pps, waste, best, mN, mM, perN, perR, gl, gw);
+  document.getElementById('svgSheet').innerHTML = svgSheet(sl, sw, cl, cw, gx2, gy2, gx, gy, kx, ky, pps, waste, best, mN, mM, perN, perR, gl, gw, pcsPanel);
   var sheetHead = document.getElementById('sheetPreviewHead');
   if (sheetHead) sheetHead.textContent = (best === 'mixed') ? '🔲 Normal rows · Rotated rows' : '🔲 Panel outline · Sheet';
 }
@@ -350,13 +442,13 @@ function svgPanel(pcbL, pcbW, px, py, gapX, gapY, bl, br, bt, bb, pL, pW, pcsPan
     s += '<text x="' + (x0 + P/2) + '" y="' + (y0 + Q - 10).toFixed(1) + '" text-anchor="middle" font-size="10" fill="#b45309" font-family="Segoe UI,Arial">gap ' + fmtNum(gapX) + '×' + fmtNum(gapY) + ' mm</text>';
   var lbl = 'Panel ' + fmtNum(pL) + '×' + fmtNum(pW) + ' mm · ' + pcsPanel + ' PCBs (' + px + '×' + py + ')';
   if (gx > 1 || gy > 1)
-    lbl += ' · ' + gx + '×' + gy + ' gang → <tspan fill="#16a34a" font-weight="700">Total ' + fmtNum(gl) + '×' + fmtNum(gw) + ' mm</tspan>';
+    lbl += ' · ' + gx + '×' + gy + ' gang → <tspan fill="#16a34a" font-weight="700">Total ' + fmtNum(gl) + '×' + fmtNum(gw) + ' mm · ' + (pcsPanel*gx*gy) + ' PCS</tspan>';
   s += '<text x="' + (W/2) + '" y="' + (H-6) + '" text-anchor="middle" font-size="12.5" fill="#8a8f98" font-family="Segoe UI,Arial">' + lbl + '</text>';
   s += '</svg>';
   return s;
 }
 
-function svgSheet(sl, sw, cl, cw, gx2, gy2, gx, gy, kx, ky, pps, waste, best, mN, mM, perN, perR, gl, gw){
+function svgSheet(sl, sw, cl, cw, gx2, gy2, gx, gy, kx, ky, pps, waste, best, mN, mM, perN, perR, gl, gw, pcsPanel){
   var W = 430, H = 380, pad = 26;
   var scale = Math.min((W - 2*pad) / sl, (H - 2*pad) / sw);
   var S = sl * scale, T = sw * scale;
@@ -393,8 +485,12 @@ function svgSheet(sl, sw, cl, cw, gx2, gy2, gx, gy, kx, ky, pps, waste, best, mN
     for (i = 0; i < gx2; i++)
       for (j = 0; j < gy2; j++)
         gangCell(x0 + i * (Cl + Kx), y0 + j * (Cw + Ky), Cl, Cw, '#f7c948', '#b45309');
+    var gangCap = '';
+    if (gx > 1 || gy > 1)
+      gangCap = gx2 + '×' + gy2 + ' GANG × ' + (pcsPanel*gx*gy) + ' PCS = ' + (pps*pcsPanel*gx*gy) + ' PCS · ';
     s += '<text x="' + (W/2) + '" y="' + (H-6) + '" text-anchor="middle" font-size="12.5" fill="#8a8f98" font-family="Segoe UI,Arial">Sheet ' +
-         fmtNum(sl) + '×' + fmtNum(sw) + ' mm · ' + gx2 + '×' + gy2 + ' = ' + pps + ' panels · ' + waste + '% waste</text>';
+         fmtNum(sl) + '×' + fmtNum(sw) + ' mm · ' + gangCap + gx2 + '×' + gy2 + ' = ' + pps + ' panels · ' +
+         (pps*pcsPanel*gx*gy) + ' PCS · ' + waste + '% waste</text>';
   }
   s += '</svg>';
   return s;

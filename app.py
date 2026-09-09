@@ -527,7 +527,7 @@ def po_status(po_id):
 FIELD_KEYS = ["pcb_len", "pcb_w", "pcbs_x", "pcbs_y", "gap_x", "gap_y",
               "border_l", "border_r", "border_t", "border_b",
               "gang_x", "gang_y", "sheet_len", "sheet_w", "kerf_x", "kerf_y", "sheets", "use",
-              "panel_len", "panel_w"]
+              "panel_len", "panel_w", "panel_base_len", "panel_base_w"]
 DEFAULTS = {"pcb_len": "40", "pcb_w": "50", "pcbs_x": "10", "pcbs_y": "5",
             "gap_x": "0", "gap_y": "0",
             "border_l": "0", "border_r": "0", "border_t": "5", "border_b": "5",
@@ -568,7 +568,7 @@ def compute_layout(p):
     if min(pcb_len, pcb_w, pcbs_x, pcbs_y, sheet_len, sheet_w) <= 0:
         return None
 
-    # --- panel size: locked (computed from PCB builder) or manual ---
+    # --- single panel size: locked (computed from PCB builder) or manual ---
     # PC to PC gap: X=40, 3 jodne par beech me 2 gaps -> 40+2.4+40+2.4+40 = 124.8
     if use_locked or panel_len_in <= 0 or panel_w_in <= 0:
         panel_len = pcb_len * pcbs_x + gap_x * (pcbs_x - 1) + border_l + border_r
@@ -582,9 +582,25 @@ def compute_layout(p):
     formula = (f"({pcb_len:g}x{pcbs_x} +{gap_x:g}x{pcbs_x - 1} gap +{border_l:g}+{border_r:g} border={panel_len:g}mm, "
                f"{pcb_w:g}x{pcbs_y} +{gap_y:g}x{pcbs_y - 1} gap +{border_t:g}+{border_b:g} border={panel_w:g}mm)")
 
-    # --- gang panel unit ---
-    gang_len = panel_len * gang_x + kerf_x * (gang_x - 1)
-    gang_w = panel_w * gang_y + kerf_y * (gang_y - 1)
+    # --- gang / cutting size ---
+    # Multiplier active ho to PANEL fields mein CUTTING SIZE dikhta hai (screenshot jaisa).
+    # Hidden base fields mein single panel rehta hai — roundtrip ke liye.
+    gang_active = gang_x > 1 or gang_y > 1
+    if gang_active:
+        if locked:
+            gang_len = panel_len * gang_x + kerf_x * (gang_x - 1)
+            gang_w = panel_w * gang_y + kerf_y * (gang_y - 1)
+        else:
+            base_l, base_w = _f(p, "panel_base_len"), _f(p, "panel_base_w")
+            gang_len, gang_w = panel_len_in, panel_w_in  # visible fields = cutting size
+            if base_l > 0 and base_w > 0:
+                panel_len, panel_w = base_l, base_w
+            else:
+                # single panel derive karo (formula display ke liye)
+                panel_len = (gang_len - kerf_x * (gang_x - 1)) / gang_x if gang_x > 1 else gang_len
+                panel_w = (gang_w - kerf_y * (gang_y - 1)) / gang_y if gang_y > 1 else gang_w
+    else:
+        gang_len, gang_w = panel_len, panel_w
 
     def fits(unit_l, unit_w):
         if unit_l <= 0 or unit_w <= 0:
@@ -593,10 +609,11 @@ def compute_layout(p):
         ny = int((sheet_w + kerf_y) // (unit_w + kerf_y))
         return nx, ny
 
+    # sheet fitting unit = cutting size (gang); counts = gang units
     nx, ny = fits(gang_len, gang_w)
-    normal_panels = nx * ny * gang_x * gang_y
+    normal_panels = nx * ny
     rx, ry = fits(gang_w, gang_len)
-    rotated_panels = rx * ry * gang_x * gang_y
+    rotated_panels = rx * ry
 
     # --- mixed rows: normal rows + rotated rows on one sheet ---
     per_normal = int((sheet_len + kerf_x) // (gang_len + kerf_x))
@@ -612,7 +629,7 @@ def compute_layout(p):
                 continue
             height = n * h_n + m * h_r - kerf_y
             if height <= sheet_w + 1e-9:
-                panels = (n * per_normal + m * per_rot) * gang_x * gang_y
+                panels = n * per_normal + m * per_rot
                 if panels > mixed_panels:
                     mixed_panels, mixed_n, mixed_m = panels, n, m
 
@@ -627,11 +644,13 @@ def compute_layout(p):
     grid_x, grid_y, cell_len, cell_w = nx, ny, gang_len, gang_w
     if best == "rotated":
         grid_x, grid_y, cell_len, cell_w = rx, ry, gang_w, gang_len
-    pcs_per_sheet = panels_per_sheet * pcs_panel
+    pcs_unit = pcs_panel * gang_x * gang_y
+    pcs_per_sheet = panels_per_sheet * pcs_unit
     total_panels = panels_per_sheet * sheets
     total_pcs = pcs_per_sheet * sheets
 
-    used = total_panels * panel_len * panel_w
+    # used area = cutting unit ka pura area (multiplier ke beech ka kerf gap included)
+    used = total_panels * gang_len * gang_w
     sheet_area = sheets * sheet_len * sheet_w
     wastage = round(100 * (sheet_area - used) / sheet_area, 1) if sheet_area else 0
     inches = f"{sheet_len / 25.4:.1f}\u2033 \u00d7 {sheet_w / 25.4:.1f}\u2033"
@@ -643,7 +662,8 @@ def compute_layout(p):
         "gang_x": gang_x, "gang_y": gang_y,
         "sheet_len": sheet_len, "sheet_w": sheet_w, "kerf_x": kerf_x, "kerf_y": kerf_y, "sheets": sheets,
         "panel_len": panel_len, "panel_w": panel_w, "locked": locked,
-        "pcs_panel": pcs_panel, "formula": formula,
+        "gang_active": gang_active, "cutting_len": gang_len, "cutting_w": gang_w,
+        "pcs_panel": pcs_panel, "pcs_unit": pcs_unit, "formula": formula,
         "nx": nx, "ny": ny, "normal_panels": normal_panels,
         "rx": rx, "ry": ry, "rotated_panels": rotated_panels,
         "per_normal": per_normal, "per_rot": per_rot,
@@ -688,12 +708,14 @@ def svg_panel_preview(r):
                     s.append(f'<rect x="{xp + bx:.1f}" y="{yp + by:.1f}" width="{cw2:.1f}" height="{ch2:.1f}" fill="none" stroke="#9a8a5a" stroke-width="1" stroke-dasharray="4 3"/>')
     if gx > 1 or gy > 1:
         s.append(f'<rect x="{x0:.1f}" y="{y0:.1f}" width="{GL:.1f}" height="{GW:.1f}" fill="none" stroke="#16a34a" stroke-width="1.8" stroke-dasharray="6 4" rx="5"/>')
-        s.append(f'<text x="{x0 + GL/2:.0f}" y="{y0 - 6:.1f}" text-anchor="middle" font-size="11" fill="#16a34a" font-family="Segoe UI,Arial">TOTAL WITH MULTIPLIER: {gl:g}\u00d7{gw:g} mm ({gx}\u00d7{gy} + kerf)</text>')
+        pcs_gang = r["pcs_panel"] * gx * gy
+        s.append(f'<text x="{x0 + GL/2:.0f}" y="{y0 - 6:.1f}" text-anchor="middle" font-size="11" fill="#16a34a" font-family="Segoe UI,Arial">TOTAL WITH MULTIPLIER: {gl:.2f}\u00d7{gw:.2f} mm \u00b7 {pcs_gang} PCS ({gx}\u00d7{gy} + kerf)</text>')
     if (gxs > 0.1 or gys > 0.1) and Q > 24:
-        s.append(f'<text x="{x0 + P/2:.0f}" y="{y0 + Q - 10:.1f}" text-anchor="middle" font-size="10" fill="#b45309" font-family="Segoe UI,Arial">gap {r["gap_x"]:g}\u00d7{r["gap_y"]:g} mm</text>')
-    lbl = f'Panel {pl:g}\u00d7{pw:g} mm \u00b7 {r["pcs_panel"]} PCBs ({r["pcbs_x"]}\u00d7{r["pcbs_y"]})'
+        s.append(f'<text x="{x0 + P/2:.0f}" y="{y0 + Q - 10:.1f}" text-anchor="middle" font-size="10" fill="#b45309" font-family="Segoe UI,Arial">gap {r["gap_x"]:.2f}\u00d7{r["gap_y"]:.2f} mm</text>')
+    lbl = f'Panel {pl:.2f}\u00d7{pw:.2f} mm \u00b7 {r["pcs_panel"]} PCBs ({r["pcbs_x"]}\u00d7{r["pcbs_y"]})'
     if gx > 1 or gy > 1:
-        lbl += f' \u00b7 {gx}\u00d7{gy} gang \u2192 <tspan fill="#16a34a" font-weight="700">Total {gl:g}\u00d7{gw:g} mm</tspan>'
+        pcs_gang = r["pcs_panel"] * gx * gy
+        lbl += f' \u00b7 {gx}\u00d7{gy} gang \u2192 <tspan fill="#16a34a" font-weight="700">Total {gl:.2f}\u00d7{gw:.2f} mm \u00b7 {pcs_gang} PCS</tspan>'
     s.append(f'<text x="{W/2:.0f}" y="{H - 6:.0f}" text-anchor="middle" font-size="12.5" fill="#8a8f98" font-family="Segoe UI,Arial">{lbl}</text>')
     s.append('</svg>')
     return "".join(s)
@@ -733,18 +755,59 @@ def svg_sheet_preview(r):
             for i in range(r["per_rot"]):
                 _svg_gang(s, x0 + i * (cl + kx), y, cl, cw, gx, gy, kx, ky, "#93c5fd", "#1d4ed8", 1.4)
             y += cw + ky
-        cap = (f"Normal rows \u00b7 Rotated rows \u2014 {r['mixed_n']}\u00d7 row of {r['per_normal']} + "
-               f"{r['mixed_m']}\u00d7 row of {r['per_rot']} = {r['panels_per_sheet']} panels \u00b7 {r['wastage']}% waste")
+        cap = (f"Sheet {sl:.2f}\u00d7{sw:.2f} mm \u00b7 {r['mixed_n']}\u00d7 row of {r['per_normal']} + "
+               f"{r['mixed_m']}\u00d7 row of {r['per_rot']} = {r['panels_per_sheet']} panels \u00b7 "
+               f"{r['pcs_per_sheet']} PCS \u00b7 {r['wastage']}% waste")
     else:
         cl, cw = r["cell_len"] * scale, r["cell_w"] * scale
         for i in range(r["grid_x"]):
             for j in range(r["grid_y"]):
                 cx, cy = x0 + i * (cl + kx), y0 + j * (cw + ky)
                 _svg_gang(s, cx, cy, cl, cw, gx, gy, kx, ky, "#f7c948", "#b45309", 1.4)
-        cap = f"Sheet {sl:g}\u00d7{sw:g} mm \u00b7 {r['grid_x']}\u00d7{r['grid_y']} = {r['panels_per_sheet']} panels \u00b7 {r['wastage']}% waste"
+        gang_cap = ""
+        if gx > 1 or gy > 1:
+            gang_cap = (f"{r['grid_x']}\u00d7{r['grid_y']} GANG \u00d7 {r['pcs_unit']} PCS = "
+                        f"{r['pcs_per_sheet']} PCS \u00b7 ")
+        cap = (f"Sheet {sl:.2f}\u00d7{sw:.2f} mm \u00b7 {gang_cap}"
+               f"{r['grid_x']}\u00d7{r['grid_y']} = {r['panels_per_sheet']} panels \u00b7 "
+               f"{r['pcs_per_sheet']} PCS \u00b7 {r['wastage']}% waste")
     s.append(f'<text x="{W/2:.0f}" y="{H - 6:.0f}" text-anchor="middle" font-size="12.5" fill="#8a8f98" font-family="Segoe UI,Arial">{cap}</text>')
     s.append('</svg>')
     return "".join(s)
+
+
+def gang_info_for(r):
+    """GANG PANEL PREVIEW data (multiplier > 1 ho to) — cutting size,
+    PCS per unit, sheet layout gang terms mein, PCS per sheet."""
+    if not r or r["gang_x"] <= 1 and r["gang_y"] <= 1:
+        return None
+    gx, gy = r["gang_x"], r["gang_y"]
+    pcs_gang = r["pcs_unit"]
+    gl, gw = r["cutting_len"], r["cutting_w"]
+    if r["best"] == "mixed":
+        gang_count = r["mixed_n"] * r["per_normal"] + r["mixed_m"] * r["per_rot"]
+        lay = f'{r["mixed_n"]} row × {r["per_normal"]} + {r["mixed_m"]} row × {r["per_rot"]}'
+    elif r["best"] == "rotated":
+        gang_count = r["rx"] * r["ry"]
+        lay = f'{r["rx"]} × {r["ry"]}'
+    else:
+        gang_count = r["grid_x"] * r["grid_y"]
+        lay = f'{r["grid_x"]} × {r["grid_y"]}'
+    pcs_sheet = r["pcs_per_sheet"]
+    cut_html = (f'✂ <b>Cutting Size: {gl:.2f} × {gw:.2f}mm - PCS/Unit: {pcs_gang}</b>'
+                f'<div class="muted small" style="margin-top:3px">'
+                f'({r["panel_len"]:.2f} x {gx} + {r["kerf_x"]:.2f} × {gx - 1} = {gl:.2f}mm, '
+                f'{r["panel_w"]:.2f} x {gy} + {r["kerf_y"]:.2f} × {gy - 1} = {gw:.2f}mm)</div>')
+    layout_html = (f'<b>{lay}</b>'
+                   f'<div class="gsize">{gl:.2f} × {gw:.2f} mm</div>')
+    note = (f'💡 Panel {r["panel_len"]:.2f}×{r["panel_w"]:.2f} mm ({r["pcs_panel"]} PCS) × {gx}×{gy} '
+            f'multiplier + {r["kerf_x"]:.2f}/{r["kerf_y"]:.2f} mm kerf = CUTTING SIZE {gl:.2f}×{gw:.2f} '
+            f'mm ({pcs_gang} PCS/unit). Sheet {r["sheet_len"]:.2f}×{r["sheet_w"]:.2f} mm me <b>{lay.lower()}</b> fit '
+            f'hoti hai — calculation isi ke hisaab se: {gang_count} × {pcs_gang} PCS = '
+            f'<b>{pcs_sheet} PCS per sheet</b>.')
+    return {"gl": gl, "gw": gw, "pcs_gang": pcs_gang,
+            "layout": layout_html, "pcs_sheet": pcs_sheet, "note": note,
+            "cut_html": cut_html}
 
 
 @app.route("/cutlist", methods=["GET", "POST"])
@@ -806,7 +869,8 @@ def cutlist():
                 order_id = int(f.get("apply_order") or 0)
                 order = db.query("SELECT * FROM orders WHERE id=?", (order_id,), one=True)
                 if order:
-                    info = (f"{result['pcs_panel']} PCS/panel \u00b7 {result['panels_per_sheet']} panels/sheet "
+                    unit_label = "PCS/unit" if result["gang_active"] else "PCS/panel"
+                    info = (f"{result['pcs_unit']} {unit_label} \u00b7 {result['panels_per_sheet']} panels/sheet "
                             f"({result['sheet_len']:g}\u00d7{result['sheet_w']:g}) \u00b7 {result['best']}")
                     db.execute("UPDATE orders SET cutlist_info=?, qty=?, product=? WHERE id=?",
                                (info, result["total_pcs"],
@@ -847,9 +911,18 @@ def cutlist():
     orders = db.query("SELECT id, order_no, party, product FROM orders WHERE status!='done' ORDER BY id DESC")
     svg_panel = svg_panel_preview(result) if result else ""
     svg_sheet = svg_sheet_preview(result) if result else ""
+    gang_info = gang_info_for(result)
+    # PANEL fields display: gang active -> cutting size; warna single panel
+    disp_pl = disp_pw = None
+    if result:
+        if result["gang_active"]:
+            disp_pl, disp_pw = result["cutting_len"], result["cutting_w"]
+        else:
+            disp_pl, disp_pw = result["panel_len"], result["panel_w"]
     return render_template("cutlist.html", active="cutlist", fields=fields, result=result,
                            models=models, orders=orders, SHEET_PRESETS=SHEET_PRESETS,
-                           svg_panel=svg_panel, svg_sheet=svg_sheet)
+                           svg_panel=svg_panel, svg_sheet=svg_sheet, gang_info=gang_info,
+                           disp_pl=disp_pl, disp_pw=disp_pw)
 
 
 # ---------------------------------------------------------------- finished products
