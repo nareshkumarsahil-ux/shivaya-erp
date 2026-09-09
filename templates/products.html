@@ -66,7 +66,7 @@
     <div style="overflow-x:auto;margin-bottom:14px">
       <table style="min-width:640px;font-size:12px">
         <thead><tr>
-          {% for pf in import_preview.preview_fields %}<th>{{ {'name':'Name','model_code':'Code','pcb_len':'PCB L','pcb_w':'PCB W','pcbs_x':'PCBs X','pcbs_y':'PCBs Y','gap_x':'Gap X','gap_y':'Gap Y','border_l':'B L','border_r':'B R','border_t':'B T','border_b':'B B','gang_x':'Gang X','gang_y':'Gang Y','sheet_len':'Sheet L','sheet_w':'Sheet W','panel_len':'Panel L','panel_w':'Panel W','cutting_len':'Cut L','cutting_w':'Cut W','kerf_x':'Kerf X','kerf_y':'Kerf Y','cnc_margin_x':'CNC X','cnc_margin_y':'CNC Y','pcs_panel':'PCS/Panel','panels_sheet':'Panels/Sheet','sheets':'Sheets','x_qty':'X Qty','y_qty':'Y Qty','orientation':'Orient'}.get(pf, pf) }}</th>{% endfor %}
+          {% for pf in import_preview.preview_fields %}<th>{{ {'name':'Name','model_code':'Model No.','party':'Party','note':'CNC/Tool','pcb_len':'PCB L','pcb_w':'PCB W','pcbs_x':'PCBs X','pcbs_y':'PCBs Y','gap_x':'Gap X','gap_y':'Gap Y','border_l':'B L','border_r':'B R','border_t':'B T','border_b':'B B','gang_x':'Gang X','gang_y':'Gang Y','sheet_len':'Sheet L','sheet_w':'Sheet W','panel_len':'Panel L','panel_w':'Panel W','cutting_len':'Cut L','cutting_w':'Cut W','kerf_x':'Kerf X','kerf_y':'Kerf Y','cnc_margin_x':'CNC X','cnc_margin_y':'CNC Y','pcs_panel':'UP (PCS/Panel)','panels_sheet':'Panels/Sheet','sheets':'Sheets','x_qty':'X Qty','y_qty':'Y Qty','orientation':'Orient'}.get(pf, pf) }}</th>{% endfor %}
         </tr></thead>
         <tbody>
           {% for row in import_preview.preview %}
@@ -135,10 +135,10 @@
       <tbody>
         {% for m in models %}
         <tr>
-          <td><b>{{ m.name }}</b>{% if m.model_code %} <span class="muted small mono">{{ m.model_code }}</span>{% endif %}</td>
+          <td><b>{{ m.name }}</b>{% if m.model_code %} <span class="muted small mono">{{ m.model_code }}</span>{% endif %}{% if m.party %}<div class="muted" style="font-size:10px">👤 {{ m.party }}</div>{% endif %}</td>
           <td class="mono small">{{ m.pcb_len|gfmt }}×{{ m.pcb_w|gfmt }}</td>
           <td class="mono small">{{ m.pcbs_x }}×{{ m.pcbs_y }}</td>
-          <td class="mono small">{% if m.cutting_len %}<b style="color:#166534">{{ m.cutting_len|gfmt }}×{{ m.cutting_w|gfmt }}</b><div class="muted" style="font-size:10px">panel {{ m.panel_len|gfmt }}×{{ m.panel_w|gfmt }} · {{ m.gang_x }}×{{ m.gang_y }} gang</div>{% else %}{{ m.panel_len|gfmt }}×{{ m.panel_w|gfmt }}{% endif %}</td>
+          <td class="mono small">{% if m.cutting_len %}<b style="color:#166534">{{ m.cutting_len|gfmt }}×{{ m.cutting_w|gfmt }}</b><div class="muted" style="font-size:10px">panel {{ m.panel_len|gfmt }}×{{ m.panel_w|gfmt }} · {{ m.gang_x }}×{{ m.gang_y }} gang</div>{% else %}{{ m.panel_len|gfmt }}×{{ m.panel_w|gfmt }}{% endif %}{% if m.note %}<div class="muted" style="font-size:10px">🔧 {{ m.note }}</div>{% endif %}</td>
           <td class="t-right mono">{{ m.pcs_panel }}</td>
           <td class="t-right mono">{{ m.panels_sheet }}</td>
           <td class="t-right"><span class="badge {{'b-green' if (m.fg_stock or 0) > 0 else 'b-gray'}}">{{ m.fg_stock or 0 }} PCS</span></td>

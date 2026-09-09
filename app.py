@@ -1045,7 +1045,9 @@ def products():
 
 IMPORT_FIELDS = [
     ("name", "Product Name", True),
-    ("model_code", "Model Code", False),
+    ("model_code", "Model No.", False),
+    ("party", "Party", False),
+    ("note", "CNC / Tool Note", False),
     ("pcb_len", "PCB Length (mm)", False),
     ("pcb_w", "PCB Width (mm)", False),
     ("pcbs_x", "PCBs in X", False),
@@ -1068,7 +1070,7 @@ IMPORT_FIELDS = [
     ("kerf_y", "Kerf / Panel Gap Y (mm)", False),
     ("cnc_margin_x", "CNC Margin X (mm)", False),
     ("cnc_margin_y", "CNC Margin Y (mm)", False),
-    ("pcs_panel", "PCS/Panel", False),
+    ("pcs_panel", "PCS/Panel (UP)", False),
     ("panels_sheet", "Panels/Sheet", False),
     ("sheets", "No. of Sheets", False),
     ("x_qty", "X Qty (Sheet Length Panels)", False),
@@ -1078,9 +1080,13 @@ IMPORT_FIELDS = [
 
 FIELD_ALIASES = {
     "name": ["name", "product name", "product", "finished product", "model name",
-             "party model", "product/model", "item", "description", "particulars"],
+             "party model", "product/model", "item", "description", "particulars",
+             "type", "product type", "pcb type"],
     "model_code": ["model code", "code", "model no", "model no.", "model number",
-                   "part no", "part no.", "product code"],
+                   "part no", "part no.", "product code", "model"],
+    "party": ["party", "customer", "client", "party name", "customer name"],
+    "note": ["cnc/tool", "cnc tool", "tool", "cnc", "machining", "machine note",
+             "cutting note", "remark", "remarks", "notes", "note"],
     "pcb_len": ["pcb length", "pcb l", "pcb x", "actual pcb x", "actual pcb size x",
                 "pcb size x", "pcb length (mm)", "pcb size l", "pcb x size"],
     "pcb_w": ["pcb width", "pcb w", "pcb y", "actual pcb y", "actual pcb size y",
@@ -1116,7 +1122,9 @@ FIELD_ALIASES = {
     "cnc_margin_x": ["cnc margin x", "margin x", "cnc x", "cnc margin x (mm)"],
     "cnc_margin_y": ["cnc margin y", "margin y", "cnc y", "cnc margin y (mm)"],
     "pcs_panel": ["pcs/panel", "pcs per panel", "pcs panel", "pcb in one panel",
-                  "pcbs/panel", "pcbs per panel", "pcs in panel", "pcs", "pcb/panel"],
+                  "pcbs/panel", "pcbs per panel", "pcs in panel", "pcs", "pcb/panel",
+                  "up", "ups", "u.p.", "u.p", "units per panel", "units/panel",
+                  "unit per panel", "pcs up", "up pcs", "pcb up", "panel up"],
     "panels_sheet": ["panels/sheet", "panels per sheet", "panels sheet", "panel per sheet",
                      "panels in sheet", "panel/sheet"],
     "sheets": ["no of sheets", "no. of sheet", "sheets", "sheet qty", "number of sheets",
@@ -1175,7 +1183,8 @@ def _num(v):
 
 
 def _map_headers(headers):
-    """Har column header -> field mapping (dict idx -> field). Pair columns bhi."""
+    """Har column header -> field mapping (dict idx -> field). Pair columns bhi.
+    Numeric headers (jaise user ki sheet me '48', '40' = panel L×W) bhi handle hote hain."""
     mapping = {}
     pair_map = {_norm_hdr(k): v for k, v in PAIR_COLUMNS.items()}
     # pass 1: exact single-field match
@@ -1187,6 +1196,20 @@ def _map_headers(headers):
             if key in [a for a in aliases]:
                 mapping[idx] = field
                 break
+    # pass 1.5: pure numeric headers -> panel length / width (order se)
+    num_seen = 0
+    for idx, h in enumerate(headers):
+        if idx in mapping:
+            continue
+        key = _norm_hdr(h)
+        if re.fullmatch(r"\d+(\.\d+)?", key):
+            num_seen += 1
+            if num_seen == 1:
+                mapping[idx] = "panel_len"
+            elif num_seen == 2:
+                mapping[idx] = "panel_w"
+            else:
+                mapping[idx] = "ignore_num"
     # pass 2: pair (combined size) columns
     for idx, h in enumerate(headers):
         if idx in mapping:
@@ -1226,12 +1249,15 @@ def _parse_upload(file_storage):
         rows = [r for r in csv.reader(io.StringIO(text), dialect)
                 if any((c or "").strip() for c in r)]
         return rows, fname
-    if fname.endswith((".xlsx", ".xls")):
+    if fname.endswith(".xlsx"):
         try:
             from openpyxl import load_workbook
         except ImportError:
             raise ValueError("Excel (.xlsx) padhne ke liye openpyxl chahiye — requirements.txt mein add kar diya hai, redeploy karo. Abhi .csv use kar sakte ho.")
-        wb = load_workbook(file_storage, read_only=True, data_only=True)
+        try:
+            wb = load_workbook(file_storage, read_only=True, data_only=True)
+        except Exception as e:
+            raise ValueError("Ye .xlsx file padh nahi paye. Google Sheets se download karo: File → Download → Microsoft Excel (.xlsx). Ya .csv try karo. Error: " + str(e))
         ws = wb.active
         rows = []
         for row in ws.iter_rows(values_only=True):
@@ -1239,10 +1265,31 @@ def _parse_upload(file_storage):
             if any(cells):
                 rows.append(cells)
         return rows, fname
+    if fname.endswith(".xls"):
+        try:
+            import xlrd
+        except ImportError:
+            raise ValueError("Purani .xls file ke liye xlrd chahiye — requirements.txt mein add kar diya hai, redeploy karo. Ya Google Sheets se .xlsx/.csv download karke upload karo.")
+        try:
+            wb = xlrd.open_workbook(file_contents=file_storage.read())
+        except Exception as e:
+            raise ValueError("Ye .xls file padh nahi paye. Google Sheets se File → Download → Microsoft Excel (.xlsx) karke dobara try karo. Error: " + str(e))
+        ws = wb.sheet_by_index(0)
+        rows = []
+        for r in range(ws.nrows):
+            cells = []
+            for c in range(ws.ncols):
+                cell = ws.cell_value(r, c)
+                if isinstance(cell, float) and cell.is_integer():
+                    cell = int(cell)
+                cells.append("" if cell is None else (str(cell).strip() if isinstance(cell, str) else cell))
+            if any(cells):
+                rows.append(cells)
+        return rows, fname
     raise ValueError("Sirf .csv ya .xlsx/.xls file upload karo.")
 
 
-TEXT_FIELDS = {"name", "model_code", "orientation"}
+TEXT_FIELDS = {"name", "model_code", "orientation", "party", "note"}
 
 
 def _row_to_fields(headers, mapping, row):
@@ -1262,6 +1309,8 @@ def _row_to_fields(headers, mapping, row):
                 out[target[2]] = 0.0
         elif target in TEXT_FIELDS:
             out[target] = str(val).strip()
+        elif target == "ignore_num":
+            continue
         else:
             nums = _num(val)
             if isinstance(nums, list):
@@ -1306,7 +1355,7 @@ def _import_preview(batch):
 
 
 def _describe_mapping(target):
-    if target is None:
+    if target is None or target == "ignore_num":
         return ("ignored", None)
     if isinstance(target, tuple):
         return ("✂ " + target[3].title() + " → 2 fields (L×W)", "pair")
@@ -1323,10 +1372,12 @@ def products_import_template():
     buf = io.StringIO()
     w = csv.writer(buf)
     w.writerow([label for _, label, _ in IMPORT_FIELDS])
-    w.writerow(["LED Driver 12W Board", "SCPL-105", 40, 50, 10, 5, 0.5, 0.5,
+    w.writerow(["LED Driver 12W Board", "SCPL-105", "ADSUN", "52 MM TOOL",
+                40, 50, 10, 5, 0.5, 0.5,
                 3, 3, 1, 1, 1, 5, 1200, 1000, 328, 237.9, 328, 1195.5,
                 0, 1.5, 3, 1, 50, 3, 52, 1, 3, "rotated"])
-    w.writerow(["LED Board 8W", "SCPL-101", 54, 54, 7, 7, 0, 0,
+    w.writerow(["LED Board 8W", "SCPL-101", "SOFGLOW", "CNC",
+                54, 54, 7, 7, 0, 0,
                 0, 0, 0, 0, 1, 1, 1200, 1000, 384, 380, 0, 0,
                 2, 2, 0, 0, 49, 6, 51, 2, 2, "normal"])
     return Response(buf.getvalue(), mimetype="text/csv",
@@ -1347,6 +1398,9 @@ def products_import():
         rows, fname = _parse_upload(f)
     except ValueError as e:
         flash(str(e), "error")
+        return redirect_with_token(url_for("products") + "?import=1")
+    except Exception as e:
+        flash("File padhne mein problem aayi: " + str(e) + " — Google Sheets se File → Download → Microsoft Excel (.xlsx) karke dobara try karo. Phir bhi na ho to screenshot bhejo.", "error")
         return redirect_with_token(url_for("products") + "?import=1")
     if len(rows) < 2:
         flash("File mein sirf header hai ya khaali hai — data rows chahiye.", "error")
@@ -1395,6 +1449,9 @@ def products_import_confirm():
         fields = _row_to_fields(headers, mapping, _json.loads(r["data"]))
         name = (str(fields.get("name") or "")).strip()
         if not name:
+            # TYPE column khaali ho to MODEL NO. se naam banao
+            name = (str(fields.get("model_code") or "")).strip()
+        if not name:
             skipped += 1
             continue
         existing = db.query("SELECT id FROM product_models WHERE name=?", (name,), one=True)
@@ -1402,6 +1459,8 @@ def products_import_confirm():
         gang_y = max(1, int(fields.get("gang_y") or 1))
         vals = (
             (str(fields.get("model_code") or "")).strip(),
+            (str(fields.get("party") or "")).strip(),
+            (str(fields.get("note") or "")).strip(),
             float(fields.get("pcb_len") or 0), float(fields.get("pcb_w") or 0),
             int(fields.get("pcbs_x") or 0), int(fields.get("pcbs_y") or 0),
             float(fields.get("gap_x") or 0), float(fields.get("gap_y") or 0),
@@ -1421,21 +1480,21 @@ def products_import_confirm():
         if existing:
             if do_update:
                 db.execute(
-                    "UPDATE product_models SET model_code=?, pcb_len=?, pcb_w=?, pcbs_x=?, pcbs_y=?, gap_x=?, "
-                    "gap_y=?, border_l=?, border_r=?, border_t=?, border_b=?, gang_x=?, gang_y=?, sheet_len=?, "
-                    "sheet_w=?, panel_len=?, panel_w=?, cutting_len=?, cutting_w=?, kerf_x=?, kerf_y=?, "
-                    "cnc_margin_x=?, cnc_margin_y=?, orientation=?, pcs_panel=?, panels_sheet=?, sheets=?, "
-                    "x_qty=?, y_qty=? WHERE id=?", vals + (existing["id"],))
+                    "UPDATE product_models SET model_code=?, party=?, note=?, pcb_len=?, pcb_w=?, pcbs_x=?, "
+                    "pcbs_y=?, gap_x=?, gap_y=?, border_l=?, border_r=?, border_t=?, border_b=?, gang_x=?, "
+                    "gang_y=?, sheet_len=?, sheet_w=?, panel_len=?, panel_w=?, cutting_len=?, cutting_w=?, "
+                    "kerf_x=?, kerf_y=?, cnc_margin_x=?, cnc_margin_y=?, orientation=?, pcs_panel=?, "
+                    "panels_sheet=?, sheets=?, x_qty=?, y_qty=? WHERE id=?", vals + (existing["id"],))
                 updated += 1
             else:
                 skipped += 1
         else:
             db.execute(
-                "INSERT INTO product_models (name, model_code, pcb_len, pcb_w, pcbs_x, pcbs_y, gap_x, gap_y, "
-                "border_l, border_r, border_t, border_b, gang_x, gang_y, sheet_len, sheet_w, panel_len, panel_w, "
-                "cutting_len, cutting_w, kerf_x, kerf_y, cnc_margin_x, cnc_margin_y, orientation, pcs_panel, "
-                "panels_sheet, sheets, x_qty, y_qty, created_on) "
-                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                "INSERT INTO product_models (name, model_code, party, note, pcb_len, pcb_w, pcbs_x, pcbs_y, "
+                "gap_x, gap_y, border_l, border_r, border_t, border_b, gang_x, gang_y, sheet_len, sheet_w, "
+                "panel_len, panel_w, cutting_len, cutting_w, kerf_x, kerf_y, cnc_margin_x, cnc_margin_y, "
+                "orientation, pcs_panel, panels_sheet, sheets, x_qty, y_qty, created_on) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (name,) + vals + (datetime.date.today().isoformat(),))
             added += 1
     db.execute("DELETE FROM import_staging WHERE batch=?", (batch,))

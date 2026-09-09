@@ -58,7 +58,7 @@
           <option value="">— Select finished product —</option>
           {% for m in models %}
           <option value="{{ m.name }}" {{'selected' if jc.party_model == m.name}}
-            data-code="{{ m.model_code }}" data-pcbx="{{ m.pcb_len|gfmt }}" data-pcby="{{ m.pcb_w|gfmt }}"
+            data-code="{{ m.model_code }}" data-party="{{ m.party }}" data-pcbx="{{ m.pcb_len|gfmt }}" data-pcby="{{ m.pcb_w|gfmt }}"
             data-panelx="{{ m.panel_len|gfmt }}" data-panely="{{ m.panel_w|gfmt }}"
             data-cutx="{{ m.cutting_len|gfmt }}" data-cuty="{{ m.cutting_w|gfmt }}"
             data-xq="{{ m.x_qty }}" data-yq="{{ m.y_qty }}"
@@ -730,6 +730,7 @@ document.getElementById('jc_party_model').addEventListener('change', function(){
   };
   setField('jc_actual_pcb_x', opt.getAttribute('data-pcbx'));
   setField('jc_actual_pcb_y', opt.getAttribute('data-pcby'));
+  if (opt.getAttribute('data-party')) setField('jc_party', opt.getAttribute('data-party'));
   /* gang/cutting size saved ho to wahi panel size bane (cut list se aayi detail) */
   var cutx = parseFloat(opt.getAttribute('data-cutx')) || 0;
   var cuty = parseFloat(opt.getAttribute('data-cuty')) || 0;
