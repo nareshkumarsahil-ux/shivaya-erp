@@ -1104,19 +1104,37 @@ def products():
         if not name:
             flash("Product name zaroori hai.", "error")
             return redirect_with_token(url_for("products"))
+        # GANG PANEL (cutting) size: khali ho to panel × gang + kerf se auto nikal lo
+        _gang_x = max(1, int(f.get("gang_x", 1) or 1))
+        _gang_y = max(1, int(f.get("gang_y", 1) or 1))
+        _plen = float(f.get("panel_len", 0) or 0)
+        _pwid = float(f.get("panel_w", 0) or 0)
+        _kx = float(f.get("kerf_x", 2) or 2)
+        _ky = float(f.get("kerf_y", 2) or 2)
+        _clen = float(f.get("cutting_len", 0) or 0)
+        _cwid = float(f.get("cutting_w", 0) or 0)
+        if _gang_x > 1 or _gang_y > 1:
+            if _clen <= 0 and _plen > 0:
+                _clen = _plen * _gang_x + _kx * (_gang_x - 1)
+            if _cwid <= 0 and _pwid > 0:
+                _cwid = _pwid * _gang_y + _ky * (_gang_y - 1)
         vals = (name, (f.get("model_code") or "").strip(),
                 float(f.get("pcb_len", 0) or 0), float(f.get("pcb_w", 0) or 0),
                 int(f.get("pcbs_x", 0) or 0), int(f.get("pcbs_y", 0) or 0),
                 float(f.get("gap_x", 0) or 0), float(f.get("gap_y", 0) or 0),
                 float(f.get("border_l", 0) or 0), float(f.get("border_r", 0) or 0),
                 float(f.get("border_t", 0) or 0), float(f.get("border_b", 0) or 0),
-                max(1, int(f.get("gang_x", 1) or 1)), max(1, int(f.get("gang_y", 1) or 1)),
+                _gang_x, _gang_y,
                 float(f.get("sheet_len", 0) or 0), float(f.get("sheet_w", 0) or 0),
-                float(f.get("panel_len", 0) or 0), float(f.get("panel_w", 0) or 0),
-                float(f.get("kerf_x", 2) or 2), float(f.get("kerf_y", 2) or 2),
+                _plen, _pwid,
+                _kx, _ky,
                 (f.get("orientation") or "normal").strip(),
                 int(f.get("pcs_panel", 0) or 0), int(f.get("panels_sheet", 0) or 0),
-                int(f.get("sheets", 1) or 1))
+                int(f.get("sheets", 1) or 1),
+                _clen, _cwid,
+                int(f.get("x_qty", 0) or 0), int(f.get("y_qty", 0) or 0),
+                float(f.get("cnc_margin_x", 0) or 0), float(f.get("cnc_margin_y", 0) or 0),
+                float(f.get("pcb_price", 0) or 0), float(f.get("per_sq_inch", 0) or 0))
         # ---- EDIT: existing product update ----
         try:
             edit_id = int(f.get("edit_id", 0) or 0)
@@ -1128,9 +1146,10 @@ def products():
                     "UPDATE product_models SET name=?, model_code=?, pcb_len=?, pcb_w=?, pcbs_x=?, pcbs_y=?, "
                     "gap_x=?, gap_y=?, border_l=?, border_r=?, border_t=?, border_b=?, gang_x=?, gang_y=?, "
                     "sheet_len=?, sheet_w=?, panel_len=?, panel_w=?, kerf_x=?, kerf_y=?, orientation=?, "
-                    "pcs_panel=?, panels_sheet=?, sheets=? WHERE id=?",
+                    "pcs_panel=?, panels_sheet=?, sheets=?, cutting_len=?, cutting_w=?, x_qty=?, y_qty=?, "
+                    "cnc_margin_x=?, cnc_margin_y=?, pcb_price=?, per_sq_inch=? WHERE id=?",
                     vals + (edit_id,))
-                flash(f"Finished product '{name}' update ho gaya ✅", "success")
+                flash(f"Finished product '{name}' update ho gaya ✅ (cut list layout + price ke saath)", "success")
             else:
                 dup = db.query("SELECT COUNT(*) c FROM product_models WHERE name=?", (name,), one=True)["c"]
                 if dup:
@@ -1139,8 +1158,9 @@ def products():
                 db.execute(
                     "INSERT INTO product_models (name, model_code, pcb_len, pcb_w, pcbs_x, pcbs_y, gap_x, gap_y, "
                     "border_l, border_r, border_t, border_b, gang_x, gang_y, sheet_len, sheet_w, panel_len, panel_w, "
-                    "kerf_x, kerf_y, orientation, pcs_panel, panels_sheet, sheets, order_id, created_on) "
-                    "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    "kerf_x, kerf_y, orientation, pcs_panel, panels_sheet, sheets, cutting_len, cutting_w, "
+                    "x_qty, y_qty, cnc_margin_x, cnc_margin_y, pcb_price, per_sq_inch, order_id, created_on) "
+                    "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                     vals + (None, datetime.date.today().isoformat()))
                 flash(f"Finished product '{name}' manually add ho gaya ✅ — BOM set karne ke liye 🧪 BOM button dabao.", "success")
         except Exception as e:
@@ -1174,10 +1194,25 @@ def products():
                                   (int(request.args.get("edit")),), one=True)
         except ValueError:
             edit_model = None
+    # PRICE HISTORY: har model ka last price (table ke liye) + edit form me poori list
+    lp_map = {}
+    for lp in db.query("SELECT model_name, price, ddate, party, order_no FROM price_history ORDER BY id DESC"):
+        if lp["model_name"] not in lp_map:
+            lp_map[lp["model_name"]] = lp
+    ph_rows = []
+    if edit_model:
+        if (edit_model["model_code"] or "").strip():
+            ph_rows = db.query("SELECT * FROM price_history WHERE model_name=? OR model_code=? "
+                               "ORDER BY id DESC LIMIT 15",
+                               (edit_model["name"], edit_model["model_code"]))
+        else:
+            ph_rows = db.query("SELECT * FROM price_history WHERE model_name=? ORDER BY id DESC LIMIT 15",
+                               (edit_model["name"],))
     return render_template("products.html", active="products", models=rows,
                            bom_map=bom_map, history=history,
                            show_add=request.args.get("add"),
                            edit_model=edit_model,
+                           lp_map=lp_map, ph_rows=ph_rows,
                            import_preview=_import_preview(request.args.get("import_batch")))
 
 

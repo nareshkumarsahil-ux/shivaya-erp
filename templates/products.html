@@ -99,30 +99,124 @@
       <div class="form-grid">
         <div class="field full"><label>Product Name *</label><input name="name" required placeholder="e.g. LED Driver 12W Board" value="{{ edit_model.name if edit_model else '' }}"></div>
         <div class="field full"><label>Model Code</label><input name="model_code" placeholder="e.g. SCPL-105" value="{{ edit_model.model_code if edit_model else '' }}"></div>
-        <div class="field"><label>PCB Length (mm)</label><input type="number" step="0.1" name="pcb_len" value="{{ edit_model.pcb_len if edit_model else 40 }}"></div>
-        <div class="field"><label>PCB Width (mm)</label><input type="number" step="0.1" name="pcb_w" value="{{ edit_model.pcb_w if edit_model else 50 }}"></div>
+        <div class="section-title">PCB SIZE (single pcb)</div>
+        <div class="field"><label>PCB Length (mm)</label><input type="number" step="0.1" id="pm_pcb_len" name="pcb_len" value="{{ edit_model.pcb_len if edit_model else 40 }}"></div>
+        <div class="field"><label>PCB Width (mm)</label><input type="number" step="0.1" id="pm_pcb_w" name="pcb_w" value="{{ edit_model.pcb_w if edit_model else 50 }}"></div>
         <div class="field"><label>PCBs in X</label><input type="number" name="pcbs_x" value="{{ edit_model.pcbs_x if edit_model else 10 }}"></div>
         <div class="field"><label>PCBs in Y</label><input type="number" name="pcbs_y" value="{{ edit_model.pcbs_y if edit_model else 5 }}"></div>
         <div class="field"><label>Gap X (PC to PC)</label><input type="number" step="0.1" name="gap_x" value="{{ edit_model.gap_x if edit_model else 0 }}"></div>
         <div class="field"><label>Gap Y (PC to PC)</label><input type="number" step="0.1" name="gap_y" value="{{ edit_model.gap_y if edit_model else 0 }}"></div>
-        <div class="field"><label>Panel Length (mm)</label><input type="number" step="0.1" name="panel_len" value="{{ edit_model.panel_len if edit_model else 400 }}"></div>
-        <div class="field"><label>Panel Width (mm)</label><input type="number" step="0.1" name="panel_w" value="{{ edit_model.panel_w if edit_model else 260 }}"></div>
-        <div class="field"><label>PCS/Panel</label><input type="number" name="pcs_panel" value="{{ edit_model.pcs_panel if edit_model else 50 }}"></div>
+        <div class="section-title">PANEL SIZE (with border)</div>
+        <div class="field"><label>Border Top (mm)</label><input type="number" step="0.1" name="border_t" value="{{ edit_model.border_t if edit_model else 5 }}"></div>
+        <div class="field"><label>Border Bottom (mm)</label><input type="number" step="0.1" name="border_b" value="{{ edit_model.border_b if edit_model else 5 }}"></div>
+        <div class="field"><label>Border Left (mm)</label><input type="number" step="0.1" name="border_l" value="{{ edit_model.border_l if edit_model else 0 }}"></div>
+        <div class="field"><label>Border Right (mm)</label><input type="number" step="0.1" name="border_r" value="{{ edit_model.border_r if edit_model else 0 }}"></div>
+        <div class="field"><label>Panel Length (mm)</label><input type="number" step="0.1" id="pm_panel_len" name="panel_len" value="{{ edit_model.panel_len if edit_model else 400 }}"></div>
+        <div class="field"><label>Panel Width (mm)</label><input type="number" step="0.1" id="pm_panel_w" name="panel_w" value="{{ edit_model.panel_w if edit_model else 260 }}"></div>
+        <div class="section-title">GANG PANEL (multiplier → cutting size)</div>
+        <div class="field"><label>Gang X (multiplier)</label><input type="number" id="pm_gang_x" name="gang_x" min="1" value="{{ edit_model.gang_x if edit_model else 1 }}"></div>
+        <div class="field"><label>Gang Y (multiplier)</label><input type="number" id="pm_gang_y" name="gang_y" min="1" value="{{ edit_model.gang_y if edit_model else 1 }}"></div>
+        <div class="field"><label>Kerf X (mm)</label><input type="number" step="0.1" id="pm_kerf_x" name="kerf_x" value="{{ edit_model.kerf_x if edit_model else 2 }}"></div>
+        <div class="field"><label>Kerf Y (mm)</label><input type="number" step="0.1" id="pm_kerf_y" name="kerf_y" value="{{ edit_model.kerf_y if edit_model else 2 }}"></div>
+        <div class="field"><label>CUTTING L (mm) — gang panel size</label><input type="number" step="0.1" id="pm_cutting_len" name="cutting_len" value="{{ edit_model.cutting_len if edit_model else '' }}" placeholder="panel × gang + kerf se auto"></div>
+        <div class="field"><label>CUTTING W (mm) — gang panel size</label><input type="number" step="0.1" id="pm_cutting_w" name="cutting_w" value="{{ edit_model.cutting_w if edit_model else '' }}" placeholder="panel × gang + kerf se auto"></div>
+        <div class="section-title">SHEET + COUNTS</div>
+        <div class="field"><label>Sheet Length (mm)</label><input type="number" step="1" name="sheet_len" value="{{ edit_model.sheet_len if edit_model else 1200 }}"></div>
+        <div class="field"><label>Sheet Width (mm)</label><input type="number" step="1" name="sheet_w" value="{{ edit_model.sheet_w if edit_model else 1000 }}"></div>
+        <div class="field"><label>PCS/Panel</label><input type="number" id="pm_pcs_panel" name="pcs_panel" value="{{ edit_model.pcs_panel if edit_model else 50 }}"></div>
         <div class="field"><label>Panels/Sheet</label><input type="number" name="panels_sheet" value="{{ edit_model.panels_sheet if edit_model else 8 }}"></div>
         <div class="field"><label>Sheets</label><input type="number" name="sheets" value="{{ edit_model.sheets if edit_model else 1 }}"></div>
+        <div class="field"><label>X Qty (sheet me panel count X)</label><input type="number" name="x_qty" value="{{ edit_model.x_qty if edit_model else '' }}"></div>
+        <div class="field"><label>Y Qty (sheet me panel count Y)</label><input type="number" name="y_qty" value="{{ edit_model.y_qty if edit_model else '' }}"></div>
         <div class="field"><label>Orientation</label>
           <select name="orientation">
             <option value="normal" {{'selected' if edit_model and edit_model.orientation=='normal'}}>Normal</option>
             <option value="rotated" {{'selected' if edit_model and edit_model.orientation=='rotated'}}>Rotated 90°</option>
           </select>
         </div>
-        <div class="field"><label>Sheet Length (mm)</label><input type="number" step="1" name="sheet_len" value="{{ edit_model.sheet_len if edit_model else 1200 }}"></div>
-        <div class="field"><label>Sheet Width (mm)</label><input type="number" step="1" name="sheet_w" value="{{ edit_model.sheet_w if edit_model else 1000 }}"></div>
+        <div class="section-title">CNC + PRICE</div>
+        <div class="field"><label>CNC Margin X (mm)</label><input type="number" step="0.1" name="cnc_margin_x" value="{{ edit_model.cnc_margin_x if edit_model else '' }}"></div>
+        <div class="field"><label>CNC Margin Y (mm)</label><input type="number" step="0.1" name="cnc_margin_y" value="{{ edit_model.cnc_margin_y if edit_model else '' }}"></div>
+        <div class="field"><label>PCB PRICE (₹)</label><input type="number" step="0.01" id="pm_pcb_price" name="pcb_price" value="{{ edit_model.pcb_price if edit_model else '' }}" style="font-weight:700;background:#fffdf3"></div>
+        <div class="field"><label>PER SQUARE INCH (₹)</label><input type="number" step="0.001" id="pm_per_sq_inch" name="per_sq_inch" value="{{ edit_model.per_sq_inch if edit_model else '' }}"></div>
         <div class="full"><button class="btn" type="submit">{% if edit_model %}💾 Update Finished Product{% else %}➕ Add Finished Product{% endif %}</button></div>
       </div>
     </form>
+    <p class="muted small" style="margin-top:8px">💡 <b>CUTTING L/W</b> = gang panel ka size — Panel × Gang + Kerf se auto banta hai (gang 1×1 ho to khali chhodo). <b>PCB PRICE</b> ↔ <b>PER SQ.INCH</b> dono taraf calculate — area PANEL size ÷ PCS/PANEL se.</p>
   </div>
 </div>
+{% if edit_model %}
+<div class="panel" style="border-left:4px solid #b45309">
+  <div class="panel-head"><h3>📜 Price History — {{ edit_model.name }}</h3></div>
+  <div class="panel-body" style="padding:0;overflow-x:auto">
+    {% if ph_rows %}
+    <table>
+      <thead><tr><th>Date</th><th class="t-right">PCB Price (₹)</th><th class="t-right">₹/sq.inch</th><th>Party</th><th>Order</th></tr></thead>
+      <tbody>
+        {% for p in ph_rows %}
+        <tr>
+          <td class="mono small">{{ p.ddate }}</td>
+          <td class="t-right mono"><b>₹{{ p.price|inr0 }}</b></td>
+          <td class="t-right mono">{{ p.rs_pcb|gfmt }}</td>
+          <td class="small">{{ p.party or '—' }}</td>
+          <td class="mono small">{% if p.order_id %}<a href="/jobcard/{{ p.order_id }}{% if request.args.get('token') %}?token={{ request.args.get('token') }}{% endif %}">{{ p.order_no or '#' ~ p.order_id }}</a>{% else %}—{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}<div class="empty">Abhi koi price history nahi — Job Card save ya dispatch par auto banegi (is item ka pichhla rate yahan dikhega).</div>{% endif %}
+  </div>
+</div>
+{% endif %}
+<script>
+/* ---- GANG auto: panel × gang + kerf → CUTTING SIZE (cut list layout save) ---- */
+(function(){
+  function cc(){
+    var pl = parseFloat((document.getElementById('pm_panel_len')||{}).value) || 0;
+    var pw = parseFloat((document.getElementById('pm_panel_w')||{}).value) || 0;
+    var gx = Math.max(1, parseInt((document.getElementById('pm_gang_x')||{}).value) || 1);
+    var gy = Math.max(1, parseInt((document.getElementById('pm_gang_y')||{}).value) || 1);
+    var kx = parseFloat((document.getElementById('pm_kerf_x')||{}).value) || 0;
+    var ky = parseFloat((document.getElementById('pm_kerf_y')||{}).value) || 0;
+    if (gx > 1 || gy > 1) {
+      if (pl > 0) document.getElementById('pm_cutting_len').value = Math.round((pl * gx + kx * (gx - 1)) * 100) / 100;
+      if (pw > 0) document.getElementById('pm_cutting_w').value = Math.round((pw * gy + ky * (gy - 1)) * 100) / 100;
+    }
+  }
+  ['pm_panel_len','pm_panel_w','pm_gang_x','pm_gang_y','pm_kerf_x','pm_kerf_y'].forEach(function(id){
+    var el = document.getElementById(id);
+    if (el) el.addEventListener('input', cc);
+  });
+})();
+/* ---- PCB PRICE two-way: PANEL size se (PCB size nahi) ---- */
+var _pmLastEdit = 'rate';
+function pmArea(){
+  var cl = parseFloat((document.getElementById('pm_cutting_len')||{}).value) || 0;
+  var cw = parseFloat((document.getElementById('pm_cutting_w')||{}).value) || 0;
+  var pl = parseFloat((document.getElementById('pm_panel_len')||{}).value) || 0;
+  var pw = parseFloat((document.getElementById('pm_panel_w')||{}).value) || 0;
+  var pcs = parseInt((document.getElementById('pm_pcs_panel')||{}).value) || 0;
+  if (cl > 0 && cw > 0 && pcs > 0) return ((cl / 25.4) * (cw / 25.4)) / pcs;
+  if (pl > 0 && pw > 0 && pcs > 0) return ((pl / 25.4) * (pw / 25.4)) / pcs;
+  return 0;
+}
+function pmPrice(){
+  var sq = pmArea();
+  var re = document.getElementById('pm_per_sq_inch'), pe = document.getElementById('pm_pcb_price');
+  if (!re || !pe || sq <= 0) return;
+  var rate = parseFloat(re.value) || 0, price = parseFloat(pe.value) || 0;
+  if (_pmLastEdit === 'price') {
+    re.value = price > 0 ? String(Math.round((price / sq) * 1000) / 1000) : '';
+  } else {
+    pe.value = String(Math.round(rate * sq * 100) / 100);
+  }
+}
+(function(){
+  var re = document.getElementById('pm_per_sq_inch'), pe = document.getElementById('pm_pcb_price');
+  if (re) re.addEventListener('input', function(){ _pmLastEdit = 'rate'; pmPrice(); });
+  if (pe) pe.addEventListener('input', function(){ _pmLastEdit = 'price'; pmPrice(); });
+})();
+</script>
 {% endif %}
 
 <div class="panel">
@@ -130,7 +224,7 @@
   <div class="panel-body" style="padding:0;overflow-x:auto">
     <table>
       <thead>
-        <tr><th>Model</th><th>PCB (mm)</th><th>PCBs</th><th>Panel (mm)</th><th class="t-right">PCS/Panel</th><th class="t-right">Panels/Sheet</th><th class="t-right">FG Stock</th><th>Created</th><th></th></tr>
+        <tr><th>Model</th><th>PCB (mm)</th><th>PCBs</th><th>Panel (mm)</th><th class="t-right">PCS/Panel</th><th class="t-right">Panels/Sheet</th><th class="t-right">FG Stock</th><th class="t-right">Last Price</th><th>Created</th><th></th></tr>
       </thead>
       <tbody>
         {% for m in models %}
@@ -142,6 +236,7 @@
           <td class="t-right mono">{{ m.pcs_panel }}</td>
           <td class="t-right mono">{{ m.panels_sheet }}</td>
           <td class="t-right"><span class="badge {{'b-green' if (m.fg_stock or 0) > 0 else 'b-gray'}}">{{ m.fg_stock or 0 }} PCS</span></td>
+          <td class="t-right mono small">{% set lp = lp_map.get(m.name) %}{% if lp %}<b style="color:#b45309">₹{{ lp.price|inr0 }}</b><div class="muted" style="font-size:10px">{{ lp.ddate }} · {{ lp.order_no }}</div>{% else %}—{% endif %}</td>
           <td class="small muted">{{ m.created_on }}</td>
           <td class="t-right" style="white-space:nowrap">
             <button type="button" class="btn btn-xs" style="background:#16a34a;color:#fff" onclick="toggleProduce({{ m.id }})">🏭 Produce</button>
@@ -155,7 +250,7 @@
           </td>
         </tr>
         <tr id="produce-{{ m.id }}" style="display:none">
-          <td colspan="9" style="background:#f0fdf4;border-top:1px dashed #bbf7d0">
+          <td colspan="10" style="background:#f0fdf4;border-top:1px dashed #bbf7d0">
             <form method="post" action="/products/{{ m.id }}/produce" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
               <b style="color:#166534">🏭 {{ m.name }} — Ready hua?</b>
               <label class="small">QTY (PCS)
@@ -175,7 +270,7 @@
           </td>
         </tr>
         {% else %}
-        <tr><td colspan="9"><div class="empty">No finished products yet — Cut List Optimizer mein layout bana kar "Save Layout to Model" karein.</div></td></tr>
+        <tr><td colspan="10"><div class="empty">No finished products yet — Cut List Optimizer mein layout bana kar "Save Layout to Model" karein.</div></td></tr>
         {% endfor %}
       </tbody>
     </table>
