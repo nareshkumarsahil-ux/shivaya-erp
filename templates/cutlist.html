@@ -217,14 +217,17 @@ function computeLive(){
   var kx = num('kerf_x'), ky = num('kerf_y');
   var sheets = Math.max(1, intNum('sheets'));
   var useLocked = document.getElementById('useChk').checked;
+  var manualL = num('panel_len'), manualW = num('panel_w');
 
-  if (pcbL <= 0 || pcbW <= 0 || px <= 0 || py <= 0 || sl <= 0 || sw <= 0) return;
+  if (sl <= 0 || sw <= 0) return;
+  /* locked mode: PCB builder data zaroori; manual mode: sirf panel size zaroori */
+  if (useLocked && (pcbL <= 0 || pcbW <= 0 || px <= 0 || py <= 0)) return;
+  if (!useLocked && (manualL <= 0 || manualW <= 0)) return;
 
   /* --- panel size: locked (computed) or manual --- */
   var gangActive = (gx > 1 || gy > 1);
   var pL, pW;               /* single panel size */
   var unitL, unitW;         /* cutting size = sheet fitting unit */
-  var manualL = num('panel_len'), manualW = num('panel_w');
   if (useLocked || manualL <= 0 || manualW <= 0) {
     pL = pcbL * px + gapX * (px - 1) + bl + br;
     pW = pcbW * py + gapY * (py - 1) + bt + bb;

@@ -15,7 +15,7 @@ import http.client
 import urllib.parse
 
 # Schema version — bump karo jab SCHEMA/migrate badle, taaki agla deploy tables update kare.
-SCHEMA_VERSION = "2026-09-09.2"
+SCHEMA_VERSION = "2026-09-09.3"
 
 DB_PATH = os.environ.get("DB_PATH") or (
     os.path.join(tempfile.gettempdir(), "circuit.db") if os.environ.get("VERCEL") else "circuit.db"
@@ -288,6 +288,7 @@ CREATE TABLE IF NOT EXISTS product_models (
     x_qty INTEGER DEFAULT 1, y_qty INTEGER DEFAULT 1,
     cnc_margin_x REAL DEFAULT 0, cnc_margin_y REAL DEFAULT 0,
     party TEXT DEFAULT '', note TEXT DEFAULT '',
+    attachment_name TEXT DEFAULT '', attachment_mime TEXT DEFAULT '', attachment_data TEXT DEFAULT '',
     order_id INTEGER,
     created_on TEXT DEFAULT ''
 );
@@ -743,6 +744,12 @@ def migrate(conn):
         conn.execute("ALTER TABLE product_models ADD COLUMN party TEXT DEFAULT ''")
     if pcols and "note" not in pcols:
         conn.execute("ALTER TABLE product_models ADD COLUMN note TEXT DEFAULT ''")
+    if pcols and "attachment_name" not in pcols:
+        conn.execute("ALTER TABLE product_models ADD COLUMN attachment_name TEXT DEFAULT ''")
+    if pcols and "attachment_mime" not in pcols:
+        conn.execute("ALTER TABLE product_models ADD COLUMN attachment_mime TEXT DEFAULT ''")
+    if pcols and "attachment_data" not in pcols:
+        conn.execute("ALTER TABLE product_models ADD COLUMN attachment_data TEXT DEFAULT ''")
     jcols = [r[1] for r in conn.execute("PRAGMA table_info(jobcard)")]
     if jcols and "mat_code" not in jcols:
         conn.execute("ALTER TABLE jobcard ADD COLUMN mat_code TEXT DEFAULT ''")

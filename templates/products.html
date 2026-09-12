@@ -135,7 +135,7 @@
       <tbody>
         {% for m in models %}
         <tr>
-          <td><b>{{ m.name }}</b>{% if m.model_code %} <span class="muted small mono">{{ m.model_code }}</span>{% endif %}{% if m.party %}<div class="muted" style="font-size:10px">👤 {{ m.party }}</div>{% endif %}</td>
+          <td><b>{{ m.name }}</b>{% if m.model_code %} <span class="muted small mono">{{ m.model_code }}</span>{% endif %}{% if m.attachment_data %}<span title="{{ m.attachment_name or 'attachment hai' }}" style="cursor:default"> 📎</span>{% endif %}{% if m.party %}<div class="muted" style="font-size:10px">👤 {{ m.party }}</div>{% endif %}</td>
           <td class="mono small">{{ m.pcb_len|gfmt }}×{{ m.pcb_w|gfmt }}</td>
           <td class="mono small">{{ m.pcbs_x }}×{{ m.pcbs_y }}</td>
           <td class="mono small">{% if m.cutting_len %}<b style="color:#166534">{{ m.cutting_len|gfmt }}×{{ m.cutting_w|gfmt }}</b><div class="muted" style="font-size:10px">panel {{ m.panel_len|gfmt }}×{{ m.panel_w|gfmt }} · {{ m.gang_x }}×{{ m.gang_y }} gang</div>{% else %}{{ m.panel_len|gfmt }}×{{ m.panel_w|gfmt }}{% endif %}{% if m.note %}<div class="muted" style="font-size:10px">🔧 {{ m.note }}</div>{% endif %}</td>
@@ -148,6 +148,7 @@
             <a class="btn btn-outline btn-xs" href="/products?edit={{ m.id }}">✏️ Edit</a>
             <a class="btn btn-outline btn-xs" href="/cutlist?model={{ m.id }}">📂 Load</a>
             <a class="btn btn-outline btn-xs" href="/products/{{ m.id }}/bom">🧪 BOM</a>
+            <button type="button" class="btn btn-outline btn-xs att-btn" data-id="{{ m.id }}" data-name="{{ m.name|e }}" data-has="{{ '1' if m.attachment_data else '' }}" data-fname="{{ (m.attachment_name or '')|e }}" title="PDF / Image attach karo">📎</button>
             <form method="post" action="/products/{{ m.id }}/delete" style="display:inline" onsubmit="return confirm('Delete this finished product?')">
               <button class="btn btn-danger btn-xs" type="submit">🗑</button>
             </form>
@@ -219,10 +220,86 @@
   </div>
 </div>
 
+<!-- 📎 attachment modal -->
+<div id="attModal" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:100;align-items:center;justify-content:center;padding:14px">
+  <div style="background:var(--card);border-radius:12px;padding:18px 20px;max-width:440px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.35)">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <b id="attTitle" style="font-size:15px">📎 Attachment</b>
+      <button type="button" class="btn btn-outline btn-xs" onclick="closeAtt()">✕</button>
+    </div>
+    <div class="muted small" id="attInfo" style="margin-bottom:10px"></div>
+    <div id="attHas" style="display:none;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+      <a class="btn btn-outline btn-sm" id="attView" target="_blank" href="#">👁 View / Open</a>
+      <button type="button" class="btn btn-outline btn-sm" id="attDel" style="color:#b91c1c">🗑 Delete</button>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <input type="file" id="attFile" accept=".pdf,.png,.jpg,.jpeg,.webp,.gif,.bmp" style="padding:6px;border:1px solid var(--border);border-radius:8px;font-size:12.5px;flex:1;min-width:180px">
+      <button type="button" class="btn" id="attUp" style="background:#16a34a">⬆️ Upload</button>
+    </div>
+    <div class="small" id="attMsg" style="margin-top:10px;min-height:16px"></div>
+  </div>
+</div>
+
 <script>
 function toggleProduce(id){
   var r = document.getElementById('produce-' + id);
   if (r) r.style.display = (r.style.display === 'none' || r.style.display === '') ? 'table-row' : 'none';
 }
+/* ---- 📎 attachment (PDF / image per model) ---- */
+var attPid = 0;
+document.querySelectorAll('.att-btn').forEach(function(b){
+  b.addEventListener('click', function(){
+    attPid = this.getAttribute('data-id');
+    var has = this.getAttribute('data-has') === '1';
+    var fname = this.getAttribute('data-fname') || '';
+    document.getElementById('attTitle').textContent = '📎 Attachment — ' + this.getAttribute('data-name');
+    document.getElementById('attInfo').textContent = has
+      ? 'Maujooda file: ' + fname + ' — nayi upload karne par replace ho jayegi.'
+      : 'Koi file nahi hai. PDF (drawing/datasheet) ya image (photo/artwork) upload karo — max 3MB.';
+    document.getElementById('attHas').style.display = has ? 'flex' : 'none';
+    if (has) document.getElementById('attView').href = '/products/' + attPid + '/attachment';
+    document.getElementById('attMsg').textContent = '';
+    document.getElementById('attFile').value = '';
+    document.getElementById('attModal').style.display = 'flex';
+  });
+});
+function closeAtt(){ document.getElementById('attModal').style.display = 'none'; }
+document.getElementById('attUp').addEventListener('click', function(){
+  var f = document.getElementById('attFile');
+  if (!f.files || !f.files.length) {
+    document.getElementById('attMsg').innerHTML = '<span style="color:#b91c1c">Pehle file choose karo.</span>';
+    return;
+  }
+  var fd = new FormData();
+  fd.append('file', f.files[0]);
+  this.disabled = true;
+  document.getElementById('attMsg').textContent = '⏳ Upload ho raha hai...';
+  fetch('/products/' + attPid + '/attachment', { method: 'POST', body: fd })
+    .then(function(r){ return r.json().then(function(j){ return {ok: r.ok, j: j}; }); })
+    .then(function(res){
+      if (res.ok) { location.reload(); }
+      else {
+        document.getElementById('attMsg').innerHTML = '<span style="color:#b91c1c">' + (res.j && res.j.msg ? res.j.msg : 'Upload fail') + '</span>';
+        document.getElementById('attUp').disabled = false;
+      }
+    })
+    .catch(function(e){
+      document.getElementById('attMsg').innerHTML = '<span style="color:#b91c1c">Upload fail: ' + e + '</span>';
+      document.getElementById('attUp').disabled = false;
+    });
+});
+document.getElementById('attDel').addEventListener('click', function(){
+  if (!confirm('Attachment delete karni hai?')) return;
+  fetch('/products/' + attPid + '/attachment/delete', { method: 'POST' })
+    .then(function(r){ return r.json(); })
+    .then(function(j){
+      if (j.ok) { location.reload(); }
+      else { alert(j.msg || 'Delete fail'); }
+    })
+    .catch(function(e){ alert('Delete fail: ' + e); });
+});
+document.getElementById('attModal').addEventListener('click', function(e){
+  if (e.target === this) closeAtt();
+});
 </script>
 {% endblock %}

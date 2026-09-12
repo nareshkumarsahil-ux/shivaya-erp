@@ -9,6 +9,7 @@ import datetime
 import calendar
 import io
 import csv
+import base64
 from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify, Response
 from functools import wraps
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
@@ -79,7 +80,8 @@ def token_login():
 
 # Operator ka limited access (screenshot jaisa): Dashboard, Job Orders, Machines,
 # Quality, Operator View — in pages mein wo dekh + kaam kar sakta hai. Baaki sab admin-only.
-OPERATOR_READ = {"dashboard", "orders", "machines", "quality", "operator_view"}
+OPERATOR_READ = {"dashboard", "orders", "machines", "quality", "operator_view",
+                 "product_attachment_view"}
 OPERATOR_WRITE = {"operator_action", "operator_issue", "machine_status", "quality", "quality_result"}
 
 
@@ -565,7 +567,12 @@ def compute_layout(p):
     panel_len_in, panel_w_in = _f(p, "panel_len"), _f(p, "panel_w")
     use_locked = p.get("use") == "1"
 
-    if min(pcb_len, pcb_w, pcbs_x, pcbs_y, sheet_len, sheet_w) <= 0:
+    if min(sheet_len, sheet_w) <= 0:
+        return None
+    # locked mode: PCB builder data zaroori; manual mode: panel size zaroori
+    if use_locked and min(pcb_len, pcb_w, pcbs_x, pcbs_y) <= 0:
+        return None
+    if not use_locked and (panel_len_in <= 0 or panel_w_in <= 0):
         return None
 
     # --- single panel size: locked (computed from PCB builder) or manual ---
@@ -906,7 +913,12 @@ def cutlist():
                 for k in FIELD_KEYS:
                     val = model[k] if k in model.keys() and model[k] is not None else ""
                     fields[k] = str(val)
-                fields["use"] = "1"
+                has_pcb = (model["pcb_len"] or 0) > 0 and (model["pcb_w"] or 0) > 0
+                fields["use"] = "1" if has_pcb else ""
+                # PCBs grid khaali ho par PCS/Panel (UP) ho -> 1 row mein count set karo
+                if (model["pcbs_x"] or 0) <= 0 and (model["pcbs_y"] or 0) <= 0 and (model["pcs_panel"] or 0) > 0:
+                    fields["pcbs_x"] = str(model["pcs_panel"])
+                    fields["pcbs_y"] = "1"
                 # gang model: PANEL fields mein cutting size dikhao, single panel hidden base mein
                 if (model["gang_x"] or 1) > 1 or (model["gang_y"] or 1) > 1:
                     cl = model["cutting_len"] or 0
@@ -922,16 +934,21 @@ def cutlist():
                     fields["panel_base_len"] = f"{(model['panel_len'] or 0):g}"
                     fields["panel_base_w"] = f"{(model['panel_w'] or 0):g}"
                     fields["use"] = ""
-                flash(f"Loaded model '{model['name']}' — cutting size bhi load ho gaya.", "success")
+                if has_pcb:
+                    flash(f"Loaded model '{model['name']}' — cutting size bhi load ho gaya.", "success")
+                else:
+                    fields["panel_len"] = f"{(model['panel_len'] or 0):g}"
+                    fields["panel_w"] = f"{(model['panel_w'] or 0):g}"
+                    flash(f"Loaded model '{model['name']}' — panel size bhara hai. Sheet size chuno, PCB size daalo, Calculate dabao.", "success")
         except (ValueError, TypeError):
             pass
-    elif q.get("pcb_len"):
+    elif any(q.get(k, "") for k in FIELD_KEYS):
         fields = {k: q.get(k, "") for k in FIELD_KEYS}
 
-    result = compute_layout(fields) if fields else compute_layout(DEFAULTS)
-    if not fields:
+    if fields:
+        result = compute_layout(fields)  # fail ho to None — form mein wahi values dikhengi jo load hui
+    else:
         fields = dict(DEFAULTS)
-    if result is None:
         result = compute_layout(DEFAULTS)
 
     models = db.query("SELECT * FROM product_models ORDER BY id DESC")
@@ -1507,6 +1524,72 @@ def products_import_confirm():
         msg += f", {skipped} skip hue (name khaali)"
     flash(msg + ".", "success")
     return redirect_with_token(url_for("products"))
+
+
+# ---------------------------------------------------------------- model attachment
+# Har finished product/model ke saath ek PDF ya image (drawing/datasheet/photo) —
+# DB mein base64 store hota hai (Vercel filesystem ephemeral hai, Turso me safe).
+
+ALLOWED_ATTACH = {"pdf": "application/pdf", "png": "image/png", "jpg": "image/jpeg",
+                  "jpeg": "image/jpeg", "webp": "image/webp", "gif": "image/gif",
+                  "bmp": "image/bmp"}
+MAX_ATTACH = 3 * 1024 * 1024  # 3MB
+
+
+@app.route("/products/<int:pid>/attachment", methods=["GET"])
+@login_required
+def product_attachment_view(pid):
+    m = db.query("SELECT attachment_name, attachment_mime, attachment_data, name FROM product_models WHERE id=?",
+                 (pid,), one=True)
+    if not m or not m["attachment_data"]:
+        flash("Is model ka koi attachment nahi hai — 📎 button se upload karo.", "error")
+        return redirect_with_token(url_for("products"))
+    try:
+        data = base64.b64decode(m["attachment_data"])
+    except Exception:
+        flash("Attachment data corrupt hai — dobara upload karo.", "error")
+        return redirect_with_token(url_for("products"))
+    mime = m["attachment_mime"] or "application/octet-stream"
+    fname = m["attachment_name"] or f"model-{pid}"
+    resp = Response(data, mimetype=mime)
+    resp.headers["Content-Disposition"] = f'inline; filename="{fname}"'
+    resp.headers["Cache-Control"] = "private, max-age=86400"
+    return resp
+
+
+@app.route("/products/<int:pid>/attachment", methods=["POST"])
+@login_required
+def product_attachment_upload(pid):
+    if session.get("user_role") != "admin":
+        return jsonify(ok=False, msg="Sirf admin attachment daal sakta hai."), 403
+    model = db.query("SELECT id, name FROM product_models WHERE id=?", (pid,), one=True)
+    if not model:
+        return jsonify(ok=False, msg="Model nahi mila."), 404
+    f = request.files.get("file")
+    if not f or not f.filename:
+        return jsonify(ok=False, msg="File choose karo."), 400
+    ext = f.filename.rsplit(".", 1)[-1].lower() if "." in f.filename else ""
+    if ext not in ALLOWED_ATTACH:
+        return jsonify(ok=False, msg="Sirf PDF ya image (png/jpg/jpeg/webp/gif/bmp) file chalegi."), 400
+    data = f.read()
+    if not data:
+        return jsonify(ok=False, msg="File khaali hai."), 400
+    if len(data) > MAX_ATTACH:
+        return jsonify(ok=False, msg="File 3MB se badi hai — chhoti file use karo."), 400
+    b64 = base64.b64encode(data).decode("ascii")
+    db.execute("UPDATE product_models SET attachment_name=?, attachment_mime=?, attachment_data=? WHERE id=?",
+               (f.filename[:180], ALLOWED_ATTACH[ext], b64, pid))
+    return jsonify(ok=True, msg=f"Attachment save ho gaya: {f.filename}")
+
+
+@app.route("/products/<int:pid>/attachment/delete", methods=["POST"])
+@login_required
+def product_attachment_delete(pid):
+    if session.get("user_role") != "admin":
+        return jsonify(ok=False, msg="Sirf admin delete kar sakta hai."), 403
+    db.execute("UPDATE product_models SET attachment_name='', attachment_mime='', attachment_data='' WHERE id=?",
+               (pid,))
+    return jsonify(ok=True, msg="Attachment hata di.")
 
 
 @app.route("/products/<int:pid>/produce", methods=["POST"])
