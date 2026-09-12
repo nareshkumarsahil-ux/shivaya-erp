@@ -1060,7 +1060,10 @@ def cutlist():
                     fields["panel_base_w"] = f"{(model['panel_w'] or 0):g}"
                     fields["use"] = ""
                 if has_pcb:
-                    flash(f"Loaded model '{model['name']}' — cutting size bhi load ho gaya.", "success")
+                    _xmsg = "price + borders + gaps + gang/cutting size ke saath"
+                    if (model["pcb_price"] or 0) > 0:
+                        _xmsg += f" — PCB PRICE ₹{model['pcb_price']:g} bhi load ho gaya"
+                    flash(f"Loaded model '{model['name']}' — saari details load ho gayi ({_xmsg}).", "success")
                 else:
                     fields["panel_len"] = f"{(model['panel_len'] or 0):g}"
                     fields["panel_w"] = f"{(model['panel_w'] or 0):g}"
