@@ -90,6 +90,19 @@ CREATE TABLE IF NOT EXISTS dispatch_log (
     ts TEXT DEFAULT ''
 );
 
+CREATE TABLE IF NOT EXISTS price_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    model_name TEXT DEFAULT '',
+    model_code TEXT DEFAULT '',
+    price REAL DEFAULT 0,
+    rs_pcb REAL DEFAULT 0,
+    order_id INTEGER,
+    order_no TEXT DEFAULT '',
+    party TEXT DEFAULT '',
+    ddate TEXT DEFAULT '',
+    created_on TEXT DEFAULT ''
+);
+
 CREATE TABLE IF NOT EXISTS jobcard_log (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     order_id INTEGER,
@@ -724,6 +737,11 @@ def migrate(conn):
     cols = [r[1] for r in conn.execute("PRAGMA table_info(orders)")]
     if "cutlist_info" not in cols:
         conn.execute("ALTER TABLE orders ADD COLUMN cutlist_info TEXT DEFAULT ''")
+    # PRICE HISTORY — item/model kis price pe gaya tha (last price memory)
+    conn.execute("CREATE TABLE IF NOT EXISTS price_history ("
+                 "id INTEGER PRIMARY KEY AUTOINCREMENT, model_name TEXT DEFAULT '', model_code TEXT DEFAULT '', "
+                 "price REAL DEFAULT 0, rs_pcb REAL DEFAULT 0, order_id INTEGER, order_no TEXT DEFAULT '', "
+                 "party TEXT DEFAULT '', ddate TEXT DEFAULT '', created_on TEXT DEFAULT '')")
     pcols = [r[1] for r in conn.execute("PRAGMA table_info(product_models)")]
     if pcols and "model_code" not in pcols:
         conn.execute("ALTER TABLE product_models ADD COLUMN model_code TEXT DEFAULT ''")

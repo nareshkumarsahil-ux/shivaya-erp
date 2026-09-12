@@ -66,7 +66,8 @@
             data-qp="{{ m.panels_sheet * m.sheets }}"
             data-pcs="{{ m.pcs_panel }}" data-pps="{{ m.panels_sheet }}" data-sheets="{{ m.sheets }}"
             data-sl="{{ m.sheet_len|gfmt }}" data-sw="{{ m.sheet_w|gfmt }}"
-            data-pp="{{ m.pcb_price|gfmt }}" data-rs="{{ m.per_sq_inch|gfmt }}">{% if m.cutting_len %}{{ m.name }} (Cutting {{ m.cutting_len|gfmt }}×{{ m.cutting_w|gfmt }}mm · {{ m.pcs_panel }} PCS){% else %}{{ m.name }} ({{ m.panel_len|gfmt }}×{{ m.panel_w|gfmt }}mm · {{ m.pcs_panel }} PCS){% endif %}</option>
+            data-pp="{{ m.pcb_price|gfmt }}" data-rs="{{ m.per_sq_inch|gfmt }}"
+            {% set lp = lp_map.get(m.name) %}data-lp="{{ lp.price|gfmt if lp else '' }}" data-lpd="{{ lp.ddate if lp else '' }}" data-lpp="{{ lp.party if lp else '' }}" data-lpo="{{ lp.order_no if lp else '' }}">{% if m.cutting_len %}{{ m.name }} (Cutting {{ m.cutting_len|gfmt }}×{{ m.cutting_w|gfmt }}mm · {{ m.pcs_panel }} PCS){% else %}{{ m.name }} ({{ m.panel_len|gfmt }}×{{ m.panel_w|gfmt }}mm · {{ m.pcs_panel }} PCS){% endif %}</option>
           {% endfor %}
           {% if pm_extra %}<option value="{{ jc.party_model }}" selected>{{ jc.party_model }} (custom)</option>{% endif %}
         </select>
@@ -206,6 +207,7 @@
       </div>
       <div class="field" style="margin-top:16px"><button class="btn" type="submit">💾 Save Job Card</button></div>
       <p class="muted small" style="margin-top:8px">💡 <b>PER SQUARE INCH</b> bharein → <b>PCB PRICE</b> auto aayega; ya <b>PCB PRICE</b> bharein → <b>PER SQ.INCH</b> auto aayega (dono taraf calculate). Area = CUTTING PANEL (X×Y) ÷ PCS/PANEL — ye khali ho to PCB ACTUAL SIZE (X×Y) se area leta hai. <b id="jc_total_price" style="color:#b45309"></b></p>
+      <p class="small" style="margin-top:4px;background:#fffbeb;border:1px solid #fde68a;border-radius:6px;padding:6px 8px"><span id="jc_last_price">{% if last_price %}📜 <b>LAST PRICE:</b> ₹{{ last_price.price|inr0 }}{% if last_price.rs_pcb %} · {{ last_price.rs_pcb|gfmt }}/sq.inch{% endif %} · {{ last_price.ddate }} · {{ last_price.party }} · <span class="mono">{{ last_price.order_no }}</span>{% endif %}</span></p>
       <p class="muted small">💡 Save karne par order list (kanban) bhi update hota hai.</p>
     </div>
   </div>
@@ -808,18 +810,14 @@ document.getElementById('jc_party_model').addEventListener('change', function(){
   setField('jc_actual_pcb_x', opt.getAttribute('data-pcbx'));
   setField('jc_actual_pcb_y', opt.getAttribute('data-pcby'));
   if (opt.getAttribute('data-party')) setField('jc_party', opt.getAttribute('data-party'));
-  /* gang/cutting size saved ho to wahi panel size bane (cut list se aayi detail) */
+  /* GANG PANEL (cutting) size -> X SIZE / Y SIZE / CUTTING PANEL (cut list se aayi detail);
+     cutting size na ho to panel size fallback */
   var cutx = parseFloat(opt.getAttribute('data-cutx')) || 0;
   var cuty = parseFloat(opt.getAttribute('data-cuty')) || 0;
-  if (cutx > 0 && cuty > 0) {
-    setField('jc_panel_x', cutx);
-    setField('jc_panel_y', cuty);
-    setField('jc_x_size', cutx);
-    setField('jc_y_size', cuty);
-  } else {
-    setField('jc_panel_x', opt.getAttribute('data-panelx'));
-    setField('jc_panel_y', opt.getAttribute('data-panely'));
-  }
+  var px = cutx > 0 ? cutx : (parseFloat(opt.getAttribute('data-panelx')) || 0);
+  var py = cuty > 0 ? cuty : (parseFloat(opt.getAttribute('data-panely')) || 0);
+  if (px > 0) { setField('jc_panel_x', px); setField('jc_x_size', px); }
+  if (py > 0) { setField('jc_panel_y', py); setField('jc_y_size', py); }
   setField('jc_x_qty', opt.getAttribute('data-xq'));
   setField('jc_y_qty', opt.getAttribute('data-yq'));
   setField('jc_cnc_margin_x', opt.getAttribute('data-cnx'));
@@ -829,12 +827,34 @@ document.getElementById('jc_party_model').addEventListener('change', function(){
   setField('jc_sheets', opt.getAttribute('data-sheets'));
   setField('jc_sheet_len', opt.getAttribute('data-sl'));
   setField('jc_sheet_w', opt.getAttribute('data-sw'));
-  setField('jc_qty_panel', opt.getAttribute('data-qp'));
+  /* QTY OF PANEL + QTY OF PCS auto-fetch: pcs/panel se panel count, model se total pcs */
+  var pcs = parseInt(opt.getAttribute('data-pcs')) || 0;
+  var mqp = parseInt(opt.getAttribute('data-qp')) || 0;
+  if (pcs > 0) {
+    var qpcs = parseInt(val('jc_qty_pcs')) || 0;
+    var qpan = parseInt(val('jc_qty_panel')) || 0;
+    if (!qpan) qpan = qpcs > 0 ? Math.ceil(qpcs / pcs) : mqp;
+    if (qpan) setField('jc_qty_panel', String(qpan));
+    if (!qpcs && mqp) setField('jc_qty_pcs', String(pcs * mqp));
+  }
   var pp = parseFloat(opt.getAttribute('data-pp')) || 0;
   var pr = parseFloat(opt.getAttribute('data-rs')) || 0;
   if (pp > 0) setField('jc_price', pp);
   if (pr > 0) setField('jc_rs_pcb', pr);
   if (typeof calcPcbPrice === 'function') calcPcbPrice();
+  /* LAST PRICE line — is model ka pichhla price/date/party/order */
+  var lel = document.getElementById('jc_last_price');
+  if (lel) {
+    var lp = parseFloat(opt.getAttribute('data-lp')) || 0;
+    if (lp > 0) {
+      lel.innerHTML = '📜 <b>LAST PRICE:</b> ₹' + lp.toLocaleString('en-IN', {maximumFractionDigits: 2}) +
+        (opt.getAttribute('data-lpd') ? ' · ' + opt.getAttribute('data-lpd') : '') +
+        (opt.getAttribute('data-lpp') ? ' · ' + opt.getAttribute('data-lpp') : '') +
+        (opt.getAttribute('data-lpo') ? ' · <span class="mono">' + opt.getAttribute('data-lpo') + '</span>' : '');
+    } else {
+      lel.textContent = '';
+    }
+  }
   var code = opt.getAttribute('data-code') || '';
   if (code) {
     var msel = document.getElementById('jc_model');

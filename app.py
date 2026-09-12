@@ -880,12 +880,14 @@ def cutlist():
         result = compute_layout(fields)
 
         if action == "save_model" and result:
-            # PCB PRICE + PER SQ.INCH — cutlist ka area = PCB SIZE (mm -> sq.inch)
+            # PCB PRICE + PER SQ.INCH — AREA = PANEL (cutting) size ÷ PCS/panel (PCB size nahi)
             pm_price = pm_rs = None
             cl_price = (f.get("pcb_price") or "").strip()
             cl_rate = (f.get("per_sq_inch") or "").strip()
-            sq_in = (result["pcb_len"] * result["pcb_w"]) / (25.4 * 25.4) \
-                if result["pcb_len"] > 0 and result["pcb_w"] > 0 else 0.0
+            cl_x = result["cutting_len"] if result["gang_active"] else result["panel_len"]
+            cl_y = result["cutting_w"] if result["gang_active"] else result["panel_w"]
+            pcs_unit = result["pcs_unit"] or result["pcs_panel"]
+            sq_in = (cl_x * cl_y) / (25.4 * 25.4) / pcs_unit if cl_x > 0 and cl_y > 0 and pcs_unit > 0 else 0.0
             if cl_price:
                 try:
                     pm_price = round(float(cl_price), 2)
@@ -969,15 +971,14 @@ def cutlist():
                     # JOB CARD bhi save karo — cut list ki saari details (sheet/panel/pcs/price) jobcard table me
                     cut_x = result["cutting_len"] if result["gang_active"] else result["panel_len"]
                     cut_y = result["cutting_w"] if result["gang_active"] else result["panel_w"]
-                    # PCB PRICE — cut list ke PCB PRICE / PER SQ.INCH se (jobcard wahi area formula use karta hai)
+                    # PCB PRICE — AREA = CUTTING PANEL ÷ PCS/unit (panel size se; PCB size nahi)
                     price = rs_pcb = None
                     cl_price = (f.get("pcb_price") or "").strip()
                     cl_rate = (f.get("per_sq_inch") or "").strip()
+                    pcs_unit = result["pcs_unit"] or result["pcs_panel"]
                     sq_in = 0.0
-                    if cut_x > 0 and cut_y > 0 and result["pcs_panel"] > 0:
-                        sq_in = (cut_x / 25.4) * (cut_y / 25.4) / result["pcs_panel"]
-                    elif result["pcb_len"] > 0 and result["pcb_w"] > 0:
-                        sq_in = (result["pcb_len"] / 25.4) * (result["pcb_w"] / 25.4)
+                    if cut_x > 0 and cut_y > 0 and pcs_unit > 0:
+                        sq_in = (cut_x / 25.4) * (cut_y / 25.4) / pcs_unit
                     if cl_price:
                         try:
                             price = round(float(cl_price), 2)
@@ -1010,6 +1011,12 @@ def cutlist():
                         vals.append(rs_pcb)
                     vals.append(order_id)
                     db.execute(f"UPDATE jobcard SET {', '.join(sets)} WHERE order_id=?", tuple(vals))
+                    # PRICE HISTORY: cut list se price set hua to record
+                    if price is not None and price > 0:
+                        base = (order["product"] or "").split(" · ")[0].strip()
+                        _record_price(base, "", price, rs_pcb, order_id,
+                                      order["order_no"], order["party"],
+                                      datetime.date.today().isoformat())
                     flash(f"Layout applied to {order['order_no']} ({order['party']}). "
                           f"Qty set to {result['total_pcs']} pcs — Job Card bhi update ho gaya "
                           f"(sheet, panels/sheet, qty panel, pcs/panel, price).", "success")
@@ -2956,6 +2963,13 @@ def operator_action():
                        (order_id, datetime.date.today().isoformat(),
                         datetime.datetime.now().strftime("%H:%M"), mode,
                         f.get("details", "").strip(), op, now, ph_name, ph_mime, ph_data))
+            # PRICE HISTORY: dispatch ke waqt item kis price pe gaya
+            _jcd = db.query("SELECT * FROM jobcard WHERE order_id=?", (order_id,), one=True)
+            _ord2 = db.query("SELECT * FROM orders WHERE id=?", (order_id,), one=True)
+            if _jcd and (_jcd["price"] or 0) > 0 and _ord2:
+                _record_price(_jcd["party_model"], _jcd["model"], _jcd["price"], _jcd["rs_pcb"],
+                              order_id, _ord2["order_no"], _ord2["party"],
+                              datetime.date.today().isoformat())
             flash(f"PCB dispatched: {mode} — date/time auto save ho gaya." + (" 📷 Photo bhi save hui." if ph_data else ""), "success")
         else:
             flash("Dispatch mode select karein.", "error")
@@ -3158,6 +3172,15 @@ def jobcard(order_id):
     inv_items = db.query("SELECT * FROM inventory ORDER BY CASE WHEN stock<=min_stock THEN 0 ELSE 1 END, category, name")
     inv_names = {it["name"] for it in inv_items}
     bmodel = db.query("SELECT * FROM product_models WHERE name=?", (jc["party_model"],), one=True)
+    # PRICE HISTORY: is model ka last price + har model ka (dropdown ke liye)
+    last_price = None
+    if jc["party_model"]:
+        last_price = db.query("SELECT * FROM price_history WHERE model_name=? ORDER BY id DESC LIMIT 1",
+                              (jc["party_model"],), one=True)
+    lp_map = {}
+    for lp in db.query("SELECT model_name, price, ddate, party, order_no FROM price_history ORDER BY id DESC"):
+        if lp["model_name"] not in lp_map:
+            lp_map[lp["model_name"]] = lp
     bom_rows = []
     if bmodel:
         for br in db.bom_rows_for(bmodel["id"]):
@@ -3187,7 +3210,7 @@ def jobcard(order_id):
                            procs_started=procs_started,
                            dispatch=dispatch, dispatch_logs=dispatch_logs,
                            inv_items=inv_items, inv_names=inv_names,
-                           bom_rows=bom_rows, bmodel=bmodel,
+                           bom_rows=bom_rows, bmodel=bmodel, last_price=last_price, lp_map=lp_map,
                            issues=issues, issue_total=issue_total, worker_names=worker_names,
                            pm_extra=(jc["party_model"] not in pm_values and jc["party_model"] != ""),
                            md_extra=(jc["model"] not in md_values and jc["model"] != ""),
@@ -3298,6 +3321,13 @@ def jobcard_update(order_id):
 
     vals.append(order_id)
     db.execute(f"UPDATE jobcard SET {', '.join(sets)} WHERE order_id=?", vals)
+    # PRICE HISTORY: price badla ho to record karo (item kis price pe chal raha)
+    new_price = _jc_num(f.get("price"))
+    if new_price > 0 and (float(jc["price"] or 0) != new_price
+                          or float(jc["rs_pcb"] or 0) != _jc_num(f.get("rs_pcb"))):
+        _record_price(party_model, model, new_price, _jc_num(f.get("rs_pcb")), order_id,
+                      order["order_no"], f.get("party", "").strip(),
+                      datetime.date.today().isoformat())
     flash("Job card saved. All changes saved.", "success")
     return redirect_with_token(url_for("jobcard", order_id=order_id))
 
@@ -3496,6 +3526,12 @@ def jobcard_dispatch(order_id):
                "photo_name, photo_mime, photo_data) VALUES (?,?,?,?,?,?,?,?,?,?)",
                (order_id, ddate, dtime, mode, f.get("details", "").strip(), by,
                 datetime.datetime.now().strftime("%Y-%m-%d %H:%M"), ph_name, ph_mime, ph_data))
+    # PRICE HISTORY: dispatch ke waqt item kis price pe gaya — record karo
+    jcd = db.query("SELECT * FROM jobcard WHERE order_id=?", (order_id,), one=True)
+    ord2 = db.query("SELECT * FROM orders WHERE id=?", (order_id,), one=True)
+    if jcd and (jcd["price"] or 0) > 0 and ord2:
+        _record_price(jcd["party_model"], jcd["model"], jcd["price"], jcd["rs_pcb"], order_id,
+                      ord2["order_no"], ord2["party"], ddate)
     flash(f"PCB dispatched: {mode} · {ddate} {dtime}." + (" 📷 Photo bhi save hui." if ph_data else ""), "success")
     return redirect_with_token(url_for("jobcard", order_id=order_id))
 
@@ -3904,6 +3940,24 @@ def reports():
         d["emp_count"] = len(d["rows"])
 
     return render_template("reports.html", active="reports", d=d)
+
+
+def _record_price(model_name, model_code, price, rs_pcb, order_id, order_no, party, ddate=""):
+    """PRICE HISTORY — item/model kis price pe bika/gaya, ye yaad rakho.
+    Same order + same model + same price par duplicate nahi banega."""
+    model_name = (model_name or "").strip()
+    if not model_name or not price:
+        return
+    price = round(float(price), 2)
+    rs = round(float(rs_pcb or 0), 3)
+    dup = db.query("SELECT id FROM price_history WHERE model_name=? AND order_id=? AND price=? "
+                   "ORDER BY id DESC LIMIT 1", (model_name, order_id or 0, price), one=True)
+    if dup:
+        return
+    db.execute("INSERT INTO price_history (model_name, model_code, price, rs_pcb, order_id, order_no, party, "
+               "ddate, created_on) VALUES (?,?,?,?,?,?,?,?,?)",
+               (model_name, model_code or "", price, rs, order_id or 0, order_no or "", party or "",
+                ddate or "", datetime.datetime.now().strftime("%Y-%m-%d %H:%M")))
 
 
 def _model_name(r):
