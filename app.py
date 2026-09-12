@@ -1198,6 +1198,7 @@ def products():
         except ValueError:
             edit_model = None
     # PRICE HISTORY: har model ka last price (table ke liye) + edit form me poori list
+    _ph_ensure()
     lp_map = {}
     for lp in db.query("SELECT model_name, price, ddate, party, order_no FROM price_history ORDER BY id DESC"):
         if lp["model_name"] not in lp_map:
@@ -3211,6 +3212,7 @@ def jobcard(order_id):
     inv_names = {it["name"] for it in inv_items}
     bmodel = db.query("SELECT * FROM product_models WHERE name=?", (jc["party_model"],), one=True)
     # PRICE HISTORY: is model ka last price + har model ka (dropdown ke liye)
+    _ph_ensure()
     last_price = None
     if jc["party_model"]:
         last_price = db.query("SELECT * FROM price_history WHERE model_name=? ORDER BY id DESC LIMIT 1",
@@ -3980,9 +3982,22 @@ def reports():
     return render_template("reports.html", active="reports", d=d)
 
 
+def _ph_ensure():
+    """PRICE HISTORY table ki guarantee — kahin bhi use karne se pehle (self-heal)."""
+    try:
+        db.execute("CREATE TABLE IF NOT EXISTS price_history ("
+                   "id INTEGER PRIMARY KEY AUTOINCREMENT, model_name TEXT DEFAULT '', "
+                   "model_code TEXT DEFAULT '', price REAL DEFAULT 0, rs_pcb REAL DEFAULT 0, "
+                   "order_id INTEGER, order_no TEXT DEFAULT '', party TEXT DEFAULT '', "
+                   "ddate TEXT DEFAULT '', created_on TEXT DEFAULT '')")
+    except Exception:
+        pass
+
+
 def _record_price(model_name, model_code, price, rs_pcb, order_id, order_no, party, ddate=""):
     """PRICE HISTORY — item/model kis price pe bika/gaya, ye yaad rakho.
     Same order + same model + same price par duplicate nahi banega."""
+    _ph_ensure()
     model_name = (model_name or "").strip()
     if not model_name or not price:
         return

@@ -15,7 +15,7 @@ import http.client
 import urllib.parse
 
 # Schema version — bump karo jab SCHEMA/migrate badle, taaki agla deploy tables update kare.
-SCHEMA_VERSION = "2026-09-12.1"
+SCHEMA_VERSION = "2026-09-12.2"
 
 DB_PATH = os.environ.get("DB_PATH") or (
     os.path.join(tempfile.gettempdir(), "circuit.db") if os.environ.get("VERCEL") else "circuit.db"
@@ -967,10 +967,17 @@ def ensure_db():
                 try:
                     c = get_db()
                     r = c.execute("SELECT value FROM meta WHERE key='schema_version'").fetchone()
-                    c.close()
                     if r and r["value"] == SCHEMA_VERSION:
+                        # safety: naye tables jo migrate me aaye hain, wo hamesha ban jayen
+                        c.execute("CREATE TABLE IF NOT EXISTS price_history ("
+                                  "id INTEGER PRIMARY KEY AUTOINCREMENT, model_name TEXT DEFAULT '', "
+                                  "model_code TEXT DEFAULT '', price REAL DEFAULT 0, rs_pcb REAL DEFAULT 0, "
+                                  "order_id INTEGER, order_no TEXT DEFAULT '', party TEXT DEFAULT '', "
+                                  "ddate TEXT DEFAULT '', created_on TEXT DEFAULT '')")
+                        c.close()
                         _inited = True
                         return
+                    c.close()
                 except Exception:
                     pass  # meta nahi hai (naya DB) ya connection issue — full init
             init_db()
