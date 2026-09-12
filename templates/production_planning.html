@@ -64,14 +64,17 @@
       <input type="hidden" name="action" value="assign">
       <table style="min-width:950px">
         <thead>
-          <tr><th>Order #</th><th>Party</th><th>Current Step</th><th>Machine</th><th>Shift</th><th>Operator</th><th>Planned Start</th></tr>
+          <tr><th>Order #</th><th>Party</th><th>Pending Process</th><th>Machine</th><th>Shift</th><th>Operator</th><th>Planned Start</th></tr>
         </thead>
         <tbody>
           {% for o in orders %}
           <tr>
             <td class="mono"><b>{{ o.order_no }}</b></td>
             <td class="small">{{ o.party }}</td>
-            <td><span class="badge b-blue">{{ o.current_process }}</span></td>
+            <td>
+              <span class="badge b-blue">{{ o.pending_proc }}</span>
+              <input type="hidden" name="proc_{{ o.id }}" value="{{ o.pending_proc }}">
+            </td>
             <td>
               <select name="machine_{{ o.id }}" style="padding:6px 8px;border:1px solid var(--border);border-radius:7px;font-size:12px">
                 <option value="Unassigned">Unassigned</option>

@@ -60,7 +60,6 @@
         <th>DATE</th><th>TIME</th><th>NAME</th>
         <th style="width:70px">TOTAL TIME</th>
         <th style="width:70px">QTY</th>
-        <th>NEXT</th>
       </tr>
     </thead>
     <tbody>
@@ -75,7 +74,6 @@
         <td class="e-name">{{ p.end_name }}</td>
         <td class="t-total">{{ p.total }}</td>
         <td class="t-qty">{{ p.qty or '' }}</td>
-        <td class="t-next">{{ p.next_process }}</td>
       </tr>
       {% endfor %}
     </tbody>

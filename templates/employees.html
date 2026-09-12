@@ -2,8 +2,33 @@
 {% block title %}Employees{% endblock %}
 {% block page_title %}Employees{% endblock %}
 {% block content %}
+<style>
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:16px}
+.stat-card{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:2px}
+.stat-card .num{font-size:24px;font-weight:800;letter-spacing:-.5px}
+.stat-card .lbl{font-size:12px;color:var(--muted);font-weight:600}
+.stat-card.c-total .num{color:#1d4ed8}
+.stat-card.c-present .num{color:#15803d}
+.stat-card.c-leave .num{color:#d97706}
+.stat-card.c-payroll .num{color:#7c3aed}
+.stat-card.c-earned .num{color:#0e7490}
+.att-chip{border:1px solid var(--border);background:var(--bg);color:var(--muted);border-radius:7px;padding:2px 7px;font-size:11px;font-weight:700;cursor:pointer;margin-right:2px}
+.att-chip:hover{border-color:#d97706;color:#b45309}
+.att-chip.on{background:#15803d;border-color:#15803d;color:#fff}
+.att-chip.on-a{background:#b91c1c;border-color:#b91c1c;color:#fff}
+.att-chip.on-l{background:#d97706;border-color:#d97706;color:#fff}
+.att-chip.on-h{background:#0e7490;border-color:#0e7490;color:#fff}
+.att-chip.on-t{background:#f59e0b;border-color:#f59e0b;color:#fff}
+.att-badge{display:inline-block;border-radius:7px;padding:2px 8px;font-size:11px;font-weight:700}
+@media print{
+  aside.sidebar,.toolbar,.no-print,.att-inline,form{display:none!important}
+  body{background:#fff}
+  .panel{box-shadow:none;border:1px solid #ddd}
+}
+</style>
+
 {% if edit_emp %}
-<div class="panel">
+<div class="panel no-print">
   <div class="panel-head"><h3>✏️ Edit Employee — {{ edit_emp.name }}</h3><a class="btn btn-outline btn-sm" href="/employees">✕ Close</a></div>
   <div class="panel-body">
     <form method="post" action="/employees/{{ edit_emp.id }}/edit">
@@ -12,6 +37,7 @@
         <div class="field"><label>Full Name *</label><input name="name" required value="{{ edit_emp.name }}"></div>
         <div class="field"><label>Email</label><input type="email" name="email" value="{{ edit_emp.email }}"></div>
         <div class="field"><label>Phone</label><input name="phone" value="{{ edit_emp.phone }}"></div>
+        <div class="field"><label>Address (city)</label><input name="address" value="{{ edit_emp.address or '' }}" placeholder="e.g. Sahibabad"></div>
         <div class="field"><label>Department</label>
           <select name="department">
             {% for d in ['Production','Quality','Management','Administration','Maintenance'] %}
@@ -20,8 +46,14 @@
             {% if edit_emp.department and edit_emp.department not in ['Production','Quality','Management','Administration','Maintenance'] %}<option selected>{{ edit_emp.department }}</option>{% endif %}
           </select>
         </div>
-        <div class="field"><label>Designation</label><input name="designation" value="{{ edit_emp.designation }}"></div>
+        <div class="field"><label>Designation / Role</label><input name="designation" value="{{ edit_emp.designation }}"></div>
         <div class="field"><label>Joining Date</label><input type="date" name="joining_date" value="{{ edit_emp.joining_date }}"></div>
+        <div class="field"><label>Shift</label>
+          <select name="shift">
+            <option value="Day" {{'selected' if (edit_emp.shift or 'Day')=='Day'}}>Day</option>
+            <option value="Night" {{'selected' if edit_emp.shift=='Night'}}>Night</option>
+          </select>
+        </div>
         <div class="field"><label>Status</label>
           <select name="status">
             <option value="active" {{'selected' if edit_emp.status=='active'}}>Active</option>
@@ -29,13 +61,14 @@
           </select>
         </div>
         <div class="field"><label>Monthly Salary (₹)</label><input type="number" step="0.01" name="salary" value="{{ edit_emp.salary }}" placeholder="e.g. 18000"></div>
+        <div class="field"><label>Leave Balance</label><input type="number" name="leave_balance" value="{{ edit_emp.leave_balance or 12 }}" placeholder="12"></div>
         <div class="full"><button class="btn" type="submit">💾 Save Changes</button></div>
       </div>
     </form>
   </div>
 </div>
 {% elif show_add %}
-<div class="panel">
+<div class="panel no-print">
   <div class="panel-head"><h3>➕ Add Employee</h3><a class="btn btn-outline btn-sm" href="/employees">✕ Close</a></div>
   <div class="panel-body">
     <form method="post">
@@ -44,59 +77,127 @@
         <div class="field"><label>Full Name *</label><input name="name" required placeholder="e.g. Rohit Sharma"></div>
         <div class="field"><label>Email</label><input type="email" name="email" placeholder="name@shivaya.in"></div>
         <div class="field"><label>Phone</label><input name="phone" placeholder="98XXXXXXXX"></div>
+        <div class="field"><label>Address (city)</label><input name="address" placeholder="e.g. Sahibabad"></div>
         <div class="field"><label>Department</label>
           <select name="department"><option>Production</option><option>Quality</option><option>Management</option><option>Administration</option><option>Maintenance</option></select>
         </div>
-        <div class="field"><label>Designation</label><input name="designation" placeholder="e.g. CNC Operator"></div>
+        <div class="field"><label>Designation / Role</label><input name="designation" placeholder="e.g. CNC Operator"></div>
         <div class="field"><label>Joining Date</label><input type="date" name="joining_date"></div>
+        <div class="field"><label>Shift</label>
+          <select name="shift"><option value="Day">Day</option><option value="Night">Night</option></select>
+        </div>
         <div class="field"><label>Monthly Salary (₹)</label><input type="number" step="0.01" name="salary" placeholder="e.g. 18000"></div>
+        <div class="field"><label>Leave Balance</label><input type="number" name="leave_balance" value="12"></div>
         <div class="full"><button class="btn" type="submit">Add Employee</button></div>
       </div>
     </form>
   </div>
 </div>
 {% else %}
-<div class="toolbar" style="justify-content:space-between">
-  <a class="btn btn-outline btn-sm" href="/attendance">📅 Attendance &amp; Salary</a>
+<div class="stat-grid">
+  <div class="stat-card c-total"><div class="num">{{ stats.total }}</div><div class="lbl">👥 Total employees</div></div>
+  <div class="stat-card c-present"><div class="num">{{ stats.present_today }}</div><div class="lbl">✅ Present today</div></div>
+  <div class="stat-card c-leave"><div class="num">{{ stats.leave_today }}</div><div class="lbl">🌴 On leave today</div></div>
+  <div class="stat-card c-payroll"><div class="num">₹{{ stats.payroll|inr0 }}</div><div class="lbl">💰 Monthly payroll</div></div>
+  <div class="stat-card c-earned"><div class="num">₹{{ stats.earned|inr0 }}</div><div class="lbl">📈 Earned this month</div></div>
+</div>
+<div class="toolbar no-print" style="justify-content:space-between;margin-bottom:14px">
+  <div style="display:flex;gap:8px;flex-wrap:wrap">
+    <button class="btn btn-outline btn-sm" onclick="window.print()">🖨 Print</button>
+    <a class="btn btn-outline btn-sm" href="/employees/download">⬇ Download</a>
+    <a class="btn btn-outline btn-sm" href="/attendance">📅 Attendance &amp; Salary</a>
+  </div>
   <a class="btn" href="/employees?add=1">＋ Add Employee</a>
 </div>
 {% endif %}
 
 <div class="panel">
-  <div class="panel-head"><h3>👥 Employees ({{ employees|length }})</h3></div>
+  <div class="panel-head"><h3>👥 Employees ({{ stats.total }})</h3></div>
   <div class="panel-body" style="padding:0;overflow-x:auto">
     <table>
-      <thead><tr><th>Employee</th><th>Code</th><th>Department</th><th>Designation</th><th>Phone</th><th>Today</th><th class="t-right">Salary (₹)</th><th class="t-right">P Days ({{ today_iso[:7] }})</th><th></th></tr></thead>
+      <thead><tr><th>Code</th><th>Name</th><th>Role</th><th>Shift</th><th class="t-right">Salary</th><th class="t-right">Leave Bal.</th><th>Today</th><th class="t-right">Earned (month)</th><th class="no-print"></th></tr></thead>
       <tbody>
         {% for e in employees %}
+        {% if e.status == 'active' or current_user_role == 'admin' %}
         <tr>
-          <td><span class="avatar {{ ['','b','c','d'][loop.index0 % 4] }}">{{ e.name[0] }}</span><b>{{ e.name }}</b>{% if e.status != 'active' %}<span class="badge b-gray">INACTIVE</span>{% endif %}</td>
-          <td class="mono">{{ e.emp_code }}</td>
-          <td>{{ e.department or '—' }}</td>
+          <td class="mono small">{{ e.emp_code }}</td>
+          <td><span class="avatar {{ ['','b','c','d'][loop.index0 % 4] }}">{{ e.name[0] }}</span><a href="/employees/{{ e.id }}"><b>{{ e.name }}</b></a>{% if e.status != 'active' %}<span class="badge b-gray">INACTIVE</span>{% endif %}</td>
           <td class="small">{{ e.designation or '—' }}</td>
-          <td class="mono small">{{ e.phone or '—' }}</td>
-          <td>
-            {% if att.get(e.id)=='present' %}<span class="badge b-done">✓ Present</span>
-            {% elif att.get(e.id)=='halfday' %}<span class="badge b-amber">🕐 Half Day</span>
-            {% elif att.get(e.id)=='leave' %}<span class="badge b-blue">🌴 Leave</span>
-            {% else %}<span class="badge b-pending">❌ Absent</span>{% endif %}
-          </td>
-          <td class="t-right mono"><b>{{ e.salary|inr }}</b></td>
-          <td class="t-right mono">{{ e.present_days }}</td>
-          <td class="t-right" style="white-space:nowrap">
+          <td><span class="badge {{'b-blue' if (e.shift or 'Day')=='Night' else 'b-gray'}}">{{ e.shift or 'Day' }}</span></td>
+          <td class="t-right mono">₹{{ e.salary|inr0 }}</td>
+          <td class="t-right mono">{{ e.leave_balance or 0 }}</td>
+          <td style="white-space:nowrap">
             {% if current_user_role == 'admin' %}
-            <a class="btn btn-outline btn-xs" href="/employees?edit={{ e.id }}" title="Employee edit karo">✏️</a>
+              {% for st, lbl, cls in [('present','P','on'),('absent','A','on-a'),('halfday','HD','on-h'),('leave','L','on-l'),('late','T','on-t')] %}
+              <form method="post" action="/employees/{{ e.id }}/att" class="att-inline" style="display:inline">
+                <button class="att-chip {{cls if att.get(e.id)==st else ''}}" type="submit" title="Aaj {{ st }} mark karo">{{ lbl }}</button>
+              </form>
+              {% endfor %}
+            {% else %}
+              {% if att.get(e.id)=='present' %}<span class="att-badge" style="background:#dcfce7;color:#15803d">✓ P</span>
+              {% elif att.get(e.id)=='halfday' %}<span class="att-badge" style="background:#cffafe;color:#0e7490">🕐 HD</span>
+              {% elif att.get(e.id)=='leave' %}<span class="att-badge" style="background:#fef3c7;color:#b45309">🌴 L</span>
+              {% elif att.get(e.id)=='late' %}<span class="att-badge" style="background:#fef3c7;color:#d97706">⏰ T</span>
+              {% else %}<span class="att-badge" style="background:#fee2e2;color:#b91c1c">✗ A</span>{% endif %}
+            {% endif %}
+          </td>
+          <td class="t-right mono"><b>₹{{ e.earned|inr0 }}</b></td>
+          <td class="t-right no-print" style="white-space:nowrap">
+            <a class="btn btn-outline btn-xs" href="/employees/{{ e.id }}" title="Employee profile + attendance">📅</a>
+            <a class="btn btn-outline btn-xs" href="/employees/{{ e.id }}/report" title="Monthly report / chart">📊</a>
+            {% if current_user_role == 'admin' %}
+            <a class="btn btn-outline btn-xs" href="/employees?edit={{ e.id }}" title="Employee edit karo">✎</a>
             <form method="post" action="/employees/{{ e.id }}/delete" style="display:inline" onsubmit="return confirm('Remove {{ e.name }}?')">
               <button class="btn btn-danger btn-xs" type="submit" title="Delete">🗑</button>
             </form>
             {% endif %}
           </td>
         </tr>
+        {% endif %}
         {% else %}
-        <tr><td colspan="9"><div class="empty">No employees yet</div></td></tr>
+        <tr><td colspan="9"><div class="empty">No employees yet — "＋ Add Employee" dabao</div></td></tr>
         {% endfor %}
       </tbody>
     </table>
+    <p class="muted small" style="padding:8px 14px">💡 Today column me <b>P</b> = Present, <b>A</b> = Absent, <b>HD</b> = Half Day, <b>L</b> = Leave, <b>T</b> = Late — chhoti chips par click karke aaj ki attendance turant mark karo. Earned (month) = salary − absent/half day ki deduction (attendance se khud calculate). Naam par click karke <b>Profile</b> aur 📊 se <b>Monthly Report/Chart</b> dekho.</p>
   </div>
 </div>
+
+{% if current_user_role == 'admin' %}
+<div class="panel no-print">
+  <div class="panel-head">
+    <h3>🔑 EMPLOYEE LOGIN ACCESS</h3>
+    <form method="post" action="/employees/provision" style="display:inline">
+      <button class="btn btn-sm" type="submit">🔐 Sab employees ke logins banao</button>
+    </form>
+  </div>
+  <div class="panel-body" style="padding:0;overflow-x:auto">
+    <table>
+      <thead><tr><th>Employee</th><th>Username</th><th>Password</th><th>Role</th><th>Kaam (designation se)</th><th></th></tr></thead>
+      <tbody>
+        {% for e in employees %}
+        <tr>
+          <td><b>{{ e.name }}</b></td>
+          {% if e.login %}
+          <td class="mono"><b>{{ e.login.username }}</b></td>
+          <td class="mono">{{ e.login.password }}</td>
+          <td><span class="badge {{'b-blue' if e.login.role=='admin' else 'b-amber'}}">{{ e.login.role|upper }}</span></td>
+          {% else %}
+          <td class="muted small" colspan="3">Login nahi bana — "Sab ke logins banao" dabao</td>
+          {% endif %}
+          <td class="small muted">{{ e.designation or '—' }}</td>
+          <td class="t-right">
+            <form method="post" action="/employees/{{ e.id }}/reset_password" style="display:flex;gap:6px;align-items:center;justify-content:flex-end">
+              <input type="text" name="new_password" placeholder="naya password" style="width:130px;padding:4px 8px;font-size:11px;border:1px solid var(--border);border-radius:6px">
+              <button class="btn btn-outline btn-xs" type="submit">Reset</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <p class="muted small" style="padding:8px 14px">💡 Naya employee add karte hi uska login khud ban jata hai — username = naam ka pehla word, default password <b>shivaya@123</b>. Employee apne login mein sirf apna kaam dekhta hai (designation ke hisaab se): CNC Operator ko CNC ke saare jobs, Dispatch wale ko dispatch ki details, waghera.</p>
+  </div>
+</div>
+{% endif %}
 {% endblock %}

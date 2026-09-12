@@ -32,8 +32,8 @@
 <div class="panel">
   <div class="panel-body" style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
     <div>
-      <div style="font-size:15px;font-weight:700">👷 Logged in as: <span style="color:#b45309">{{ op }}</span></div>
-      <div class="muted small">{{ designation }}</div>
+      <div style="font-size:15px;font-weight:700">👷 Logged in as: <span style="color:#b45309">{{ op }}</span> <span class="badge {{'b-blue' if admin_show else 'b-amber'}}" style="margin-left:4px">{{ 'ADMIN' if admin_show else designation }}</span></div>
+      <div class="muted small">{% if not admin_show %}Is designation ke saare jobs yahan dikhte hain — aap yahin se kaam start karo.{% else %}Admin — saare jobs dikh rahe hain.{% endif %}</div>
     </div>
     {% if admin_show %}
     <form method="post" action="/operator/switch" style="display:flex;gap:8px;align-items:center;margin-left:auto">
@@ -58,8 +58,8 @@
 {% else %}
 <div class="panel" style="margin-bottom:16px">
   <div class="panel-body" style="padding:10px 16px;display:flex;align-items:center;gap:10px;background:#eef6ff;border-radius:0 0 12px 12px">
-    <b>🔒 Sirf aapka assigned kaam dikh raha hai</b> — admin ne jo job/step aapko diya hai, wahi yahan aayega.
-    <span style="color:#b91c1c">🚨 Lekin EMERGENCY (urgent) orders sabko dikhte hain.</span>
+    <b>🔒 Aapke kaam wale jobs dikh rahe hain</b> — designation (<b>{{ designation }}</b>) se related saare jobs + jo aapko assign hue hain.
+    <span style="color:#b91c1c">🚨 EMERGENCY (urgent) orders sabko dikhte hain.</span>
   </div>
 </div>
 {% endif %}
@@ -85,12 +85,10 @@
     <div class="jstep" style="display:flex;flex-direction:column;gap:6px">
       <div>▶ RUNNING: <b>{{ j.proc }}</b></div>
       <div>
-        {% if j.next_none %}
-        NEXT: <b style="color:#b3401c">⏭ NONE (agla process nahi hoga)</b>
-        {% elif j.next_proc %}
-        NEXT: <b style="color:#0f766e">{{ j.next_proc }}</b>
+        {% if j.next_proc %}
+        NEXT: <b style="color:#0f766e">{{ j.next_proc }}</b>{% if j.next_op %} · 👤 <b>{{ j.next_op }}</b> karega{% endif %}
         {% else %}
-        NEXT: <span class="muted">— Job Card mein NEXT dropdown se select karein —</span>
+        NEXT: <span class="muted">— Sab processes ho gaye —</span>
         {% endif %}
       </div>
     </div>
@@ -100,6 +98,7 @@
     <div class="btnrow">
       {% if j.dispatched %}
       <span class="state-badge st-done" style="background:#d8f4ee;color:#0f766e">🚚 DISPATCHED — {{ j.dispatched.mode }} · {{ j.dispatched.ddate }} {{ j.dispatched.dtime }}</span>
+      {% if j.dispatched.photo_data %}<a class="btn btn-outline btn-xs" target="_blank" href="/dispatch/{{ j.dispatched.id }}/photo{% if request.args.get('token') %}?token={{ request.args.get('token') }}{% endif %}" title="Dispatch photo/screenshot">📷 Photo</a>{% endif %}
       {% elif j.is_dispatch_step %}
       <button class="btn btn-sm" onclick="toggleReason('dispatch-{{ j.id }}')">🚚 Dispatch</button>
       {% elif j.skipped %}
@@ -135,7 +134,7 @@
       </form>
     </div>
     <div id="dispatch-{{ j.id }}" class="reasonbox hide">
-      <form method="post" action="/operator/action" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;width:100%">
+      <form method="post" action="/operator/action" enctype="multipart/form-data" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;width:100%">
         <input type="hidden" name="action" value="dispatch">
         <input type="hidden" name="order_id" value="{{ j.id }}"><input type="hidden" name="process" value="{{ j.proc }}">
         <select name="mode" required style="padding:6px 9px;border:1px solid var(--border);border-radius:7px;font-size:12px">
@@ -148,6 +147,7 @@
           <option value="Other">📋 Other</option>
         </select>
         <input type="text" name="details" placeholder="LR No. / AWB / Driver…" style="flex:1;min-width:150px">
+        <label class="muted small" style="display:flex;align-items:center;gap:5px">📷 <input type="file" name="photo" accept="image/*" style="font-size:11px"></label>
         <button class="btn btn-sm" type="submit">🚚 Dispatch (auto date/time)</button>
       </form>
     </div>
@@ -189,6 +189,31 @@
 
 <!-- ================= ITEM LO — STOCK SE ITEM LENA ================= -->
 <div class="panel" style="margin-top:18px">
+{% if is_dispatch or admin_show %}
+<div class="panel" style="margin-bottom:16px">
+  <div class="panel-head"><h3>📦 DISPATCH DETAILS ({{ dispatch_rows|length }})</h3></div>
+  <div class="panel-body" style="padding:0">
+    {% for d in dispatch_rows %}
+    <div class="logrow" style="flex-wrap:wrap">
+      {% if d.order_id and d.order_no %}<a class="mono" href="/jobcard/{{ d.order_id }}{% if request.args.get('token') %}?token={{ request.args.get('token') }}{% endif %}" title="Job Order kholo"><b>{{ d.order_no }}</b></a>{% else %}<b class="mono">{{ d.order_no }}</b>{% endif %}
+      <span class="muted small">{{ d.party }}</span>
+      <span class="badge b-blue">{{ d.mode }}</span>
+      <span class="small mono">{{ d.ddate }} {{ d.dtime }}</span>
+      <span class="muted small">{{ d.details or '' }}</span>
+      <span class="muted small">by {{ d.dispatched_by }}</span>
+      {% if d.photo_data %}<a class="btn btn-outline btn-xs" target="_blank" href="/dispatch/{{ d.id }}/photo{% if request.args.get('token') %}?token={{ request.args.get('token') }}{% endif %}">📷 Photo</a>{% endif %}
+      <form method="post" action="/dispatch/{{ d.id }}/attach_photo" enctype="multipart/form-data" style="display:inline-flex;gap:4px;align-items:center">
+        <input type="file" name="photo" accept="image/*" required style="width:105px;font-size:10px">
+        <button class="btn btn-outline btn-xs" type="submit" title="{{'Photo badlo' if d.photo_data else 'Photo/screenshot attach karo'}}">{{'📷 Replace' if d.photo_data else '📷 Attach'}}</button>
+      </form>
+    </div>
+    {% else %}
+    <div class="empty">Abhi koi dispatch entry nahi — dispatch wale jobs upar dikhenge, wahan se 📷 photo ke saath dispatch karo.</div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+<div class="panel">
   <div class="panel-head"><h3>📦 ITEM LO — STOCK SE ITEM LENA HAI</h3></div>
   <div class="panel-body">
     <form method="post" action="/operator/issue" style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">

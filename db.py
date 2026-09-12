@@ -15,7 +15,7 @@ import http.client
 import urllib.parse
 
 # Schema version — bump karo jab SCHEMA/migrate badle, taaki agla deploy tables update kare.
-SCHEMA_VERSION = "2026-09-09.3"
+SCHEMA_VERSION = "2026-09-12.1"
 
 DB_PATH = os.environ.get("DB_PATH") or (
     os.path.join(tempfile.gettempdir(), "circuit.db") if os.environ.get("VERCEL") else "circuit.db"
@@ -29,7 +29,8 @@ CREATE TABLE IF NOT EXISTS users (
     username TEXT UNIQUE NOT NULL,
     password TEXT NOT NULL,
     name TEXT NOT NULL,
-    role TEXT DEFAULT 'admin'
+    role TEXT DEFAULT 'admin',
+    employee_id INTEGER DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS employees (
@@ -101,11 +102,13 @@ CREATE TABLE IF NOT EXISTS jobcard_log (
 );
 
 CREATE TABLE IF NOT EXISTS order_assignments (
-    order_id INTEGER UNIQUE NOT NULL,
+    order_id INTEGER NOT NULL,
+    process TEXT DEFAULT '',
     machine TEXT DEFAULT 'Unassigned',
     shift TEXT DEFAULT '',
     operator TEXT DEFAULT 'Unassigned',
-    planned_start TEXT DEFAULT ''
+    planned_start TEXT DEFAULT '',
+    UNIQUE(order_id, process)
 );
 
 CREATE TABLE IF NOT EXISTS machines (
@@ -234,6 +237,7 @@ CREATE TABLE IF NOT EXISTS jobcard (
     rs_pcb REAL DEFAULT 0, payment_status TEXT DEFAULT 'pending',
     sheet_material TEXT DEFAULT '', copper_finish TEXT DEFAULT '', masking TEXT DEFAULT '',
     finish TEXT DEFAULT '', legend_printing TEXT DEFAULT '', pcb_type TEXT DEFAULT '',
+    board_side TEXT DEFAULT '', board_material TEXT DEFAULT '',
     actual_pcb_x REAL DEFAULT 0, actual_pcb_y REAL DEFAULT 0,
     x_size REAL DEFAULT 0, x_qty INTEGER DEFAULT 0, y_size REAL DEFAULT 0, y_qty INTEGER DEFAULT 0,
     cnc_margin_x REAL DEFAULT 0, cnc_margin_y REAL DEFAULT 0,
@@ -755,10 +759,20 @@ def migrate(conn):
         conn.execute("ALTER TABLE jobcard ADD COLUMN mat_code TEXT DEFAULT ''")
     if jcols and "mat_sheets" not in jcols:
         conn.execute("ALTER TABLE jobcard ADD COLUMN mat_sheets REAL DEFAULT 0")
+    if jcols and "board_side" not in jcols:
+        conn.execute("ALTER TABLE jobcard ADD COLUMN board_side TEXT DEFAULT ''")
+    if jcols and "board_material" not in jcols:
+        conn.execute("ALTER TABLE jobcard ADD COLUMN board_material TEXT DEFAULT ''")
     # employees: salary column (attendance se salary banane ke liye)
     ecols = [r[1] for r in conn.execute("PRAGMA table_info(employees)")]
     if ecols and "salary" not in ecols:
         conn.execute("ALTER TABLE employees ADD COLUMN salary REAL DEFAULT 0")
+    if ecols and "shift" not in ecols:
+        conn.execute("ALTER TABLE employees ADD COLUMN shift TEXT DEFAULT 'Day'")
+    if ecols and "leave_balance" not in ecols:
+        conn.execute("ALTER TABLE employees ADD COLUMN leave_balance INTEGER DEFAULT 12")
+    if ecols and "address" not in ecols:
+        conn.execute("ALTER TABLE employees ADD COLUMN address TEXT DEFAULT ''")
     conn.execute("UPDATE employees SET salary=60000 WHERE emp_code='EMP001' AND salary=0")
     conn.execute("UPDATE employees SET salary=18000 WHERE emp_code='EMP002' AND salary=0")
     conn.execute("UPDATE employees SET salary=17000 WHERE emp_code='EMP003' AND salary=0")
@@ -815,6 +829,39 @@ def migrate(conn):
                 conn.execute("INSERT OR IGNORE INTO parties (name, ptype) VALUES (?,?)", (name, ptype))
             except Exception:
                 pass
+    # orders: qty_panel + pcs_panel (cut list se job order par dikhane ke liye)
+    ocols = [r[1] for r in conn.execute("PRAGMA table_info(orders)")]
+    if ocols and "qty_panel" not in ocols:
+        conn.execute("ALTER TABLE orders ADD COLUMN qty_panel INTEGER DEFAULT 0")
+    if ocols and "pcs_panel" not in ocols:
+        conn.execute("ALTER TABLE orders ADD COLUMN pcs_panel INTEGER DEFAULT 0")
+    # order_assignments: per-PROCESS assignment (order_id + process unique) —
+    # pending process par operator/machine assign hota hai, order-level nahi
+    acols = [r[1] for r in conn.execute("PRAGMA table_info(order_assignments)")]
+    if acols and "process" not in acols:
+        conn.batch([
+            ("CREATE TABLE order_assignments_new ("
+             "order_id INTEGER NOT NULL, process TEXT DEFAULT '', "
+             "machine TEXT DEFAULT 'Unassigned', shift TEXT DEFAULT '', "
+             "operator TEXT DEFAULT 'Unassigned', planned_start TEXT DEFAULT '', "
+             "UNIQUE(order_id, process))", ()),
+            ("INSERT OR IGNORE INTO order_assignments_new "
+             "(order_id, process, machine, shift, operator, planned_start) "
+             "SELECT order_id, '', machine, shift, operator, planned_start FROM order_assignments", ()),
+            ("DROP TABLE order_assignments", ()),
+            ("ALTER TABLE order_assignments_new RENAME TO order_assignments", ()),
+        ])
+    # users: employee login link (employee_id) + dispatch photo columns
+    ucols = [r[1] for r in conn.execute("PRAGMA table_info(users)")]
+    if ucols and "employee_id" not in ucols:
+        conn.execute("ALTER TABLE users ADD COLUMN employee_id INTEGER DEFAULT 0")
+    dcols = [r[1] for r in conn.execute("PRAGMA table_info(dispatch_log)")]
+    if dcols and "photo_name" not in dcols:
+        conn.execute("ALTER TABLE dispatch_log ADD COLUMN photo_name TEXT DEFAULT ''")
+    if dcols and "photo_mime" not in dcols:
+        conn.execute("ALTER TABLE dispatch_log ADD COLUMN photo_mime TEXT DEFAULT ''")
+    if dcols and "photo_data" not in dcols:
+        conn.execute("ALTER TABLE dispatch_log ADD COLUMN photo_data BLOB")
     conn.commit()
 
 
@@ -830,10 +877,54 @@ def init_db():
     seed_bom(conn)
     conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('schema_version', ?)",
                  (SCHEMA_VERSION,))
+    ensure_employee_logins(conn)
     conn.commit()
     conn.close()
     global _inited
     _inited = True
+
+
+def ensure_employee_logins(conn):
+    """Har ACTIVE employee ka login account banao (missing ho to).
+    username = naam ka pehla word (lowercase, non-alnum stripped), collision -> n suffix.
+    password = shivaya@123. role: Management/Administration -> admin, baaki -> operator."""
+    import re as _re
+    rows = [r for r in conn.execute("SELECT * FROM employees WHERE status='active'")]
+    users = [r for r in conn.execute("SELECT * FROM users")]
+    by_emp = {r["employee_id"]: r for r in users if r["employee_id"]}
+    by_name = {r["name"].strip().lower(): r for r in users}
+    taken = {r["username"] for r in users}
+    for e in rows:
+        if e["id"] in by_emp:
+            continue
+        key = e["name"].strip().lower()
+        existing = by_name.get(key)
+        if existing is not None and not existing["employee_id"]:
+            conn.execute("UPDATE users SET employee_id=? WHERE id=?",
+                         (e["id"], existing["id"]))
+            continue
+        first = _re.sub(r"[^a-z0-9]", "", (e["name"] or "").strip().split()[0].lower()) if e["name"].strip() else ""
+        if not first:
+            first = (e["emp_code"] or "emp").strip().lower()
+        base = first
+        n = 1
+        while base in taken:
+            n += 1
+            base = f"{first}{n}"
+        taken.add(base)
+        dept = (e["department"] or "").strip().lower()
+        role = "admin" if dept in ("management", "administration") else "operator"
+        conn.execute(
+            "INSERT INTO users (username, password, name, role, employee_id) VALUES (?,?,?,?,?)",
+            (base, "shivaya@123", e["name"], role, e["id"]))
+
+
+def provision_employee_logins():
+    """Live DB par missing employee logins banao (app route se call hota hai)."""
+    conn = get_db()
+    ensure_employee_logins(conn)
+    conn.commit()
+    conn.close()
 
 
 _inited = False
@@ -953,13 +1044,54 @@ JC_PROCESSES_MCPCB = ["Laminate Cutting", "Circuit Printing", "Etching", "CENTER
                       "Legend Printing (Optional)", JC_TOOL_SLOT, "V-Cut", "Lacquer", "FQC",
                       "Packing", "Dispatch"]
 
+# ===== PCB LINE FLOW PRESETS (aapke process chart ke hisaab se) =====
+# SIDE × MATERIAL chunne par ye lists job card ki process table mein set hoti hain.
 
-def process_list_for(material=""):
-    """MCPCB/metal boards -> 12-step list; otherwise FR4 16-step list."""
+# SINGLE SIDE × META (Metal Core PCB) — 12 steps
+JC_PROCESSES_SINGLE_META = ["Laminate Cutting", "CKT Printing", "Etching", "CENTER (CCD)",
+                            "Solder Mask", "Top Printing (Optional)/NONE", JC_TOOL_SLOT,
+                            "Tinning/HAL/NONE", "V-Cut", "Lacquer", "Packing", "Dispatch"]
+
+# SINGLE SIDE × FR4/CEM-1/FR1/XPC/OTHER — 13 steps
+JC_PROCESSES_SINGLE_FR4 = ["Laminate Cutting", "CNC Drilling", "Circuit Printing", "Etching",
+                           "Solder Mask", "Top Printing", "Back Printing", JC_TOOL_SLOT,
+                           "Tinning/HAL", "V-Cut", "Lacquer", "Packing", "Dispatch"]
+
+# DOUBLE SIDE × FR4 (1MM/1.5MM) — 29 steps
+JC_PROCESSES_DOUBLE = ["Laminate Cutting", "CNC Drilling", "PTH", "Circuit Printing", "Plating",
+                       "Etching", "Lamination", "CENTER (CCD)", "Top Printing", "Back Printing",
+                       "PTH QC", "DIE/CNC Drilling", JC_TOOL_SLOT, "Tinning/HAL", "V-Cut",
+                       "Pre-Mask", "Solder Mask", "Pre Oven", "Photo Printing", "Post Oven", "HAL",
+                       "Legend Printing", "CNC Routing", "V-Cut", "OSP", "BBT", "FQC", "Packing",
+                       "Dispatch"]
+
+PRESET_LABELS = {
+    "single_meta": "SINGLE SIDE · META (Metal Core) · 12 processes",
+    "single_fr4": "SINGLE SIDE · FR4/CEM-1/FR1/XPC · 13 processes",
+    "double": "DOUBLE SIDE · FR4 1MM/1.5MM · 29 processes",
+}
+
+
+def process_preset_for(side="", material=""):
+    """SIDE (single/double) + MATERIAL (meta/fr4) se sahi process flow list + label.
+    Fallback: purana material-only behavior."""
+    s = (side or "").upper()
     m = (material or "").upper()
-    if any(k in m for k in ("MCPCB", "METAL", "ALUMINUM", "ALUMINIUM")):
+    is_meta = any(k in m for k in ("META", "METAL", "MCPCB", "ALUMIN"))
+    if "SINGLE" in s:
+        if is_meta:
+            return JC_PROCESSES_SINGLE_META, PRESET_LABELS["single_meta"]
+        return JC_PROCESSES_SINGLE_FR4, PRESET_LABELS["single_fr4"]
+    if "DOUBL" in s:
+        return JC_PROCESSES_DOUBLE, PRESET_LABELS["double"]
+    if is_meta:
         return JC_PROCESSES_MCPCB, "MCPCB (Metal) · 12 processes"
     return JC_PROCESSES, "FR4 · 16 processes"
+
+
+def process_list_for(material=""):
+    """MCPCB/metal boards -> 12-step list; otherwise FR4 16-step list. (back-compat)"""
+    return process_preset_for("", material)
 
 
 def seed_jobcards(conn):
@@ -1051,13 +1183,14 @@ def bom_rows_for(model_id):
 
 
 def all_process_options():
-    """NEXT dropdown ke liye saare processes (dono lists + tool options) — unique, order ke saath.
+    """NEXT dropdown ke liye saare processes (saari lists + tool options) — unique, order ke saath.
 
     NOTE: 'Dispatch' ko jaan-boojh kar HATA diya gaya hai — dispatch koi process
     line nahi hai. Wo ALAG rakha gaya hai: Packing finish hone ke baad operator ko
     🚚 Dispatch button dikhta hai, aur Job Card mein alag DISPATCH panel hai."""
     seen, out = [], []
-    for lst in (JC_PROCESSES, JC_PROCESSES_MCPCB):
+    for lst in (JC_PROCESSES, JC_PROCESSES_MCPCB, JC_PROCESSES_SINGLE_META,
+                JC_PROCESSES_SINGLE_FR4, JC_PROCESSES_DOUBLE):
         for p in lst:
             if p == JC_TOOL_SLOT:
                 continue
@@ -1093,7 +1226,9 @@ def get_jc_processes(order_id):
         rows = conn.execute("SELECT * FROM jobcard_process WHERE order_id=?", (order_id,)).fetchall()
     rows = sorted(rows, key=lambda r: ((r["ord"] or 0), r["id"]))
     # tool-slot matching: TOOL/CNC DRILLING/CNC DRILLING+ROUTING -> dropdown row
-    std_specs = [tuple(JC_TOOL_OPTIONS) if p == JC_TOOL_SLOT else (p,) for p in JC_PROCESSES]
+    # (slot spec PEHLE check hota hai taaki "TOOL" wali row dropdown bane)
+    std_specs = [tuple(JC_TOOL_OPTIONS) if p == JC_TOOL_SLOT else (p,)
+                 for p in ([JC_TOOL_SLOT] + JC_PROCESSES)]
     consumed = [False] * len(std_specs)
     out = []
     for idx, r in enumerate(rows):
@@ -1177,6 +1312,8 @@ def seed_if_empty(conn):
         ("EMP004", "Amit Patel", "amit@shivaya.in", "9810012304", "Quality", "QC Inspector", "2022-09-05", "active", 16000),
         ("EMP005", "Vikas Singh", "vikas@shivaya.in", "9810012305", "Administration", "Admin Executive", "2023-03-20", "active", 15000),
         ("EMP006", "Sonu", "sonu@shivaya.in", "9810012306", "Production", "Sheet cutter Man", "2023-06-01", "active", 12000),
+        ("EMP007", "Ravi Kumar", "ravi@shivaya.in", "9810012307", "Production", "CNC Operator", "2024-02-01", "active", 18000),
+        ("EMP008", "Shivam", "shivam@shivaya.in", "9810012308", "Production", "Dispatch Executive", "2024-03-01", "active", 15000),
     ]
     conn.executemany(
         "INSERT OR IGNORE INTO employees (emp_code, name, email, phone, department, designation, joining_date, status, salary) "

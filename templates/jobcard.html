@@ -81,13 +81,6 @@
         </select>
       </div>
       <div class="field"><label>DATE</label><input type="date" name="odate" id="jc_odate" value="{{ jc.odate }}"></div>
-      <div class="field"><label>BOARD TYPE</label>
-        <select name="board_type" id="jc_board_type">
-          <option {{'selected' if jc.board_type=='Single Side'}}>Single Side</option>
-          <option {{'selected' if jc.board_type=='Double Side'}}>Double Side</option>
-          <option {{'selected' if jc.board_type=='Multilayer'}}>Multilayer</option>
-        </select>
-      </div>
       <div class="field"><label>PRIORITY</label>
         <select name="priority" id="jc_priority">
           <option value="normal" {{'selected' if order.priority=='normal'}}>Normal</option>
@@ -121,6 +114,34 @@
       <div class="field"><label>FINISH</label><input name="finish" id="jc_finish" value="{{ jc.finish }}"></div>
       <div class="field"><label>LEGEND PRINTING</label><input name="legend_printing" id="jc_legend_printing" value="{{ jc.legend_printing }}"></div>
       <div class="field"><label>TYPE</label><input name="pcb_type" id="jc_pcb_type" value="{{ jc.pcb_type }}"></div>
+      <div class="field"><label>PCB SIDE (Process Flow)</label>
+        <select name="board_side" id="jc_board_side">
+          <option value="">— Select Side —</option>
+          <option value="SINGLE SIDE" {{'selected' if 'SINGLE' in ((jc.board_side or '')|upper)}}>SINGLE SIDE</option>
+          <option value="DOUBLE SIDE" {{'selected' if 'DOUBL' in ((jc.board_side or '')|upper)}}>DOUBLE SIDE</option>
+        </select>
+      </div>
+      <div class="field"><label>BASE MATERIAL</label>
+        <select name="board_material" id="jc_board_material">
+          <option value="">— Select Material —</option>
+          <option value="METAL CORE PCB (META)" {{'selected' if 'MET' in ((jc.board_material or '')|upper)}}>METAL CORE PCB (META)</option>
+          <option value="FR4/CEM-1/FR1/XPC/OTHER" {{'selected' if jc.board_material and 'MET' not in ((jc.board_material or '')|upper)}}>FR4/CEM-1/FR1/XPC/OTHER</option>
+        </select>
+      </div>
+      <div class="field" style="align-self:flex-end">
+        <button type="button" class="btn" id="applyFlowBtn" onclick="applyProcessFlow()">⚙️ Apply Process Flow</button>
+      </div>
+      <div id="flowMsg" class="small" style="grid-column:1/-1;margin-top:-4px;min-height:16px"></div>
+      <div id="flowConfirm" style="display:none;grid-column:1/-1;background:#fffdf3;border:1px solid var(--amber);border-radius:9px;padding:10px 12px;margin-top:2px">
+        <span id="flowConfirmTxt" class="small"></span>
+        <div style="margin-top:8px;display:flex;gap:8px">
+          <button type="button" class="btn btn-sm" id="flowApplyYes" style="background:#16a34a">✅ Apply</button>
+          <button type="button" class="btn btn-outline btn-sm" id="flowApplyNo">✖ Cancel</button>
+        </div>
+      </div>
+      <div class="muted small" style="grid-column:1/-1;margin-top:-4px">
+        💡 <b>SIDE + MATERIAL dono chunte hi</b> usi se related process flow <b>turant</b> neeche <b>PROCESS TABLE</b> mein set ho jayega — <b>Operator View aur Print mein bhi sab jagah</b> wahi processes dikhenge.
+      </div>
     </div>
   </div>
 
@@ -173,8 +194,8 @@
       <div class="field"><label>CHECKED BY</label><input name="checked_by" id="jc_checked_by" value="{{ jc.checked_by }}"></div>
       <div class="field"><label>ORDER RECEIVED VIA</label><input name="order_via" id="jc_order_via" value="{{ jc.order_via }}"></div>
       <div class="field"><label>EXP. DELIVERY</label><input type="date" name="exp_delivery" id="jc_exp_delivery" value="{{ jc.exp_delivery }}"></div>
-      <div class="field"><label>PRICE (₹)/PC</label><input type="number" step="0.01" name="price" id="jc_price" value="{{ jc.price }}" style="font-weight:700;background:#fffdf3"></div>
-      <div class="field"><label>RATE/SQ.INCH</label><input type="number" step="0.001" name="rs_pcb" id="jc_rs_pcb" value="{{ jc.rs_pcb }}" placeholder="e.g. 1"></div>
+      <div class="field"><label>PCB PRICE (₹)</label><input type="number" step="0.01" name="price" id="jc_price" value="{{ jc.price }}" style="font-weight:700;background:#fffdf3"></div>
+      <div class="field"><label>PER SQUARE INCH (₹)</label><input type="number" step="0.001" name="rs_pcb" id="jc_rs_pcb" value="{{ jc.rs_pcb }}" placeholder="e.g. 1"></div>
       <div class="field"><label>PAYMENT STATUS</label>
         <select name="payment_status" id="jc_payment_status">
           <option value="pending" {{'selected' if jc.payment_status=='pending'}}>Pending</option>
@@ -183,7 +204,7 @@
         </select>
       </div>
       <div class="field" style="margin-top:16px"><button class="btn" type="submit">💾 Save Job Card</button></div>
-      <p class="muted small" style="margin-top:8px">💡 RATE/SQ.INCH type karo — PRICE/PC = RATE × PANEL AREA (sq.inch) ÷ PCS/PANEL se auto-calculate hota hai (size single panel ka leta hai). <b id="jc_total_price" style="color:#b45309"></b></p>
+      <p class="muted small" style="margin-top:8px">💡 <b>PER SQUARE INCH</b> bharein → <b>PCB PRICE</b> auto aayega; ya <b>PCB PRICE</b> bharein → <b>PER SQ.INCH</b> auto aayega (dono taraf calculate). Area = CUTTING PANEL (X×Y) ÷ PCS/PANEL — ye khali ho to PCB ACTUAL SIZE (X×Y) se area leta hai. <b id="jc_total_price" style="color:#b45309"></b></p>
       <p class="muted small">💡 Save karne par order list (kanban) bhi update hota hai.</p>
     </div>
   </div>
@@ -199,18 +220,19 @@
     <h3>🛠️ PROCESS TABLE</h3>
     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
       <span class="badge b-amber">{{ procs|length }} PROCESSES · {{ proc_label }}</span>
+      <button class="btn btn-sm btn-outline" type="button" onclick="applyProcessFlow()">⚙️ Process Flow</button>
       <button class="btn btn-sm" type="submit">💾 Save Process Table</button>
     </div>
   </div>
   <div class="panel-body" style="padding:0;overflow-x:auto">
-    <table style="min-width:1050px">
+    <table style="min-width:880px">
       <thead>
         <tr>
           <th style="width:130px">PROCESS</th>
           <th>START DATE</th><th>START TIME</th><th>START NAME</th>
           <th>FINISH DATE</th><th>FINISH TIME</th><th>FINISH NAME</th>
           <th style="width:90px">TOTAL TIME</th>
-          <th style="width:90px">QTY</th><th>NEXT</th>
+          <th style="width:90px">QTY</th>
         </tr>
       </thead>
       <tbody>
@@ -243,6 +265,19 @@
             {% else %}
             <b class="small">{{ p.process }}</b>{% if p.fixed %}<span class="badge b-gray" style="margin-left:5px">🔒 FIXED</span>{% endif %}
             {% endif %}
+            {% if p.status == 'pending' %}
+            <div style="margin-top:5px;display:flex;gap:4px;flex-wrap:wrap;align-items:center">
+              <select name="asg_machine_{{ p.id }}" style="padding:3px 5px;border:1px solid var(--border);border-radius:6px;font-size:11px;background:#fff">
+                <option value="">🖥 Machine?</option>
+                {% for m in machines %}<option value="{{ m.name }}" {{'selected' if p.asg_machine == m.name}}>{{ m.code }} · {{ m.name }}</option>{% endfor %}
+              </select>
+              <select name="asg_op_{{ p.id }}" style="padding:3px 5px;border:1px solid var(--border);border-radius:6px;font-size:11px;background:#fff">
+                <option value="">👤 Kaun karega?</option>
+                {% for e2 in all_employees %}<option value="{{ e2.name }}" {{'selected' if p.asg_op == e2.name}}>{{ e2.name }}</option>{% endfor %}
+              </select>
+              {% if p.asg_op %}<span class="badge b-blue" style="font-size:10px">👤 {{ p.asg_op }} karega</span>{% endif %}
+            </div>
+            {% endif %}
           </td>
           <td><input type="date" name="start_date_{{ p.id }}" class="sdate" value="{{ p.start_date }}" style="width:130px;padding:5px 7px;border:1px solid var(--border);border-radius:7px;font-size:12px"></td>
           <td><input type="time" name="start_time_{{ p.id }}" class="stime" value="{{ p.start_time }}" style="width:100px;padding:5px 7px;border:1px solid var(--border);border-radius:7px;font-size:12px"></td>
@@ -252,15 +287,6 @@
           <td><input type="text" name="end_name_{{ p.id }}" class="ename" value="{{ p.end_name }}" placeholder="Name" style="width:130px;padding:5px 7px;border:1px solid var(--border);border-radius:7px;font-size:12px"></td>
           <td class="ttotal small" style="font-weight:700">{{ p.total }}</td>
           <td><input type="number" name="qty_{{ p.id }}" class="pqty" value="{{ p.qty or '' }}" style="width:80px;padding:5px 7px;border:1px solid var(--border);border-radius:7px;font-size:12px"></td>
-          <td>
-            <select name="next_{{ p.id }}" class="pnext" style="width:170px;padding:5px 7px;border:1px solid var(--border);border-radius:7px;font-size:12px;background:#fff">
-              <option value="">— select next —</option>
-              <option value="NONE" {{'selected' if p.next_process == 'NONE'}} style="color:#b3401c;font-weight:700">⏭ NONE (ye process nahi hoga)</option>
-              {% for opt in p.next_options %}
-              <option value="{{ opt }}" {{'selected' if p.next_process == opt}}>{{ opt }}</option>
-              {% endfor %}
-            </select>
-          </td>
         </tr>
         {% endfor %}
       </tbody>
@@ -271,9 +297,7 @@
 
 <script>
 /* PROCESS TABLE: pehla process hamesha Laminate Cutting (FIXED) hota hai.
-   Kisi bhi row ke NEXT dropdown se process select karo -> usi row ke NICHE
-   nayi line add ho jati hai. Ye kram tab tak chalta hai jab tak job finish
-   nahi hota (NONE = ruk jao). */
+   Process flow SIDE + MATERIAL presets se set hota hai. */
 (function(){
   var addCounter = 0;
   function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
@@ -302,52 +326,12 @@
       + '<td>' + inp('add_end_time_' + pid + '_' + k, 'time', 'width:100px') + '</td>'
       + '<td>' + inp('add_end_name_' + pid + '_' + k, 'text', 'width:130px', 'Name') + '</td>'
       + '<td class="small" style="font-weight:700">—</td>'
-      + '<td>' + inp('add_qty_' + pid + '_' + k, 'number', 'width:80px') + '</td>'
-      + '<td></td>';
-    // NEXT dropdown clone karo (same options)
-    var srcSel = parentRow.querySelector('.pnext');
-    var nextSel = document.createElement('select');
-    nextSel.className = 'pnext';
-    nextSel.name = 'add_next_' + pid + '_' + k;
-    nextSel.style.cssText = 'width:170px;padding:5px 7px;border:1px solid var(--border);border-radius:7px;font-size:12px;background:#fff';
-    if (srcSel) {
-      Array.prototype.forEach.call(srcSel.options, function(o){ nextSel.appendChild(o.cloneNode(true)); });
-    }
-    nextSel.value = '';
-    tr.cells[tr.cells.length - 1].appendChild(nextSel);
+      + '<td>' + inp('add_qty_' + pid + '_' + k, 'number', 'width:80px') + '</td>';
     parentRow.parentNode.insertBefore(tr, parentRow.nextSibling);
     if (tr.scrollIntoView) tr.scrollIntoView({behavior: 'smooth', block: 'nearest'});
     var firstTxt = tr.querySelector('input[type="text"]');
     if (firstTxt) firstTxt.focus();
   }
-  document.addEventListener('change', function(e){
-    var sel = e.target;
-    if (!sel.classList || !sel.classList.contains('pnext')) return;
-    var val = sel.value;
-    if (!val || val === 'NONE') return;
-    var row = sel.closest('tr');
-    if (!row) return;
-    var nextRow = row.nextElementSibling;
-    if (nextRow && nextRow.getAttribute('data-proc') === val) return; // chain pehle se sahi
-    addRowAfter(row, val);
-  });
-  // nayi line ya extra row ka process text badla -> upar wali line ka NEXT bhi wahi ho jaye
-  document.addEventListener('input', function(e){
-    var inp = e.target;
-    if (!inp.name || !(/^(add_process_\d+_\d+|process_\d+)$/.test(inp.name))) return;
-    var row = inp.closest('tr');
-    var prev = row ? row.previousElementSibling : null;
-    if (prev) {
-      var sel = prev.querySelector('.pnext');
-      if (sel) {
-        var v = inp.value;
-        var found = false;
-        Array.prototype.forEach.call(sel.options, function(o){ if (o.value === v) found = true; });
-        if (!found && v) { var o = document.createElement('option'); o.value = v; o.textContent = v; sel.appendChild(o); }
-        if (v) sel.value = v;
-      }
-    }
-  });
 })();
 function delProcRow(ev, oid, pid, name){
   ev.preventDefault();
@@ -387,7 +371,7 @@ function delProcRow(ev, oid, pid, name){
     {% if dispatch %}<span class="badge b-done">✓ DISPATCHED</span>{% else %}<span class="badge b-amber">PENDING DISPATCH</span>{% endif %}
   </div>
   <div class="panel-body">
-    <form method="post" action="/jobcard/{{ order.id }}/dispatch">
+    <form method="post" action="/jobcard/{{ order.id }}/dispatch" enctype="multipart/form-data">
       <div class="form-grid">
         <div class="field"><label>DISPATCH DATE</label><input type="date" name="ddate" id="disp_date"></div>
         <div class="field"><label>DISPATCH TIME</label><input type="time" name="dtime" id="disp_time"></div>
@@ -404,6 +388,7 @@ function delProcRow(ev, oid, pid, name){
         </div>
         <div class="field"><label>DISPATCHED BY</label><input name="dispatched_by" value="{{ current_user_name }}"></div>
         <div class="field full"><label>DETAILS (LR No. / AWB / Driver / Tracking)</label><input name="details" placeholder="e.g. LR No. TS-2214 · Driver: Mahesh"></div>
+        <div class="field full"><label>📷 DISPATCH PHOTO / SCREENSHOT</label><input type="file" name="photo" accept="image/*" style="padding:7px"></div>
         <div class="full" style="display:flex;gap:10px;justify-content:flex-end">
           <button class="btn" type="submit">🚚 Save Dispatch Entry</button>
         </div>
@@ -419,6 +404,11 @@ function delProcRow(ev, oid, pid, name){
           <span class="mono"><b>{{ d.ddate }} {{ d.dtime }}</b></span>
           <span class="small">by {{ d.dispatched_by }}</span>
           {% if d.details %}<span class="muted small">{{ d.details }}</span>{% endif %}
+          {% if d.photo_data %}<a class="btn btn-outline btn-xs" target="_blank" href="/dispatch/{{ d.id }}/photo{% if request.args.get('token') %}?token={{ request.args.get('token') }}{% endif %}">📷 Photo</a>{% endif %}
+          <form method="post" action="/dispatch/{{ d.id }}/attach_photo" enctype="multipart/form-data" style="display:inline-flex;gap:4px;align-items:center">
+            <input type="file" name="photo" accept="image/*" required style="width:105px;font-size:10px">
+            <button class="btn btn-outline btn-xs" type="submit" title="{{'Photo badlo' if d.photo_data else 'Photo/screenshot attach karo'}}">{{'📷 Replace' if d.photo_data else '📷 Attach'}}</button>
+          </form>
         </div>
         {% else %}
         <div class="muted small">Abhi koi dispatch entry nahi — PCB bhejne par yahan date/time/mode save hoga</div>
@@ -714,11 +704,86 @@ function syncPreview(){
     var cells = document.querySelectorAll('.proc-' + pid + ' .s-date, .proc-' + pid + ' .s-time, .proc-' + pid + ' .s-name, .proc-' + pid + ' .e-date, .proc-' + pid + ' .e-time, .proc-' + pid + ' .e-name, .proc-' + pid + ' .t-total, .proc-' + pid + ' .t-qty');
     var vals = [sd, st, sname, ed, et, ename, (t==='—'?'':t), qty];
     cells.forEach(function(c, i){ c.textContent = vals[i]; });
-    var pnext = row.querySelector('.pnext');
-    var ncell = document.querySelector('.proc-' + pid + ' .t-next');
-    if (pnext && ncell) ncell.textContent = pnext.value;
   });
 }
+
+/* ---- SIDE + MATERIAL -> process flow preset (sab jagah same processes) ----
+   NOTE: confirm()/alert() preview iframe mein block hote hain, isliye inline
+   confirmation use karta hai — har jagah kaam karta hai.
+   SIDE + MATERIAL dono chunte hi flow INSTANT apply ho jata hai (koi confirm nahi).
+   Sirf tab inline confirm aata hai jab table par pehle se kaam shuru hai. */
+var PROCS_STARTED = {{ 'true' if procs_started else 'false' }};
+var FLOW_FORCE = false;
+function flowMsg(html, isErr){
+  var m = document.getElementById('flowMsg');
+  m.innerHTML = html || '';
+  m.style.color = isErr ? '#b91c1c' : 'inherit';
+}
+function doApplyFlow(side, mat){
+  var body = new URLSearchParams();
+  body.append('side', side);
+  body.append('material', mat);
+  if (FLOW_FORCE) body.append('force', '1');
+  /* preview/proxy iframe mein session cookie nahi jaati — URL wala token body mein bhejo */
+  var t = new URLSearchParams(window.location.search).get('token');
+  if (t) body.append('token', t);
+  document.getElementById('flowConfirm').style.display = 'none';
+  flowMsg('⏳ Process flow set ho raha hai...');
+  fetch('/jobcard/{{ order.id }}/preset', { method: 'POST', body: body })
+    .then(function(r){
+      if (r.redirected && r.url && r.url.indexOf('/login') !== -1) {
+        window.location.href = r.url;   /* session nahi — login par bhejo */
+        throw new Error('login');
+      }
+      var ct = (r.headers && r.headers.get) ? (r.headers.get('content-type') || '') : '';
+      if (ct.indexOf('application/json') === -1) throw new Error('bad-response');
+      return r.json();
+    })
+    .then(function(j){
+      if (j && j.ok) { window.location.reload(); }   /* sirf EK reload — fast */
+      else { flowMsg('⚠️ <b>' + (j && j.msg ? j.msg : 'Apply fail') + '</b>', true); }
+    })
+    .catch(function(e){
+      if (e && e.message === 'login') return;
+      flowMsg('⚠️ <b>Apply fail — phir se try karo.</b>', true);
+    });
+}
+function applyProcessFlow(){
+  var side = document.getElementById('jc_board_side').value;
+  var mat = document.getElementById('jc_board_material').value;
+  if (!side) {
+    flowMsg('⚠️ <b>Pehle SIDE chuno: SINGLE SIDE ya DOUBLE SIDE.</b>', true);
+    return;
+  }
+  FLOW_FORCE = PROCS_STARTED;
+  if (!PROCS_STARTED) {
+    doApplyFlow(side, mat);   /* instant apply — koi confirm nahi */
+    return;
+  }
+  document.getElementById('flowConfirmTxt').innerHTML =
+    '⚙️ <b>' + side + (mat ? ' + ' + mat : '') + '</b> ka process flow PROCESS TABLE mein set karna hai?' +
+    '<br>⚠️ Table par pehle se kaam shuru hai (dates/qty bhare hain) — purani entries hat jayengi!';
+  document.getElementById('flowConfirm').style.display = 'block';
+  flowMsg('');
+}
+document.getElementById('flowApplyYes').addEventListener('click', function(){
+  var side = document.getElementById('jc_board_side').value;
+  var mat = document.getElementById('jc_board_material').value;
+  doApplyFlow(side, mat);
+});
+document.getElementById('flowApplyNo').addEventListener('click', function(){
+  document.getElementById('flowConfirm').style.display = 'none';
+});
+/* side + material dono chune hi flow INSTANT apply hota hai */
+['jc_board_side','jc_board_material'].forEach(function(id){
+  var el = document.getElementById(id);
+  if (el) el.addEventListener('change', function(){
+    var side = document.getElementById('jc_board_side').value;
+    var mat = document.getElementById('jc_board_material').value;
+    if (side && mat) applyProcessFlow();
+    else if (side && !mat) flowMsg('👉 Ab <b>BASE MATERIAL</b> bhi chuno — phir flow khud apply hoga.');
+  });
+});
 
 /* ---- party model dropdown: finished product autofill ---- */
 document.getElementById('jc_party_model').addEventListener('change', function(){
@@ -765,25 +830,51 @@ document.getElementById('jc_party_model').addEventListener('change', function(){
   if (document.getElementById('printArea').style.display === 'block') syncPreview();
 });
 
-/* ---- price auto-calc: PRICE (₹)/PC = RATE/SQ.INCH × PANEL AREA (sq.in) ÷ PCS/PANEL ---- */
-function calcPcbPrice(){
+/* ---- PCB PRICE two-way calc: PER SQ.INCH <-> PCB PRICE ----
+   Area (sq.inch per PCB) = CUTTING PANEL (X×Y mm) ÷ PCS/PANEL;
+   agar panel/pcs khali hain to PCB ACTUAL SIZE (X×Y mm) se area.
+   PER SQUARE INCH bharein  -> PCB PRICE = RATE × AREA
+   PCB PRICE bharein        -> PER SQ.INCH = PRICE ÷ AREA            */
+var _lastPriceEdit = 'rate';
+function _pcbAreaSqIn(){
   var px = parseFloat(val('jc_panel_x')) || 0;
   var py = parseFloat(val('jc_panel_y')) || 0;
   var pcs = parseInt(val('jc_pcs_panel')) || 0;
+  if (px > 0 && py > 0 && pcs > 0) return ((px / 25.4) * (py / 25.4)) / pcs;
+  var ax = parseFloat(val('jc_actual_pcb_x')) || 0;
+  var ay = parseFloat(val('jc_actual_pcb_y')) || 0;
+  if (ax > 0 && ay > 0) return (ax / 25.4) * (ay / 25.4);
+  return 0;
+}
+function calcPcbPrice(){
+  var sqIn = _pcbAreaSqIn();
   var rate = parseFloat(val('jc_rs_pcb')) || 0;
-  var sqIn = (px / 25.4) * (py / 25.4);
-  var perPc = (pcs > 0 && sqIn > 0) ? (rate * sqIn / pcs) : 0;
-  perPc = Math.round(perPc * 100) / 100;
+  var price = parseFloat(val('jc_price')) || 0;
+  var re = document.getElementById('jc_rs_pcb');
   var pe = document.getElementById('jc_price');
-  if (pe) pe.value = perPc;
+  if (re && pe && sqIn > 0) {
+    if (_lastPriceEdit === 'price') {
+      re.value = price > 0 ? String(Math.round((price / sqIn) * 1000) / 1000) : '';
+      price = parseFloat(pe.value) || 0;
+    } else {
+      pe.value = String(Math.round(rate * sqIn * 100) / 100);
+      price = parseFloat(pe.value) || 0;
+    }
+  }
   var qty = parseInt(val('jc_qty_pcs')) || 0;
-  var tot = perPc * qty;
+  var tot = price * qty;
   var tel = document.getElementById('jc_total_price');
   if (tel) tel.textContent = '| TOTAL PCB PRICE: ₹' + tot.toLocaleString('en-IN', {maximumFractionDigits: 2});
   var tsel = document.getElementById('pr_total_price');
   if (tsel) tsel.textContent = '₹' + tot.toLocaleString('en-IN', {maximumFractionDigits: 2});
 }
-['jc_rs_pcb','jc_panel_x','jc_panel_y','jc_pcs_panel','jc_qty_pcs'].forEach(function(id){
+(function(){
+  var re = document.getElementById('jc_rs_pcb');
+  var pe = document.getElementById('jc_price');
+  if (re) re.addEventListener('input', function(){ _lastPriceEdit = 'rate'; calcPcbPrice(); });
+  if (pe) pe.addEventListener('input', function(){ _lastPriceEdit = 'price'; calcPcbPrice(); });
+})();
+['jc_panel_x','jc_panel_y','jc_pcs_panel','jc_actual_pcb_x','jc_actual_pcb_y','jc_qty_pcs'].forEach(function(id){
   var el = document.getElementById(id);
   if (el) el.addEventListener('input', calcPcbPrice);
 });

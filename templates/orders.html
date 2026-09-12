@@ -81,6 +81,9 @@
         </div>
         <div class="kparty">{{ o.party }}</div>
         <div class="kproduct">{{ o.product }}</div>
+        {% if o.qty_panel or o.pcs_panel %}
+        <div class="muted small" style="margin-top:4px">🔲 QTY OF PANEL: <b>{{ o.qty_panel or '—' }}</b> · {{ o.pcs_panel or '—' }} PCS/PANEL</div>
+        {% endif %}
         <div style="display:flex;align-items:center;gap:8px;margin-top:10px">
           <span class="prog" style="flex:1"><span class="fill" style="width:{{ o.progress }}%"></span></span>
           <span class="prog-label">{{ o.progress }}%</span>
@@ -110,7 +113,7 @@
         <td style="width:120px"><b class="mono">{{ o.order_no }}</b> <span class="badge b-done" style="margin-left:6px">DONE</span>
           {% if o.disp %}<div><span class="badge b-blue" style="margin-top:4px">🚚 {{ o.disp.mode }} · {{ o.disp.ddate }} {{ o.disp.dtime }}</span></div>{% endif %}
         </td>
-        <td><b>{{ o.party }}</b><div class="muted small">{{ o.product }}</div></td>
+        <td><b>{{ o.party }}</b><div class="muted small">{{ o.product }}{% if o.qty_panel or o.pcs_panel %} · 🔲 {{ o.qty_panel or '—' }} panels · {{ o.pcs_panel or '—' }} pcs/panel{% endif %}</div></td>
         <td class="t-right">{% if current_user_role == 'admin' %}<a class="btn btn-outline btn-xs" href="/jobcard/{{ o.id }}">📋 Job Card</a>{% endif %}</td>
       </tr>
       {% endfor %}

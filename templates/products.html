@@ -272,6 +272,9 @@ document.getElementById('attUp').addEventListener('click', function(){
   }
   var fd = new FormData();
   fd.append('file', f.files[0]);
+  /* preview/proxy iframe mein session cookie nahi jaati — URL wala token bhejo */
+  var t = new URLSearchParams(window.location.search).get('token');
+  if (t) fd.append('token', t);
   this.disabled = true;
   document.getElementById('attMsg').textContent = '⏳ Upload ho raha hai...';
   fetch('/products/' + attPid + '/attachment', { method: 'POST', body: fd })
@@ -290,7 +293,10 @@ document.getElementById('attUp').addEventListener('click', function(){
 });
 document.getElementById('attDel').addEventListener('click', function(){
   if (!confirm('Attachment delete karni hai?')) return;
-  fetch('/products/' + attPid + '/attachment/delete', { method: 'POST' })
+  var u = '/products/' + attPid + '/attachment/delete';
+  var t = new URLSearchParams(window.location.search).get('token');
+  if (t) u += '?token=' + encodeURIComponent(t);
+  fetch(u, { method: 'POST' })
     .then(function(r){ return r.json(); })
     .then(function(j){
       if (j.ok) { location.reload(); }

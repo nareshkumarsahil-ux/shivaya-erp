@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+{% block title %}{{ emp.name }} — Profile{% endblock %}
+{% block page_title %}Employee Profile{% endblock %}
+{% block content %}
+<style>
+.prof-head{display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin-bottom:16px}
+.prof-head .av{width:64px;height:64px;border-radius:16px;background:linear-gradient(135deg,#1d4ed8,#7c3aed);color:#fff;display:flex;align-items:center;justify-content:center;font-size:26px;font-weight:800}
+.prof-head h2{margin:0;font-size:20px}
+.prof-grid{display:grid;grid-template-columns:1.1fr 1fr;gap:14px}
+@media(max-width:900px){.prof-grid{grid-template-columns:1fr}}
+.panel-body.mini{padding:14px 16px}
+.kv{display:flex;gap:10px;padding:8px 0;border-bottom:1px dashed var(--border);font-size:13.5px;align-items:center}
+.kv:last-child{border-bottom:none}
+.kv .k{color:var(--muted);width:120px;flex-shrink:0}
+.kv .v{font-weight:600}
+.mini-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.ms{background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px;text-align:center}
+.ms .n{font-size:18px;font-weight:800}
+.ms .l{font-size:11px;color:var(--muted);font-weight:600}
+.money-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px}
+.money{border-radius:12px;padding:16px;color:#fff}
+.money .l{font-size:12px;opacity:.9;font-weight:600}
+.money .n{font-size:24px;font-weight:800;margin-top:2px}
+.m-earned{background:linear-gradient(135deg,#0e7490,#0891b2)}
+.m-net{background:linear-gradient(135deg,#7c3aed,#a855f7)}
+.m-net.neg{background:linear-gradient(135deg,#b91c1c,#ef4444)}
+.att-btn{border:1.5px solid var(--border);background:var(--bg);border-radius:9px;padding:7px 12px;font-size:12.5px;font-weight:700;cursor:pointer}
+.att-btn:hover{border-color:#d97706;color:#b45309}
+.att-btn.on{background:#15803d;border-color:#15803d;color:#fff}
+.att-btn.on-a{background:#b91c1c;border-color:#b91c1c;color:#fff}
+.att-btn.on-l{background:#d97706;border-color:#d97706;color:#fff}
+.att-btn.on-h{background:#0e7490;border-color:#0e7490;color:#fff}
+.att-btn.on-t{background:#f59e0b;border-color:#f59e0b;color:#fff}
+.rec-row{display:flex;gap:10px;align-items:center;padding:8px 12px;border-bottom:1px solid var(--border);font-size:12.5px}
+.rec-row:last-child{border-bottom:none}
+.rec-row .dt{font-family:ui-monospace,monospace;color:var(--muted);width:110px}
+.badge-st{display:inline-block;border-radius:7px;padding:2px 9px;font-size:11px;font-weight:700}
+.st-p{background:#dcfce7;color:#15803d}
+.st-a{background:#fee2e2;color:#b91c1c}
+.st-l{background:#fef3c7;color:#b45309}
+.st-h{background:#cffafe;color:#0e7490}
+.st-t{background:#fef3c7;color:#d97706}
+</style>
+
+<div class="prof-head">
+  <div class="av">{{ emp.name[0] }}</div>
+  <div>
+    <h2>{{ emp.name }}</h2>
+    <div class="muted small">{{ emp.emp_code }} · {{ emp.designation or '—' }} · <span class="badge {{'b-blue' if (emp.shift or 'Day')=='Night' else 'b-gray'}}">{{ emp.shift or 'Day' }} Shift</span></div>
+  </div>
+  <div style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap">
+    <a class="btn btn-outline btn-sm" href="/employees">← Employees</a>
+    <a class="btn btn-sm" href="/employees/{{ emp.id }}/report">📊 Monthly Report</a>
+  </div>
+</div>
+
+<div class="money-row">
+  <div class="money m-earned"><div class="l">💰 Earned salary</div><div class="n">₹{{ m.earned|inr0 }}</div><div class="l" style="margin-top:4px">Is mahine ({{ m.month_label }})</div></div>
+  <div class="money m-net {{'neg' if m.net < 0}}"><div class="l">🏦 Net payable (after advance)</div><div class="n">₹{{ m.net|inr0 }}</div><div class="l" style="margin-top:4px">Advance: ₹{{ m.advance|inr0 }}{{ ' · PAID ✓' if m.paid else '' }}</div></div>
+</div>
+
+<div class="prof-grid">
+  <div>
+    <div class="panel" style="margin-bottom:14px">
+      <div class="panel-head"><h3>👤 Profile</h3></div>
+      <div class="panel-body mini">
+        <div class="kv"><span class="k">📱 Phone</span><span class="v">{{ emp.phone or '—' }}</span></div>
+        <div class="kv"><span class="k">🏠 Address</span><span class="v">{{ emp.address or '—' }}</span></div>
+        <div class="kv"><span class="k">📅 Joined</span><span class="v">{{ emp.joining_date or '—' }}</span></div>
+        <div class="kv"><span class="k">🏦 Advance</span><span class="v">₹{{ m.advance|inr0 }} (is mahine)</span></div>
+        <div class="kv"><span class="k">💰 Monthly Salary</span><span class="v">₹{{ m.sal|inr0 }}</span></div>
+      </div>
+    </div>
+
+    <div class="panel" style="margin-bottom:14px">
+      <div class="panel-head"><h3>📆 This Month</h3></div>
+      <div class="panel-body mini">
+        <div class="mini-stats">
+          <div class="ms"><div class="n" style="color:#15803d">{{ m.counts.present }}</div><div class="l">Present</div></div>
+          <div class="ms"><div class="n" style="color:#b91c1c">{{ m.counts.absent }}</div><div class="l">Absent</div></div>
+          <div class="ms"><div class="n" style="color:#b45309">{{ m.counts.leave }}</div><div class="l">Leave</div></div>
+          <div class="ms"><div class="n" style="color:#0e7490">{{ m.counts.halfday }}</div><div class="l">Half Day</div></div>
+          <div class="ms"><div class="n" style="color:#d97706">{{ m.counts.late }}</div><div class="l">Late</div></div>
+          <div class="ms"><div class="n">{{ m.leave_balance }}</div><div class="l">Leave Bal.</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div>
+    {% if is_admin %}
+    <div class="panel" style="margin-bottom:14px">
+      <div class="panel-head"><h3>✍️ Mark Attendance</h3></div>
+      <div class="panel-body mini">
+        <form method="post" action="/employees/{{ emp.id }}">
+          <div class="field"><label>Date</label><input type="date" name="date" value="{{ m.today_iso if m.month == m.today_iso[:7] else (m.month + '-01') }}" max="{{ m.today_iso }}"></div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin:8px 0 12px">
+            {% for st, lbl, cls in [('present','Present','on'),('absent','Absent','on-a'),('leave','Leave','on-l'),('halfday','Half Day','on-h'),('late','Late','on-t')] %}
+            <button class="att-btn" type="submit" name="status" value="{{ st }}">{{ lbl }}</button>
+            {% endfor %}
+          </div>
+          <button class="btn btn-sm" type="submit">💾 Save</button>
+        </form>
+      </div>
+    </div>
+    {% endif %}
+
+    <div class="panel">
+      <div class="panel-head"><h3>🧾 This Month's Records</h3></div>
+      <div class="panel-body" style="padding:0">
+        {% for r in m.records %}
+        <div class="rec-row">
+          <span class="dt">{{ r.date }}</span>
+          {% if r.status=='present' %}<span class="badge-st st-p">✓ Present</span>
+          {% elif r.status=='absent' %}<span class="badge-st st-a">✗ Absent</span>
+          {% elif r.status=='leave' %}<span class="badge-st st-l">🌴 Leave</span>
+          {% elif r.status=='halfday' %}<span class="badge-st st-h">🕐 Half Day</span>
+          {% elif r.status=='late' %}<span class="badge-st st-t">⏰ Late</span>
+          {% else %}<span class="badge-st">{{ r.status }}</span>{% endif %}
+          <span class="muted small" style="margin-left:auto">{% if r.status in ('present','late') %}₹{{ m.per_day|inr0 }}{% elif r.status=='halfday' %}₹{{ (m.per_day/2)|inr0 }}{% else %}₹0{% endif %}</span>
+        </div>
+        {% else %}
+        <div class="empty">No records yet — defaults to Present.</div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

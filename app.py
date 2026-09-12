@@ -8,6 +8,7 @@ import re
 import datetime
 import calendar
 import io
+import math
 import csv
 import base64
 from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify, Response
@@ -16,6 +17,8 @@ from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 import db
 
 app = Flask(__name__)
+# static files (CSS) browser mein cache ho — har page load par dobara download na ho
+app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 86400
 app.secret_key = os.environ.get("SECRET_KEY") or "shivaya-circuit-secret-2026"
 
 PROCESS_STEPS = ["Laminate Cutting", "CNC Drilling", "Plating", "Etching", "Solder Mask",
@@ -81,8 +84,9 @@ def token_login():
 # Operator ka limited access (screenshot jaisa): Dashboard, Job Orders, Machines,
 # Quality, Operator View — in pages mein wo dekh + kaam kar sakta hai. Baaki sab admin-only.
 OPERATOR_READ = {"dashboard", "orders", "machines", "quality", "operator_view",
-                 "product_attachment_view"}
-OPERATOR_WRITE = {"operator_action", "operator_issue", "machine_status", "quality", "quality_result"}
+                 "product_attachment_view", "dispatch_photo", "jobcard"}
+OPERATOR_WRITE = {"operator_action", "operator_issue", "machine_status", "quality", "quality_result",
+                  "dispatch_attach_photo"}
 
 
 @app.before_request
@@ -140,6 +144,14 @@ def inject_globals():
             "party_names": [p["name"] for p in parties]}
 
 
+@app.template_filter("inr0")
+def inr0_filter(value):
+    try:
+        return f"{float(value):,.0f}"
+    except (TypeError, ValueError):
+        return "0"
+
+
 @app.template_filter("inr")
 def inr_filter(value):
     try:
@@ -174,6 +186,11 @@ def gfmt_filter(value):
         return f"{value:g}"
     except (TypeError, ValueError):
         return ""
+
+
+@app.template_filter("modelname")
+def modelname_filter(value):
+    return _model_name(value) if value is not None else "—"
 
 
 # ---------------------------------------------------------------- login
@@ -280,6 +297,13 @@ def tracking():
     rows = [dict(r) for r in rows]
     for r in rows:
         r["step_idx"] = PROCESS_STEPS.index(r["current_process"]) if r["current_process"] in PROCESS_STEPS else 0
+        # agla process AUTO (order ke flow se) + uski assignment (kaun karega)
+        nxt = flow_next(r["id"]) if r["status"] == "pending" else ""
+        r["next_proc"] = nxt or None
+        r["next_op"] = None
+        if r["next_proc"] and r["next_proc"] != "Completed":
+            asg = proc_assignment(r["id"], r["next_proc"])
+            r["next_op"] = (asg["operator"] or "") if asg and asg["operator"] not in ("", "Unassigned") else None
     return render_template("tracking.html", active="tracking", orders=rows, q=q,
                            PROCESS_STEPS=PROCESS_STEPS, operators=operators)
 
@@ -373,14 +397,18 @@ def orders():
                 party_model, model_code, prod_display = "", "", ""
             qty_pcs = int(f.get("qty", 0) or 0)
             product_str = f"{prod_display} · {qty_pcs} pcs" if prod_display else ""
+            # cut list / finished product se QTY OF PANEL + PCS/PANEL seedha job order par
+            qty_panel = math.ceil(qty_pcs / pmodel["pcs_panel"]) if pmodel and pmodel["pcs_panel"] and qty_pcs else 0
+            pcs_panel = (pmodel["pcs_panel"] or 0) if pmodel else 0
             count = db.query("SELECT COUNT(*) c FROM orders", one=True)["c"]
             new_id = db.execute(
-                "INSERT INTO orders (order_no, party, board, product, qty, value, current_process, status, progress, priority, delivery_date, operator, started_qty, finished_qty, created_on) "
-                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                "INSERT INTO orders (order_no, party, board, product, qty, value, current_process, status, progress, priority, delivery_date, operator, started_qty, finished_qty, created_on, qty_panel, pcs_panel) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (f"#{count + 1}", f.get("party").strip(), f.get("board", "Single Side"),
                  product_str, qty_pcs, float(f.get("value", 0) or 0),
                  PROCESS_STEPS[0], "pending", 0, f.get("priority", "normal"),
-                 f.get("delivery_date", ""), "", 0, 0, datetime.date.today().isoformat()))
+                 f.get("delivery_date", ""), "", 0, 0, datetime.date.today().isoformat(),
+                 qty_panel, pcs_panel))
             if pmodel:
                 # job card ko finished product ki poori sizing se pre-fill karo
                 db.execute(
@@ -446,15 +474,33 @@ def orders():
     for dr in dispatch_rows:
         if dr["order_id"] not in dmap or (dmap[dr["order_id"]]["id"] or 0) < dr["id"]:
             dmap[dr["order_id"]] = dr
+
+    def _panel_info(r):
+        """QTY OF PANEL + NO OF PCS/PANEL — cut list se aaya ho to wahi, warna
+        finished product model se nikalo (product string 'name - code' se match)."""
+        qp = r.get("qty_panel") or 0
+        pp = r.get("pcs_panel") or 0
+        if not pp:
+            prod = (r["product"] or "").split(" · ")[0].strip()
+            pm = db.query("SELECT * FROM product_models WHERE (name || ' - ' || model_code)=? OR name=?",
+                          (prod, prod), one=True) if prod else None
+            if pm and pm["pcs_panel"]:
+                pp = pm["pcs_panel"]
+        if not qp and pp and (r["qty"] or 0) > 0:
+            qp = math.ceil((r["qty"] or 0) / pp)
+        return qp, pp
+
     cols = [[] for _ in KANBAN_COLS]
     for r in rows:
         r = dict(r)
         r["disp"] = dmap.get(r["id"])
         r["cur_proc"], r["cur_status"] = _jc_status(r)
+        r["qty_panel"], r["pcs_panel"] = _panel_info(r)
         cols[kanban_col(r["current_process"])].append(r)
     done = [dict(r) for r in done_rows]
     for r in done:
         r["disp"] = dmap.get(r["id"])
+        r["qty_panel"], r["pcs_panel"] = _panel_info(r)
     return render_template("orders.html", active="orders", cols=cols, done=done, q=q, filt=filt,
                            KANBAN_COLS=KANBAN_COLS, PROCESS_STEPS=PROCESS_STEPS,
                            models=models, show_add=request.args.get("add"))
@@ -529,13 +575,15 @@ def po_status(po_id):
 FIELD_KEYS = ["pcb_len", "pcb_w", "pcbs_x", "pcbs_y", "gap_x", "gap_y",
               "border_l", "border_r", "border_t", "border_b",
               "gang_x", "gang_y", "sheet_len", "sheet_w", "kerf_x", "kerf_y", "sheets", "use",
-              "panel_len", "panel_w", "panel_base_len", "panel_base_w"]
+              "panel_len", "panel_w", "panel_base_len", "panel_base_w",
+              "per_sq_inch", "pcb_price"]
 DEFAULTS = {"pcb_len": "40", "pcb_w": "50", "pcbs_x": "10", "pcbs_y": "5",
             "gap_x": "0", "gap_y": "0",
             "border_l": "0", "border_r": "0", "border_t": "5", "border_b": "5",
             "gang_x": "1", "gang_y": "1", "sheet_len": "1200", "sheet_w": "1000",
             "kerf_x": "2", "kerf_y": "2", "sheets": "1", "use": "1",
-            "panel_len": "400", "panel_w": "260"}
+            "panel_len": "400", "panel_w": "260",
+            "per_sq_inch": "", "pcb_price": ""}
 SHEET_PRESETS = ["1244x1044", "1240x1040", "1230x1030", "1200x1100", "1200x1000", "1100x1100", "1050x1050"]
 
 
@@ -891,9 +939,10 @@ def cutlist():
                     unit_label = "PCS/unit" if result["gang_active"] else "PCS/panel"
                     info = (f"{result['pcs_unit']} {unit_label} \u00b7 {result['panels_per_sheet']} panels/sheet "
                             f"({result['sheet_len']:g}\u00d7{result['sheet_w']:g}) \u00b7 {result['best']}")
-                    db.execute("UPDATE orders SET cutlist_info=?, qty=?, product=? WHERE id=?",
+                    db.execute("UPDATE orders SET cutlist_info=?, qty=?, product=?, qty_panel=?, pcs_panel=? WHERE id=?",
                                (info, result["total_pcs"],
-                                f"{order['product']} \u00b7 Panel {result['panel_len']:g}\u00d7{result['panel_w']:g}mm", order_id))
+                                f"{order['product']} \u00b7 Panel {result['panel_len']:g}\u00d7{result['panel_w']:g}mm",
+                                result["total_panels"], result["pcs_panel"], order_id))
                     flash(f"Layout applied to {order['order_no']} ({order['party']}). Qty set to {result['total_pcs']} pcs.", "success")
                 else:
                     flash("Select a valid job order.", "error")
@@ -1922,6 +1971,75 @@ def payment_delete(pmt_id):
 
 
 # ---------------------------------------------------------------- employees
+@app.route("/dispatch/<int:dl_id>/photo")
+@login_required
+def dispatch_photo(dl_id):
+    d = db.query("SELECT photo_data, photo_mime FROM dispatch_log WHERE id=?", (dl_id,), one=True)
+    if not d or not d["photo_data"]:
+        return "No photo", 404
+    return Response(d["photo_data"], mimetype=d["photo_mime"] or "image/png")
+
+
+def _back_redirect(fallback):
+    """Wahi page par wapas jao (referrer) — token pehle se ho to wahi rakhna."""
+    back = request.referrer or fallback
+    if "token=" not in back:
+        tok = request.values.get("token")
+        if tok:
+            sep = "&" if "?" in back else "?"
+            back = f"{back}{sep}token={tok}"
+    return redirect(back)
+
+
+@app.route("/dispatch/<int:dl_id>/attach_photo", methods=["POST"])
+@login_required
+def dispatch_attach_photo(dl_id):
+    """Existing dispatch entry par photo/screenshot attach ya replace karo."""
+    d = db.query("SELECT * FROM dispatch_log WHERE id=?", (dl_id,), one=True)
+    if not d:
+        flash("Dispatch entry nahi mili.", "error")
+        return _back_redirect(url_for("reports"))
+    photo = request.files.get("photo")
+    if not photo or not photo.filename:
+        flash("Pehle photo/screenshot file chuno.", "error")
+        return _back_redirect(url_for("reports"))
+    ext = (photo.filename.rsplit(".", 1)[-1] if "." in photo.filename else "").lower()
+    blob = photo.read()
+    if ext not in ("jpg", "jpeg", "png", "gif", "webp", "bmp", "heic") or len(blob) > 3 * 1024 * 1024:
+        flash("Sirf image file chalegi (max 3MB).", "error")
+        return _back_redirect(url_for("reports"))
+    db.execute("UPDATE dispatch_log SET photo_name=?, photo_mime=?, photo_data=? WHERE id=?",
+               (photo.filename, photo.mimetype or "image/png", blob, dl_id))
+    flash("📷 Dispatch entry par photo save ho gayi ✅", "success")
+    return _back_redirect(url_for("reports"))
+
+
+@app.route("/employees/provision", methods=["POST"])
+@login_required
+@admin_required
+def employees_provision():
+    db.provision_employee_logins()
+    flash("Sab employees ke login accounts ban gaye ✅ (username = pehla naam, password shivaya@123).", "success")
+    return redirect_with_token(url_for("employees"))
+
+
+@app.route("/employees/<int:emp_id>/reset_password", methods=["POST"])
+@login_required
+@admin_required
+def employee_reset_password(emp_id):
+    new_pw = (request.form.get("new_password") or "").strip() or "shivaya@123"
+    u = db.query("SELECT * FROM users WHERE employee_id=?", (emp_id,), one=True)
+    if not u:
+        db.provision_employee_logins()
+        u = db.query("SELECT * FROM users WHERE employee_id=?", (emp_id,), one=True)
+    if u:
+        db.execute("UPDATE users SET password=? WHERE id=?", (new_pw, u["id"]))
+        flash(f"'{u['username']}' ka password reset ho gaya ✅", "success")
+    else:
+        flash("Login account nahi mila.", "error")
+    return redirect_with_token(url_for("employees"))
+
+
 @app.route("/employees", methods=["GET", "POST"])
 @login_required
 def employees():
@@ -1929,27 +2047,59 @@ def employees():
         f = request.form
         try:
             db.execute(
-                "INSERT INTO employees (emp_code, name, email, phone, department, designation, joining_date, status, salary) "
-                "VALUES (?,?,?,?,?,?,?,?,?)",
+                "INSERT INTO employees (emp_code, name, email, phone, department, designation, joining_date, status, salary, shift, leave_balance, address) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
                 (f.get("emp_code", "").strip(), f.get("name", "").strip(), f.get("email", "").strip(),
                  f.get("phone", "").strip(), f.get("department", "").strip(), f.get("designation", "").strip(),
                  f.get("joining_date", "") or datetime.date.today().isoformat(), "active",
-                 float(f.get("salary", 0) or 0)))
-            flash("Employee added.", "success")
+                 float(f.get("salary", 0) or 0), f.get("shift", "Day").strip() or "Day",
+                 int(f.get("leave_balance", 12) or 0), f.get("address", "").strip()))
+            db.provision_employee_logins()
+            flash("Employee added ✅ Login bhi ban gaya (username = pehla naam, password shivaya@123).", "success")
         except Exception as e:
             flash(f"Could not add employee: {e}", "error")
         return redirect_with_token(url_for("employees"))
     cur_month = datetime.date.today().strftime("%Y-%m") + "%"
-    rows = db.query("SELECT e.*, (SELECT COUNT(*) FROM attendance a WHERE a.emp_id=e.id AND a.status='present' "
-                    "AND a.date LIKE ?) AS present_days FROM employees e ORDER BY e.id", (cur_month,))
+    rows = [dict(r) for r in db.query(
+        "SELECT e.*, "
+        "(SELECT COUNT(*) FROM attendance a WHERE a.emp_id=e.id AND a.status='present' AND a.date LIKE ?) AS present_days, "
+        "(SELECT COUNT(*) FROM attendance a WHERE a.emp_id=e.id AND a.status='absent' AND a.date LIKE ?) AS absent_days, "
+        "(SELECT COUNT(*) FROM attendance a WHERE a.emp_id=e.id AND a.status='halfday' AND a.date LIKE ?) AS half_days, "
+        "(SELECT COUNT(*) FROM attendance a WHERE a.emp_id=e.id AND a.status='leave' AND a.date LIKE ?) AS leave_days, "
+        "(SELECT COUNT(*) FROM attendance a WHERE a.emp_id=e.id AND a.date LIKE ?) AS att_days "
+        "FROM employees e ORDER BY e.id",
+        (cur_month, cur_month, cur_month, cur_month, cur_month))]
+    payroll = 0.0
+    earned_total = 0.0
+    for r in rows:
+        sal = r["salary"] or 0
+        if r["status"] == "active":
+            payroll += sal
+        if r["att_days"] == 0:
+            r["earned"] = round(sal)
+        else:
+            ded = (r["absent_days"] + 0.5 * r["half_days"]) * ((sal) / 30.0)
+            r["earned"] = max(0, round(sal - ded))
+        if r["status"] == "active":
+            earned_total += r["earned"]
+    users = {u["employee_id"]: dict(u) for u in db.query("SELECT * FROM users WHERE employee_id>0")}
+    for r in rows:
+        r["login"] = users.get(r["id"])
     today = datetime.date.today().isoformat()
     att = {r["emp_id"]: r["status"] for r in db.query("SELECT emp_id, status FROM attendance WHERE date=?", (today,))}
+    stats = {
+        "total": sum(1 for r in rows if r["status"] == "active"),
+        "present_today": sum(1 for r in rows if att.get(r["id"]) == "present"),
+        "leave_today": sum(1 for r in rows if att.get(r["id"]) == "leave"),
+        "payroll": round(payroll),
+        "earned": round(earned_total),
+    }
     edit_emp = None
     eid = request.args.get("edit")
     if eid and eid.isdigit():
         edit_emp = db.query("SELECT * FROM employees WHERE id=?", (int(eid),), one=True)
-    return render_template("employees.html", active="employees", employees=rows, att=att,
-                           show_add=request.args.get("add"), edit_emp=edit_emp)
+    return render_template("employees.html", active="employees", employees=rows, att=att, stats=stats,
+                           att_labels=ATT_LABELS, show_add=request.args.get("add"), edit_emp=edit_emp)
 
 
 @app.route("/employees/<int:emp_id>/edit", methods=["POST"])
@@ -1963,15 +2113,116 @@ def employee_edit(emp_id):
     try:
         db.execute(
             "UPDATE employees SET emp_code=?, name=?, email=?, phone=?, department=?, designation=?, "
-            "joining_date=?, status=?, salary=? WHERE id=?",
+            "joining_date=?, status=?, salary=?, shift=?, leave_balance=?, address=? WHERE id=?",
             ((f.get("emp_code") or "").strip(), name, (f.get("email") or "").strip(),
              (f.get("phone") or "").strip(), (f.get("department") or "").strip(),
              (f.get("designation") or "").strip(), (f.get("joining_date") or "").strip(),
-             f.get("status", "active"), float(f.get("salary", 0) or 0), emp_id))
+             f.get("status", "active"), float(f.get("salary", 0) or 0),
+             f.get("shift", "Day").strip() or "Day", int(f.get("leave_balance", 12) or 0),
+             f.get("address", "").strip(), emp_id))
         flash(f"'{name}' update ho gaya ✅", "success")
     except Exception as e:
         flash(f"Update failed: {e}", "error")
     return redirect_with_token(url_for("employees"))
+
+
+@app.route("/employees/download")
+@login_required
+@admin_required
+def employees_download():
+    cur_month = datetime.date.today().strftime("%Y-%m") + "%"
+    rows = db.query(
+        "SELECT e.*, "
+        "(SELECT COUNT(*) FROM attendance a WHERE a.emp_id=e.id AND a.status='present' AND a.date LIKE ?) AS present_days, "
+        "(SELECT COUNT(*) FROM attendance a WHERE a.emp_id=e.id AND a.status='absent' AND a.date LIKE ?) AS absent_days, "
+        "(SELECT COUNT(*) FROM attendance a WHERE a.emp_id=e.id AND a.status='halfday' AND a.date LIKE ?) AS half_days, "
+        "(SELECT COUNT(*) FROM attendance a WHERE a.emp_id=e.id AND a.status='leave' AND a.date LIKE ?) AS leave_days, "
+        "(SELECT COUNT(*) FROM attendance a WHERE a.emp_id=e.id AND a.date LIKE ?) AS att_days "
+        "FROM employees e ORDER BY e.id",
+        (cur_month, cur_month, cur_month, cur_month, cur_month))
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(["Code", "Name", "Role", "Shift", "Salary", "Leave Balance",
+                "Present Days (month)", "Absent", "Half Day", "Leave", "Earned (month)"])
+    for r in rows:
+        sal = r["salary"] or 0
+        if r["att_days"] == 0:
+            earned = round(sal)
+        else:
+            earned = max(0, round(sal - (r["absent_days"] + 0.5 * r["half_days"]) * (sal / 30.0)))
+        w.writerow([r["emp_code"], r["name"], r["designation"] or "", r["shift"] or "Day",
+                    sal, r["leave_balance"], r["present_days"], r["absent_days"],
+                    r["half_days"], r["leave_days"], earned])
+    fname = "employees_" + datetime.date.today().isoformat() + ".csv"
+    return Response(buf.getvalue(), mimetype="text/csv",
+                    headers={"Content-Disposition": f"attachment; filename={fname}"})
+
+
+@app.route("/employees/<int:emp_id>/att", methods=["POST"])
+@login_required
+@admin_required
+def employee_att_mark(emp_id):
+    st = request.form.get("status", "present")
+    if st not in ATT_STATUSES:
+        st = "present"
+    db.execute("INSERT OR REPLACE INTO attendance (emp_id, date, status) VALUES (?,?,?)",
+               (emp_id, datetime.date.today().isoformat(), st))
+    flash("Aaj ki attendance update ho gayi ✅", "success")
+    return redirect_with_token(url_for("employees"))
+
+
+@app.route("/employees/<int:emp_id>", methods=["GET", "POST"])
+@login_required
+def employee_profile(emp_id):
+    emp = db.query("SELECT * FROM employees WHERE id=?", (emp_id,), one=True)
+    if not emp:
+        flash("Employee nahi mila.", "error")
+        return redirect_with_token(url_for("employees"))
+    if request.method == "POST":
+        if session.get("user_role") != "admin":
+            flash("Sirf admin attendance mark kar sakta hai.", "error")
+            return redirect_with_token(url_for("employee_profile", emp_id=emp_id))
+        date_str = request.form.get("date") or datetime.date.today().isoformat()
+        try:
+            d = datetime.date.fromisoformat(date_str)
+            if d > datetime.date.today():
+                flash("Future date ki attendance nahi ho sakti.", "error")
+            else:
+                st = request.form.get("status", "present")
+                if st not in ATT_STATUSES:
+                    st = "present"
+                db.execute("INSERT OR REPLACE INTO attendance (emp_id, date, status) VALUES (?,?,?)",
+                           (emp_id, date_str, st))
+                flash(f"Attendance save ho gayi: {date_str} — {ATT_LABELS.get(st, st)} ✅", "success")
+        except ValueError:
+            flash("Invalid date.", "error")
+        return redirect_with_token(url_for("employee_profile", emp_id=emp_id))
+    cur_month = datetime.date.today().strftime("%Y-%m")
+    m = _emp_month(emp_id, cur_month)
+    is_admin = session.get("user_role") == "admin"
+    return render_template("employee_profile.html", active="employees", emp=emp, m=m,
+                           is_admin=is_admin, att_labels=ATT_LABELS,
+                           att_statuses=ATT_STATUSES)
+
+
+@app.route("/employees/<int:emp_id>/report")
+@login_required
+def employee_report(emp_id):
+    emp = db.query("SELECT * FROM employees WHERE id=?", (emp_id,), one=True)
+    if not emp:
+        flash("Employee nahi mila.", "error")
+        return redirect_with_token(url_for("employees"))
+    month = request.args.get("month") or datetime.date.today().strftime("%Y-%m")
+    if not _valid_month(month):
+        month = datetime.date.today().strftime("%Y-%m")
+    m = _emp_month(emp_id, month)
+    y, mo = int(month[:4]), int(month[5:7])
+    prev_d = datetime.date(y, mo, 1) - datetime.timedelta(days=1)
+    next_d = datetime.date(y, mo, calendar.monthrange(y, mo)[1]) + datetime.timedelta(days=1)
+    is_admin = session.get("user_role") == "admin"
+    return render_template("employee_report.html", active="employees", emp=emp, m=m, month=month,
+                           prev_m=prev_d.strftime("%Y-%m"), next_m=next_d.strftime("%Y-%m"),
+                           is_admin=is_admin, att_labels=ATT_LABELS)
 
 
 @app.route("/employees/<int:emp_id>/delete", methods=["POST"])
@@ -1985,8 +2236,8 @@ def employee_delete(emp_id):
     return redirect_with_token(url_for("employees"))
 
 
-ATT_STATUSES = ["present", "halfday", "leave", "absent"]
-ATT_LABELS = {"present": "P", "halfday": "HD", "leave": "L", "absent": "A"}
+ATT_STATUSES = ["present", "halfday", "leave", "absent", "late"]
+ATT_LABELS = {"present": "P", "halfday": "HD", "leave": "L", "absent": "A", "late": "T"}
 
 
 def _att_month_rows(month):
@@ -1997,6 +2248,7 @@ def _att_month_rows(month):
         "COALESCE(SUM(CASE WHEN a.status='absent' THEN 1 END),0) AS a, "
         "COALESCE(SUM(CASE WHEN a.status='leave' THEN 1 END),0) AS l, "
         "COALESCE(SUM(CASE WHEN a.status='halfday' THEN 1 END),0) AS hd, "
+        "COALESCE(SUM(CASE WHEN a.status='late' THEN 1 END),0) AS lt, "
         "COALESCE(es.advance,0) AS advance, COALESCE(es.paid,0) AS paid "
         "FROM employees e "
         "LEFT JOIN attendance a ON a.emp_id=e.id AND a.date LIKE ? "
@@ -2016,6 +2268,80 @@ def _att_month_rows(month):
         r["earned"] = round(sal - ded, 2)
         r["net"] = round(sal - ded - float(r["advance"] or 0), 2)
     return rows, dim
+
+
+
+
+def _emp_month(emp_id, month):
+    """Ek employee ka poora month summary: counts, earned, advance, net, records,
+    calendar grid data + cumulative earned chart points (profile/report ke liye)."""
+    emp = db.query("SELECT * FROM employees WHERE id=?", (emp_id,), one=True)
+    if not emp:
+        return None
+    y, mo = int(month[:4]), int(month[5:7])
+    dim = calendar.monthrange(y, mo)[1]
+    recs = db.query("SELECT date, status FROM attendance WHERE emp_id=? AND date LIKE ? ORDER BY date",
+                    (emp_id, month + "%"))
+    counts = {"present": 0, "absent": 0, "leave": 0, "halfday": 0, "late": 0}
+    by_date = {}
+    for r in recs:
+        s = r["status"]
+        if s in counts:
+            counts[s] += 1
+        by_date[r["date"]] = s
+    sal = float(emp["salary"] or 0)
+    per_day = round(sal / dim, 2) if dim else 0.0
+    ded = round(per_day * counts["absent"] + per_day * 0.5 * counts["halfday"], 2)
+    earned = round(sal - ded, 2)
+    es = db.query("SELECT * FROM emp_salary WHERE emp_id=? AND month=?", (emp_id, month), one=True)
+    advance = float((es["advance"] if es else 0) or 0)
+    paid = int((es["paid"] if es else 0) or 0)
+    net = round(earned - advance, 2)
+    today = datetime.date.today().isoformat()
+    no_records = len(recs) == 0
+    first_wd = calendar.monthrange(y, mo)[0]  # 0=Mon
+    cal = []
+    for i in range(first_wd):
+        cal.append({"blank": True})
+    chart = [(0, 0.0)]
+    cum = 0.0
+    for d in range(1, dim + 1):
+        ds = f"{month}-{d:02d}"
+        st = by_date.get(ds)
+        if st:
+            f = {"present": 1.0, "late": 1.0, "halfday": 0.5}.get(st, 0.0)
+            cls = {"present": "st-p", "late": "st-t", "halfday": "st-h",
+                   "leave": "st-l", "absent": "st-a"}.get(st, "st-x")
+        else:
+            if month == today[:7] and ds > today:
+                f, cls = 0.0, "st-f"
+            else:
+                f, cls = 1.0, "st-x"
+        cum += per_day * f
+        chart.append((d, cum))
+        cal.append({"day": d, "ds": ds, "st": st, "cls": cls,
+                    "is_today": ds == today, "label": ATT_LABELS.get(st, "·") if st else ""})
+    # SVG points (600x260): actual earned line + full salary target
+    W, H = 600, 260
+    mx = W - 60
+    my = H - 50
+    maxv = sal if sal > 0 else 1.0
+    pts = []
+    for d, c in chart:
+        x = 50 + (d / dim) * mx
+        py = my + 10 - (c / maxv) * (my - 20)
+        pts.append(f"{x:.1f},{py:.1f}")
+    target_y = my + 10 - (sal / maxv) * (my - 20)
+    return {
+        "emp": emp, "month": month, "dim": dim, "records": [dict(r) for r in recs],
+        "counts": counts, "by_date": by_date, "sal": sal, "per_day": per_day,
+        "ded": ded, "earned": earned, "advance": advance, "paid": paid, "net": net,
+        "leave_balance": emp["leave_balance"] or 0, "cal": cal, "chart_points": " ".join(pts),
+        "target_y": f"{target_y:.1f}", "chart_max": round(maxv, 2),
+        "no_records": no_records, "month_label": datetime.date(y, mo, 1).strftime("%B %Y"),
+        "today_iso": today,
+        "present_fraction": (counts["present"] + counts["late"] + 0.5 * counts["halfday"]) / dim if dim else 0,
+    }
 
 
 def _valid_month(m):
@@ -2056,7 +2382,7 @@ def attendance():
     rows = db.query(
         "SELECT e.id, e.name, e.department, a.status FROM employees e "
         "LEFT JOIN attendance a ON a.emp_id=e.id AND a.date=? WHERE e.status='active' ORDER BY e.id", (date_str,))
-    summary = {"present": 0, "absent": 0, "halfday": 0, "leave": 0}
+    summary = {"present": 0, "absent": 0, "halfday": 0, "leave": 0, "late": 0}
     for r in rows:
         if r["status"] in summary:
             summary[r["status"]] += 1
@@ -2261,6 +2587,73 @@ def op_state(order_id, process):
     return "new"
 
 
+def flow_pending(order_id):
+    """Order ka PENDING process — pehla process jiska kaam shuru nahi hua (start_dt empty).
+    Production Planning isi par operator/machine assign karta hai."""
+    rows = db.get_jc_processes(order_id)
+    for r in rows:
+        if not (r.get("start_dt") or ""):
+            return r["process"]
+    return ""
+
+
+def flow_next(order_id):
+    """Order ka AGLA process — pehla unfinished (end_dt empty); sab done -> Completed.
+    Live Tracking ke 'Move To Next' mein ye AUTO dikhta hai."""
+    rows = db.get_jc_processes(order_id)
+    if not rows:
+        return ""
+    unfinished = [r for r in rows if not r.get("end_dt")]
+    if not unfinished:
+        return "Completed"
+    unstarted = [r for r in unfinished if not r.get("start_dt")]
+    return unstarted[0]["process"] if unstarted else unfinished[0]["process"]
+
+
+def proc_assignment(order_id, process):
+    """Kisi process ki assignment (machine/shift/operator) — purani order-level
+    assignment (process='') fallback ke saath."""
+    asg = db.query("SELECT * FROM order_assignments WHERE order_id=? AND process=?",
+                   (order_id, process or ""), one=True)
+    if asg:
+        return asg
+    return db.query("SELECT * FROM order_assignments WHERE order_id=? AND process=''",
+                    (order_id,), one=True)
+
+
+DESIGNATION_JOBS = {
+    "CNC": ["CNC DRILLING", "DIE/CNC", "DRILLING"],
+    "DRILL": ["CNC DRILLING", "DIE/CNC", "DRILLING"],
+    "LAMINAT": ["LAMINATION"],
+    "QC": ["PTH QC", "FQC", "BBT"],
+    "TEST": ["BBT", "FQC", "TESTING"],
+    "CUT": ["LAMINATE CUTTING", "V-CUT", "CUTTING"],
+    "PRINT": ["PRINTING", "SOLDER MASK", "LEGEND"],
+    "ETCH": ["ETCHING"],
+    "PLAT": ["PLATING"],
+    "HAL": ["HAL", "TINNING"],
+    "SOLDER": ["SOLDER MASK"],
+    "PTH": ["PTH"],
+    "ROUT": ["ROUTING"],
+    "DISPATCH": ["DISPATCH", "PACKING"],
+    "PACK": ["PACKING", "DISPATCH"],
+}
+
+
+def designation_matches(designation, process):
+    """Kya is designation ka employee ye process karta hai? (designation ke hisaab se work filter)"""
+    if not designation or not process:
+        return False
+    d_up = (designation or "").upper()
+    p_up = (process or "").upper()
+    for key, procs in DESIGNATION_JOBS.items():
+        if key in d_up:
+            for p in procs:
+                if p in p_up:
+                    return True
+    return False
+
+
 def advance_current(order_id):
     """finish ke baad: latest finished row ka NEXT; NONE = agla process hoga hi nahi (skip);
     warna pehla unfinished; sab done -> Completed."""
@@ -2306,6 +2699,7 @@ def operator_view():
     emp = db.query("SELECT * FROM employees WHERE name=?", (op,), one=True)
     designation = emp["designation"] if emp and emp["designation"] else "Production Operator"
     is_admin = session.get("user_role") == "admin"
+    is_dispatch = ("DISPATCH" in (designation or "").upper()) or ("PACK" in (designation or "").upper())
     jobs = []
     for o in db.query("SELECT * FROM orders WHERE status != 'done' ORDER BY "
                       "CASE priority WHEN 'urgent' THEN 0 ELSE 1 END, delivery_date, id"):
@@ -2315,22 +2709,30 @@ def operator_view():
             continue
         d["proc"] = prow["process"]
         d["state"] = op_state(o["id"], prow["process"])
-        nxt = (prow["next_process"] or "").strip()
-        d["next_proc"] = nxt
-        d["next_none"] = (nxt.upper() == "NONE")
+        # NEXT = flow ka agla process (auto) + usko kaun karega (assigned name)
+        d["next_proc"] = ""
+        d["next_none"] = False
+        d["next_op"] = ""
+        allrows = db.get_jc_processes(o["id"])
+        nxtrow = next((r for r in allrows if r["idx"] == prow["idx"] + 1), None)
+        if nxtrow:
+            d["next_proc"] = nxtrow["process"]
+            nasg = proc_assignment(o["id"], nxtrow["process"])
+            d["next_op"] = (nasg["operator"] or "") if nasg and nasg["operator"] not in ("", "Unassigned") else ""
         d["pause_reason"] = ""
         if d["state"] == "paused":
             last = db.query("SELECT * FROM jobcard_log WHERE order_id=? AND process=? AND action='pause' "
                             "ORDER BY id DESC LIMIT 1", (o["id"], prow["process"]), one=True)
             d["pause_reason"] = last["reason"] if last else ""
-        asg = db.query("SELECT * FROM order_assignments WHERE order_id=?", (o["id"],), one=True)
+        asg = proc_assignment(o["id"], prow["process"])
         d["assigned_op"] = asg["operator"] if asg else "Unassigned"
         d["assigned_machine"] = asg["machine"] if asg else "Unassigned"
         d["mine"] = ((asg and asg["operator"] == op)
                      or (prow["start_name"] or "") == op
                      or (o["operator"] or "") == op)
-        if not is_admin and not d["mine"] and (d["priority"] or "") != "urgent":
-            continue  # operator ko sirf apna kaam dikhe; 🚨 URGENT/emergency orders SABKO dikhte hain
+        d["my_work"] = (d["mine"] or designation_matches(designation, prow["process"]))
+        if not is_admin and not d["my_work"] and (d["priority"] or "") != "urgent":
+            continue  # operator ko sirf apne kaam (designation/assignment) ke jobs dikhen; 🚨 URGENT sabko
         d["skipped"] = proc_skipped(o["id"], prow["process"])
         dl = db.query("SELECT * FROM dispatch_log WHERE order_id=? ORDER BY id DESC LIMIT 1",
                       (o["id"],), one=True)
@@ -2342,9 +2744,15 @@ def operator_view():
     employees = db.query("SELECT * FROM employees WHERE department='Production' ORDER BY name")
     inv_items = db.query("SELECT * FROM inventory ORDER BY CASE WHEN stock<=min_stock THEN 0 ELSE 1 END, name")
     my_issues = db.query("SELECT * FROM material_issues WHERE worker=? ORDER BY id DESC LIMIT 10", (op,))
+    dispatch_rows = []
+    if is_dispatch or is_admin:
+        dispatch_rows = db.query(
+            "SELECT dl.*, o.order_no, o.party FROM dispatch_log dl "
+            "LEFT JOIN orders o ON o.id=dl.order_id ORDER BY dl.id DESC LIMIT 30")
     return render_template("operator.html", active="operator", jobs=jobs, logs=logs,
                            employees=employees, op=op, designation=designation,
-                           inv_items=inv_items, my_issues=my_issues,
+                           inv_items=inv_items, my_issues=my_issues, is_dispatch=is_dispatch,
+                           dispatch_rows=dispatch_rows,
                            admin_show=session.get("user_role") == "admin")
 
 
@@ -2384,7 +2792,7 @@ def operator_issue():
     if session.get("user_role") != "admin":
         order = db.query("SELECT * FROM orders WHERE id=?", (order_id,), one=True) if order_id else None
         _order, prow = current_proc_row(order_id) if order_id else (None, None)
-        asg = db.query("SELECT * FROM order_assignments WHERE order_id=?", (order_id,), one=True) if order_id else None
+        asg = proc_assignment(order_id, prow["process"]) if order_id and prow else None
         allowed = (bool(asg and asg["operator"] == op)
                    or (prow is not None and (prow["start_name"] or "") == op)
                    or (order is not None and (order["operator"] or "") == op))
@@ -2459,12 +2867,21 @@ def operator_action():
     elif action == "dispatch":
         mode = f.get("mode", "").strip()
         if mode:
-            db.execute("INSERT INTO dispatch_log (order_id, ddate, dtime, mode, details, dispatched_by, ts) "
-                       "VALUES (?,?,?,?,?,?,?)",
+            ph_name, ph_mime, ph_data = "", "", None
+            photo = request.files.get("photo")
+            if photo and photo.filename:
+                ext = (photo.filename.rsplit(".", 1)[-1] if "." in photo.filename else "").lower()
+                blob = photo.read()
+                if ext in ("jpg", "jpeg", "png", "gif", "webp", "bmp", "heic") and len(blob) <= 3 * 1024 * 1024:
+                    ph_name, ph_mime, ph_data = photo.filename, photo.mimetype or "image/png", blob
+                else:
+                    flash("📷 Photo nahi lagi (sirf image, max 3MB) — dispatch bina photo ke ho gaya.", "error")
+            db.execute("INSERT INTO dispatch_log (order_id, ddate, dtime, mode, details, dispatched_by, ts, "
+                       "photo_name, photo_mime, photo_data) VALUES (?,?,?,?,?,?,?,?,?,?)",
                        (order_id, datetime.date.today().isoformat(),
                         datetime.datetime.now().strftime("%H:%M"), mode,
-                        f.get("details", "").strip(), op, now))
-            flash(f"PCB dispatched: {mode} — date/time auto save ho gaya.", "success")
+                        f.get("details", "").strip(), op, now, ph_name, ph_mime, ph_data))
+            flash(f"PCB dispatched: {mode} — date/time auto save ho gaya." + (" 📷 Photo bhi save hui." if ph_data else ""), "success")
         else:
             flash("Dispatch mode select karein.", "error")
     elif action == "handover":
@@ -2489,14 +2906,16 @@ def production_planning():
                 oid = o["id"]
                 if f.get(f"machine_{oid}") is None:
                     continue
+                proc = f.get(f"proc_{oid}", "").strip() or flow_pending(oid) or ""
                 db.execute(
-                    "INSERT INTO order_assignments (order_id, machine, shift, operator, planned_start) VALUES (?,?,?,?,?) "
-                    "ON CONFLICT(order_id) DO UPDATE SET machine=excluded.machine, shift=excluded.shift, "
+                    "INSERT INTO order_assignments (order_id, process, machine, shift, operator, planned_start) "
+                    "VALUES (?,?,?,?,?,?) "
+                    "ON CONFLICT(order_id, process) DO UPDATE SET machine=excluded.machine, shift=excluded.shift, "
                     "operator=excluded.operator, planned_start=excluded.planned_start",
-                    (oid, f.get(f"machine_{oid}", "Unassigned").strip() or "Unassigned",
+                    (oid, proc, f.get(f"machine_{oid}", "Unassigned").strip() or "Unassigned",
                      f.get(f"shift_{oid}", "").strip(), f.get(f"op_{oid}", "Unassigned").strip() or "Unassigned",
                      f.get(f"start_{oid}", "").strip()))
-            flash("Assignments saved.", "success")
+            flash("Assignments saved (pending process ke liye).", "success")
         else:
             count = db.query("SELECT COUNT(*) c FROM plans", one=True)["c"]
             db.execute("INSERT INTO plans (plan_no, order_id, desc, start_date, end_date, status) VALUES (?,?,?,?,?,?)",
@@ -2529,12 +2948,17 @@ def production_planning():
         cnt = db.query("SELECT COUNT(*) c FROM orders WHERE delivery_date=?",
                        (d.isoformat(),), one=True)["c"]
         cal.append({"date": d.isoformat(), "iso": d.strftime("%d-%m"), "count": cnt})
-    # assignment rows
+    # assignment rows — ab per PROCESS (pending process par assign hota hai)
     assigns = db.query("SELECT * FROM order_assignments")
-    amap = {a["order_id"]: a for a in assigns}
+    amap = {}
+    for a in assigns:
+        amap.setdefault(a["order_id"], {})[a["process"] or ""] = a
     pending = [dict(o) for o in pending]
     for o in pending:
-        o["asm"] = amap.get(o["id"])
+        pproc = flow_pending(o["id"]) or o["current_process"] or "—"
+        o["pending_proc"] = pproc
+        m = amap.get(o["id"], {})
+        o["asm"] = m.get(pproc) or m.get("") or m.get(o["current_process"])
     machines = db.query("SELECT * FROM machines ORDER BY id")
     employees = db.query("SELECT * FROM employees WHERE department='Production' ORDER BY name")
     rows = db.query("SELECT p.*, o.order_no, o.party FROM plans p LEFT JOIN orders o ON o.id=p.order_id ORDER BY p.id DESC")
@@ -2573,7 +2997,7 @@ JC_FIELDS = ["party", "party_model", "model", "odate", "board_type", "created_by
              "actual_pcb_y", "x_size", "x_qty", "y_size", "y_qty", "cnc_margin_x", "cnc_margin_y",
              "panel_x", "panel_y", "panels_per_sheet", "sheets", "qty_panel", "pcs_panel",
              "v_grooving", "customer_req", "raw_materials", "total_qty", "short_qty", "short_reason",
-             "handover_sign", "priority"]
+             "handover_sign", "priority", "board_side", "board_material"]
 
 
 def _jc_num(v):
@@ -2624,6 +3048,9 @@ def prep_jobcard(order_id):
         d["skipped"] = bool(i > 0 and (raw_rows[i - 1]["next_process"] or "").upper() == "NONE")
         # work status: end_dt -> done, sirf start_dt -> running, kuch nahi -> pending
         d["status"] = "done" if d["end_dt"] else ("running" if d["start_dt"] else "pending")
+        asg = proc_assignment(order_id, d["process"])
+        d["asg_op"] = (asg["operator"] or "") if asg and asg["operator"] not in ("", "Unassigned") else ""
+        d["asg_machine"] = (asg["machine"] or "") if asg and asg["machine"] not in ("", "Unassigned") else ""
         procs.append(d)
     # current process row ka status (headbar ke liye)
     cur_name = (order["current_process"] or "").lower()
@@ -2650,7 +3077,8 @@ def jobcard(order_id):
     jc_logs = db.query("SELECT * FROM jobcard_log WHERE order_id=? ORDER BY id DESC LIMIT 15", (order_id,))
     dispatch_logs = db.query("SELECT * FROM dispatch_log WHERE order_id=? ORDER BY id DESC", (order_id,))
     dispatch = dispatch_logs[0] if dispatch_logs else None
-    _plist, proc_label = db.process_list_for(jc["sheet_material"])
+    _plist, proc_label = db.process_preset_for(jc["board_side"], jc["board_material"])
+    procs_started = any(p["status"] != "pending" for p in procs)
     models = db.query("SELECT * FROM product_models ORDER BY name")
     inv_items = db.query("SELECT * FROM inventory ORDER BY CASE WHEN stock<=min_stock THEN 0 ELSE 1 END, category, name")
     inv_names = {it["name"] for it in inv_items}
@@ -2675,9 +3103,13 @@ def jobcard(order_id):
         issue_summary[k] = round(issue_summary.get(k, 0) + (mi["qty"] or 0), 4)
     issue_total = "; ".join(f"{q:g} {u} {n}" for (n, u), q in issue_summary.items())
     worker_names = [r["name"] for r in db.query("SELECT name FROM employees ORDER BY name")]
+    machines = db.query("SELECT * FROM machines ORDER BY code")
+    all_employees = db.query("SELECT * FROM employees WHERE status='active' ORDER BY name")
     return render_template("jobcard.html", active="orders", order=order, jc=jc, procs=procs,
+                           machines=machines, all_employees=all_employees,
                            flat_next=db.all_process_options(),
                            qty_pcs=qty_pcs, models=models, proc_label=proc_label, jc_logs=jc_logs,
+                           procs_started=procs_started,
                            dispatch=dispatch, dispatch_logs=dispatch_logs,
                            inv_items=inv_items, inv_names=inv_names,
                            bom_rows=bom_rows, bmodel=bmodel,
@@ -2722,7 +3154,7 @@ def jobcard_update(order_id):
                 required = round(qty_pcs / up * br["qty_per"], 2) if up else 0
                 rm_lines.append(f"{br['item_name']}: {required:g} {br['unit']}")
             rm_val = chr(10).join(rm_lines) if rm_lines else ""
-    for k in ["party_model", "model", "odate", "board_type", "created_by", "checked_by", "order_via",
+    for k in ["party_model", "model", "odate", "created_by", "checked_by", "order_via",
               "exp_delivery", "payment_status", "sheet_material", "copper_finish", "masking", "finish",
               "legend_printing", "pcb_type", "v_grooving", "customer_req", "short_reason",
               "handover_sign"]:
@@ -2800,6 +3232,45 @@ def _dt_pair(f, d_key, t_key):
     return f"{d} {t}".strip() if (d and t) else ""
 
 
+@app.route("/jobcard/<int:order_id>/preset", methods=["POST"])
+@login_required
+def jobcard_preset(order_id):
+    """SIDE + MATERIAL chuno -> uske related process flow table mein set ho jata hai.
+    Ye jobcard_process rows replace karta hai — table, Operator view aur print
+    sab isi table se aata hai, isliye 'sab jagah' wahi flow dikhta hai.
+    JSON return karta hai (chhota response) — page JS ek baar reload karta hai,
+    isse redirect + full page double download nahi hota (speed ke liye)."""
+    if session.get("user_role") != "admin":
+        return jsonify({"ok": False, "msg": "Sirf admin process flow set kar sakta hai."})
+    order = db.query("SELECT * FROM orders WHERE id=?", (order_id,), one=True)
+    if not order:
+        return jsonify({"ok": False, "msg": "Order not found."})
+    side = (request.form.get("side") or "").strip().upper()
+    material = (request.form.get("material") or "").strip()
+    if not side:
+        return jsonify({"ok": False, "msg": "Pehle SIDE chuno (SINGLE SIDE ya DOUBLE SIDE)."})
+    plist, label = db.process_preset_for(side, material)
+    force = request.form.get("force") == "1"
+    rows = db.get_jc_processes(order_id)
+    has_data = any((r["start_dt"] or r["end_dt"] or r["qty"] or r["start_name"] or r["end_name"])
+                   for r in rows)
+    if has_data and not force:
+        return jsonify({"ok": False, "msg": "⚠️ Process table par kaam shuru ho chuka hai (dates/qty bhare hain). "
+                                           "Dobara Apply dabao to purani entries hatke naya flow set hoga."})
+    db.execute("DELETE FROM jobcard_process WHERE order_id=?", (order_id,))
+    for i, p in enumerate(plist):
+        # tool slot row -> dropdown bane, isliye pehla option ("TOOL") insert hota hai
+        proc_name = db.JC_TOOL_OPTIONS[0] if p == db.JC_TOOL_SLOT else p
+        db.execute("INSERT INTO jobcard_process (order_id, process, next_process, ord) VALUES (?,?,?,?)",
+                   (order_id, proc_name, "", (i + 1) * 10))
+    db.execute("UPDATE jobcard SET board_side=?, board_material=? WHERE order_id=?",
+               (("SINGLE SIDE" if "SINGLE" in side else "DOUBLE SIDE"), material, order_id))
+    db.execute("UPDATE orders SET current_process=? WHERE id=?", (plist[0], order_id))
+    flash(f"✅ {label} — process flow set ho gaya. Ye table, Operator view aur Job Card print mein sab jagah lagega.",
+          "success")
+    return jsonify({"ok": True, "msg": label})
+
+
 @app.route("/jobcard/<int:order_id>/process", methods=["POST"])
 @login_required
 def jobcard_process(order_id):
@@ -2817,6 +3288,17 @@ def jobcard_process(order_id):
             r["process"] = new_proc
         start_dt = _dt_pair(f, f"start_date_{pid}", f"start_time_{pid}")
         end_dt = _dt_pair(f, f"end_date_{pid}", f"end_time_{pid}")
+        # per-process assignment: kaun karega + kaunsi machine (PENDING PROCESS)
+        asg_op = f.get(f"asg_op_{pid}", "").strip()
+        asg_machine = f.get(f"asg_machine_{pid}", "").strip()
+        if asg_op or asg_machine:
+            db.execute(
+                "INSERT OR REPLACE INTO order_assignments (order_id, process, machine, shift, operator, planned_start) "
+                "VALUES (?,?,?,?,?,?)",
+                (order_id, r["process"], asg_machine or "Unassigned", "Day", asg_op or "Unassigned", ""))
+        else:
+            db.execute("DELETE FROM order_assignments WHERE order_id=? AND process=?",
+                       (order_id, r["process"]))
         nxt = f.get(f"next_{pid}", "").strip()
         db.execute(
             "UPDATE jobcard_process SET start_dt=?, end_dt=?, start_name=?, end_name=?, qty=?, next_process=? WHERE id=?",
@@ -2920,11 +3402,20 @@ def jobcard_dispatch(order_id):
     ddate = f.get("ddate", "") or datetime.date.today().isoformat()
     dtime = f.get("dtime", "") or datetime.datetime.now().strftime("%H:%M")
     by = f.get("dispatched_by", "").strip() or session.get("user_name", "")
-    db.execute("INSERT INTO dispatch_log (order_id, ddate, dtime, mode, details, dispatched_by, ts) "
-               "VALUES (?,?,?,?,?,?,?)",
+    ph_name, ph_mime, ph_data = "", "", None
+    photo = request.files.get("photo")
+    if photo and photo.filename:
+        ext = (photo.filename.rsplit(".", 1)[-1] if "." in photo.filename else "").lower()
+        blob = photo.read()
+        if ext in ("jpg", "jpeg", "png", "gif", "webp", "bmp", "heic") and len(blob) <= 3 * 1024 * 1024:
+            ph_name, ph_mime, ph_data = photo.filename, photo.mimetype or "image/png", blob
+        else:
+            flash("📷 Photo nahi lagi (sirf image, max 3MB) — dispatch bina photo ke ho gaya.", "error")
+    db.execute("INSERT INTO dispatch_log (order_id, ddate, dtime, mode, details, dispatched_by, ts, "
+               "photo_name, photo_mime, photo_data) VALUES (?,?,?,?,?,?,?,?,?,?)",
                (order_id, ddate, dtime, mode, f.get("details", "").strip(), by,
-                datetime.datetime.now().strftime("%Y-%m-%d %H:%M")))
-    flash(f"PCB dispatched: {mode} · {ddate} {dtime}.", "success")
+                datetime.datetime.now().strftime("%Y-%m-%d %H:%M"), ph_name, ph_mime, ph_data))
+    flash(f"PCB dispatched: {mode} · {ddate} {dtime}." + (" 📷 Photo bhi save hui." if ph_data else ""), "success")
     return redirect_with_token(url_for("jobcard", order_id=order_id))
 
 
@@ -3200,24 +3691,237 @@ def export_parties():
 @app.route("/reports")
 @login_required
 def reports():
-    order_stats = db.query("SELECT COUNT(*) total, "
-                           "COALESCE(SUM(CASE WHEN status='done' THEN 1 ELSE 0 END),0) done, "
-                           "COALESCE(SUM(CASE WHEN status='pending' THEN 1 ELSE 0 END),0) pending, "
-                           "COALESCE(SUM(value),0) total_value FROM orders", one=True)
-    revenue = db.query("SELECT COALESCE(SUM(amount),0) billed, "
-                       "COALESCE(SUM(CASE WHEN status='paid' THEN amount ELSE 0 END),0) collected, "
-                       "COALESCE(SUM(CASE WHEN status!='paid' THEN amount ELSE 0 END),0) outstanding FROM billing", one=True)
-    att = db.query("SELECT e.name, e.department, "
-                   "SUM(CASE WHEN a.status='present' THEN 1 ELSE 0 END) present, "
-                   "SUM(CASE WHEN a.status='absent' THEN 1 ELSE 0 END) absent "
-                   "FROM employees e LEFT JOIN attendance a ON a.emp_id=e.id GROUP BY e.id ORDER BY e.id")
-    machines = db.query("SELECT status, COUNT(*) c FROM machines GROUP BY status")
-    machine_counts = {r["status"]: r["c"] for r in machines}
-    inventory_low = db.query("SELECT * FROM inventory WHERE stock<=min_stock ORDER BY name")
-    orders_by_party = db.query("SELECT party, COUNT(*) c, COALESCE(SUM(value),0) v FROM orders GROUP BY party ORDER BY v DESC")
-    return render_template("reports.html", active="reports", order_stats=order_stats, revenue=revenue,
-                           att=att, machine_counts=machine_counts, inventory_low=inventory_low,
-                           orders_by_party=orders_by_party)
+    rtype = request.args.get("type") or "dispatch"
+    period = request.args.get("period") or "monthly"
+    if rtype not in ("dispatch", "production", "salary"):
+        rtype = "dispatch"
+    if period not in ("daily", "monthly", "yearly"):
+        period = "monthly"
+    today = datetime.date.today()
+    sel_date = request.args.get("date") or today.isoformat()
+    sel_month = request.args.get("month") or today.strftime("%Y-%m")
+    sel_year = request.args.get("year") or str(today.year)
+    try:
+        datetime.date.fromisoformat(sel_date)
+    except ValueError:
+        sel_date = today.isoformat()
+    if not _valid_month(sel_month):
+        sel_month = today.strftime("%Y-%m")
+    if not (sel_year.isdigit() and len(sel_year) == 4):
+        sel_year = str(today.year)
+    y, mo = int(sel_month[:4]), int(sel_month[5:7])
+    period_label = {"daily": datetime.date.fromisoformat(sel_date).strftime("%d %b %Y"),
+                    "monthly": datetime.date(y, mo, 1).strftime("%B %Y"),
+                    "yearly": sel_year}[period]
+    d = {"type": rtype, "period": period, "date": sel_date, "month": sel_month, "year": sel_year,
+         "period_label": period_label,
+         "type_label": {"dispatch": "Dispatch", "production": "Production", "salary": "Employee Salary"}[rtype],
+         "active_orders": {"running": 0, "pending": 0, "done": 0, "total": 0}}
+
+    if rtype == "dispatch":
+        pattern = sel_date if period == "daily" else (sel_month + "%" if period == "monthly" else sel_year + "%")
+        rows = db.query("SELECT dl.*, o.order_no, o.party, o.value, o.qty, o.product, "
+                        "jc.party_model, jc.model FROM dispatch_log dl "
+                        "LEFT JOIN orders o ON o.id=dl.order_id "
+                        "LEFT JOIN jobcard jc ON jc.order_id=o.id "
+                        "WHERE dl.ddate LIKE ? "
+                        "ORDER BY dl.ddate DESC, dl.id DESC", (pattern,))
+        d["rows"] = rows
+        d["total"] = len(rows)
+        seen = {}
+        for r in rows:
+            seen[r["order_id"]] = (r["value"] or 0) + (r["qty"] or 0)
+        d["orders"] = len(seen)
+        d["value"] = round(sum(r["value"] or 0 for r in rows), 0)
+        d["qty"] = sum(r["qty"] or 0 for r in rows)
+        modes = {}
+        for r in rows:
+            modes[r["mode"] or "Other"] = modes.get(r["mode"] or "Other", 0) + 1
+        d["modes"] = sorted(modes.items(), key=lambda x: -x[1])
+        d["photos"] = sum(1 for r in rows if r["photo_data"])
+
+    elif rtype == "production":
+        pattern = sel_date if period == "daily" else (sel_month + "%" if period == "monthly" else sel_year + "%")
+        d["rows"] = db.query("SELECT * FROM orders WHERE created_on LIKE ? ORDER BY id DESC", (pattern,))
+        d["total"] = len(d["rows"])
+        d["value"] = round(sum(r["value"] or 0 for r in d["rows"]), 0)
+        d["qty"] = sum(r["qty"] or 0 for r in d["rows"])
+        snap = db.query("SELECT COUNT(*) total, "
+                        "COALESCE(SUM(CASE WHEN status='running' THEN 1 ELSE 0 END),0) running, "
+                        "COALESCE(SUM(CASE WHEN status='pending' THEN 1 ELSE 0 END),0) pending, "
+                        "COALESCE(SUM(CASE WHEN status='done' THEN 1 ELSE 0 END),0) done "
+                        "FROM orders", one=True)
+        d["active_orders"] = {"total": snap["total"] or 0, "running": snap["running"] or 0,
+                              "pending": snap["pending"] or 0, "done": snap["done"] or 0}
+        d["procs_done"] = db.query("SELECT COUNT(*) c FROM jobcard_process WHERE end_dt LIKE ?",
+                                   (pattern,), one=True)["c"]
+        d["procs_started"] = db.query("SELECT COUNT(*) c FROM jobcard_process WHERE start_dt LIKE ?",
+                                      (pattern,), one=True)["c"]
+
+    else:  # salary
+        if period == "yearly":
+            months_in_year = [m for m in range(1, 13)]
+            cur_ym = today.strftime("%Y-%m")
+            ag = {}
+            for r in db.query("SELECT emp_id, substr(date,1,7) AS m, status, COUNT(*) AS c FROM attendance "
+                              "WHERE date LIKE ? GROUP BY emp_id, m, status", (sel_year + "%",)):
+                key = (r["emp_id"], r["m"])
+                ag.setdefault(key, {"present": 0, "absent": 0, "leave": 0, "halfday": 0, "late": 0})
+                if r["status"] in ag[key]:
+                    ag[key][r["status"]] = r["c"]
+            adv = {}
+            paid = {}
+            for r in db.query("SELECT emp_id, COALESCE(SUM(advance),0) a, SUM(CASE WHEN paid THEN 1 ELSE 0 END) p "
+                              "FROM emp_salary WHERE month LIKE ? GROUP BY emp_id", (sel_year + "%",)):
+                adv[r["emp_id"]] = r["a"]
+                paid[r["emp_id"]] = r["p"]
+            rows = []
+            for e in db.query("SELECT * FROM employees WHERE status='active' ORDER BY id"):
+                r = dict(e)
+                cnt = {"present": 0, "absent": 0, "leave": 0, "halfday": 0, "late": 0}
+                earned = 0.0
+                sal = float(e["salary"] or 0)
+                for mnum in months_in_year:
+                    ym = f"{sel_year}-{mnum:02d}"
+                    if sel_year == str(today.year) and ym > cur_ym:
+                        continue
+                    dim = calendar.monthrange(int(sel_year), mnum)[1]
+                    a = ag.get((e["id"], ym))
+                    if not a:
+                        earned += sal
+                        continue
+                    ded = (a["absent"] + 0.5 * a["halfday"]) * (sal / dim if dim else 0)
+                    earned += max(0.0, sal - ded)
+                    for k in cnt:
+                        cnt[k] += a[k]
+                r.update(cnt)
+                r["earned"] = round(earned)
+                r["advance"] = float(adv.get(e["id"], 0) or 0)
+                r["net"] = round(earned - r["advance"])
+                r["paid_months"] = int(paid.get(e["id"], 0) or 0)
+                rows.append(r)
+            d["rows"] = rows
+            d["payroll"] = round(sum((x["salary"] or 0) * 12 for x in rows), 0)
+            d["earned_tot"] = sum(x["earned"] for x in rows)
+            d["advance_tot"] = round(sum(x["advance"] for x in rows), 0)
+            d["net_tot"] = sum(x["net"] for x in rows)
+        else:
+            rows = []
+            for e in db.query("SELECT * FROM employees WHERE status='active' ORDER BY id"):
+                m = _emp_month(e["id"], sel_month)
+                rows.append({"id": e["id"], "emp_code": e["emp_code"], "name": e["name"],
+                             "designation": e["designation"], "salary": e["salary"],
+                             "present": m["counts"]["present"], "absent": m["counts"]["absent"],
+                             "leave": m["counts"]["leave"], "halfday": m["counts"]["halfday"],
+                             "late": m["counts"]["late"], "earned": m["earned"],
+                             "advance": m["advance"], "net": m["net"], "paid": m["paid"]})
+            d["rows"] = rows
+            d["payroll"] = round(sum((x["salary"] or 0) for x in rows), 0)
+            d["earned_tot"] = sum(x["earned"] for x in rows)
+            d["advance_tot"] = round(sum(x["advance"] for x in rows), 0)
+            d["net_tot"] = sum(x["net"] for x in rows)
+        d["emp_count"] = len(d["rows"])
+
+    return render_template("reports.html", active="reports", d=d)
+
+
+def _model_name(r):
+    """Dispatch row ka MODEL NAME — jobcard ke party_model · model, warna product name."""
+    try:
+        keys = r.keys()
+    except AttributeError:
+        return "—"
+    pm = (r["party_model"] or "").strip() if "party_model" in keys else ""
+    mo = (r["model"] or "").strip() if "model" in keys else ""
+    name = " · ".join(x for x in (pm, mo) if x)
+    if not name and "product" in keys:
+        name = (r["product"] or "").strip()
+    return name or "—"
+
+
+@app.route("/reports/csv")
+@login_required
+def reports_csv():
+    """Current report view ka CSV export (type + period params ke saath)."""
+    args = request.args.to_dict()
+    args.pop("token", None)
+    target = url_for("reports", **args)
+    # wahi data dobara compute (reports route se) — re-render se heavy hai, seedha query
+    rtype = args.get("type") or "dispatch"
+    period = args.get("period") or "monthly"
+    today = datetime.date.today()
+    sel_date = args.get("date") or today.isoformat()
+    sel_month = args.get("month") or today.strftime("%Y-%m")
+    sel_year = args.get("year") or str(today.year)
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    fname = f"report_{rtype}_{period}_{today.isoformat()}.csv"
+    if rtype == "dispatch":
+        pattern = sel_date if period == "daily" else (sel_month + "%" if period == "monthly" else sel_year + "%")
+        rows = db.query("SELECT dl.*, o.order_no, o.party, o.value, o.qty, o.product, "
+                        "jc.party_model, jc.model FROM dispatch_log dl "
+                        "LEFT JOIN orders o ON o.id=dl.order_id "
+                        "LEFT JOIN jobcard jc ON jc.order_id=o.id "
+                        "WHERE dl.ddate LIKE ? ORDER BY dl.ddate, dl.id", (pattern,))
+        w.writerow(["Date", "Order No", "Model", "Party", "Mode", "Details", "Dispatched By", "Qty", "Value", "Photo"])
+        for r in rows:
+            w.writerow([r["ddate"], r["order_no"] or "", _model_name(r), r["party"] or "", r["mode"],
+                        r["details"] or "", r["dispatched_by"] or "", r["qty"] or 0, r["value"] or 0,
+                        "Yes" if r["photo_data"] else "No"])
+    elif rtype == "production":
+        pattern = sel_date if period == "daily" else (sel_month + "%" if period == "monthly" else sel_year + "%")
+        rows = db.query("SELECT * FROM orders WHERE created_on LIKE ? ORDER BY id", (pattern,))
+        w.writerow(["Order No", "Party", "Product", "Qty", "Value", "Status", "Current Process", "Delivery Date", "Created"])
+        for r in rows:
+            w.writerow([r["order_no"], r["party"] or "", r["product"] or "", r["qty"] or 0, r["value"] or 0,
+                        r["status"] or "", r["current_process"] or "", r["delivery_date"] or "", r["created_on"] or ""])
+    else:  # salary
+        if period == "yearly":
+            args2 = {"type": "salary", "period": "yearly", "year": sel_year}
+            # reports() jaisa hi data — chhota duplicate via flask test client nahi; seedha same loop
+            ag = {}
+            for r in db.query("SELECT emp_id, substr(date,1,7) AS m, status, COUNT(*) AS c FROM attendance "
+                              "WHERE date LIKE ? GROUP BY emp_id, m, status", (sel_year + "%",)):
+                key = (r["emp_id"], r["m"])
+                ag.setdefault(key, {"present": 0, "absent": 0, "leave": 0, "halfday": 0, "late": 0})
+                if r["status"] in ag[key]:
+                    ag[key][r["status"]] = r["c"]
+            adv = {r["emp_id"]: r["a"] for r in db.query(
+                "SELECT emp_id, COALESCE(SUM(advance),0) a FROM emp_salary WHERE month LIKE ? GROUP BY emp_id", (sel_year + "%",))}
+            cur_ym = today.strftime("%Y-%m")
+            w.writerow(["Code", "Name", "Role", "Monthly Salary", "Present", "Absent", "Leave", "Half Day", "Late",
+                        "Earned (year)", "Advance (year)", "Net Payable"])
+            for e in db.query("SELECT * FROM employees WHERE status='active' ORDER BY id"):
+                cnt = {"present": 0, "absent": 0, "leave": 0, "halfday": 0, "late": 0}
+                earned = 0.0
+                sal = float(e["salary"] or 0)
+                for mnum in range(1, 13):
+                    ym = f"{sel_year}-{mnum:02d}"
+                    if sel_year == str(today.year) and ym > cur_ym:
+                        continue
+                    a = ag.get((e["id"], ym))
+                    if not a:
+                        earned += sal
+                        continue
+                    dim = calendar.monthrange(int(sel_year), mnum)[1]
+                    earned += max(0.0, sal - (a["absent"] + 0.5 * a["halfday"]) * (sal / dim if dim else 0))
+                    for k in cnt:
+                        cnt[k] += a[k]
+                w.writerow([e["emp_code"], e["name"], e["designation"] or "", sal, cnt["present"], cnt["absent"],
+                            cnt["leave"], cnt["halfday"], cnt["late"], round(earned),
+                            round(adv.get(e["id"], 0) or 0), round(earned - (adv.get(e["id"], 0) or 0))])
+        else:
+            w.writerow(["Code", "Name", "Role", "Monthly Salary", "Present", "Absent", "Leave", "Half Day", "Late",
+                        "Earned", "Advance", "Net Payable", "Paid"])
+            for e in db.query("SELECT * FROM employees WHERE status='active' ORDER BY id"):
+                m = _emp_month(e["id"], sel_month)
+                w.writerow([e["emp_code"], e["name"], e["designation"] or "", e["salary"] or 0,
+                            m["counts"]["present"], m["counts"]["absent"], m["counts"]["leave"],
+                            m["counts"]["halfday"], m["counts"]["late"], m["earned"], m["advance"], m["net"],
+                            "Yes" if m["paid"] else "No"])
+        fname = f"report_salary_{period}_{sel_month if period == 'monthly' else sel_year}_{today.isoformat()}.csv"
+    return Response(buf.getvalue(), mimetype="text/csv",
+                    headers={"Content-Disposition": f"attachment; filename={fname}"})
 
 
 # ---------------------------------------------------------------- users & access

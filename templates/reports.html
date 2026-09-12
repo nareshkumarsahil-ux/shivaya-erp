@@ -2,77 +2,205 @@
 {% block title %}Reports{% endblock %}
 {% block page_title %}Reports{% endblock %}
 {% block content %}
-<div class="toolbar" style="justify-content:flex-end">
-  <button class="btn btn-outline btn-sm" onclick="window.print()">🖨️ Print Report</button>
+<style>
+.rep-filter{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:14px;display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.tab{border:1.5px solid var(--border);background:var(--bg);border-radius:9px;padding:6px 13px;font-size:12.5px;font-weight:700;cursor:pointer;color:var(--muted);text-decoration:none}
+.tab.on{background:#1d4ed8;border-color:#1d4ed8;color:#fff}
+.tab.on.amber{background:#b45309;border-color:#b45309}
+.tab.on.green{background:#15803d;border-color:#15803d}
+.ptab{border:1.5px solid var(--border);background:var(--bg);border-radius:9px;padding:5px 11px;font-size:12px;font-weight:700;cursor:pointer;color:var(--muted);text-decoration:none}
+.ptab.on{background:var(--muted);border-color:var(--muted);color:#fff}
+.snap{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:14px}
+.snap .s{background:var(--bg2);border:1px solid var(--border);border-radius:11px;padding:10px 13px}
+.snap .s .n{font-size:20px;font-weight:800}
+.snap .s .l{font-size:11px;color:var(--muted);font-weight:600}
+.modechip{display:inline-flex;gap:6px;align-items:center;background:var(--bg);border:1px solid var(--border);border-radius:99px;padding:4px 12px;font-size:12px;font-weight:700;margin:3px 3px 0 0}
+.modechip .c{background:#1d4ed8;color:#fff;border-radius:99px;padding:0 8px;font-size:11px}
+.totrow td{background:#f8fafc;font-weight:800}
+@media print{aside.sidebar,.toolbar,.no-print,form,.rep-filter{display:none!important}body{background:#fff}.panel{box-shadow:none;border:1px solid #ddd}}
+</style>
+
+<div class="rep-filter no-print">
+  <a class="tab {{'on' if d.type=='dispatch'}}" href="/reports?type=dispatch&period={{ d.period }}&date={{ d.date }}&month={{ d.month }}&year={{ d.year }}">📦 Dispatch</a>
+  <a class="tab {{'on amber' if d.type=='production'}}" href="/reports?type=production&period={{ d.period }}&date={{ d.date }}&month={{ d.month }}&year={{ d.year }}">🏭 Production</a>
+  <a class="tab {{'on green' if d.type=='salary'}}" href="/reports?type=salary&period={{ d.period }}&date={{ d.date }}&month={{ d.month }}&year={{ d.year }}">👷 Employee Salary</a>
+  <span style="width:10px"></span>
+  <a class="ptab {{'on' if d.period=='daily'}}" href="/reports?type={{ d.type }}&period=daily&date={{ d.date }}">Daily</a>
+  <a class="ptab {{'on' if d.period=='monthly'}}" href="/reports?type={{ d.type }}&period=monthly&month={{ d.month }}">Monthly</a>
+  <a class="ptab {{'on' if d.period=='yearly'}}" href="/reports?type={{ d.type }}&period=yearly&year={{ d.year }}">Yearly</a>
+  <span style="margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+    {% if d.period == 'daily' %}
+    <input type="date" value="{{ d.date }}" onchange="goP('date', this.value)">
+    {% elif d.period == 'monthly' %}
+    <input type="month" value="{{ d.month }}" onchange="goP('month', this.value)">
+    {% else %}
+    <input type="number" min="2020" max="2035" value="{{ d.year }}" style="width:90px" onchange="goP('year', this.value)">
+    {% endif %}
+    <button class="btn btn-outline btn-sm" onclick="window.print()">🖨 Print</button>
+    <a class="btn btn-outline btn-sm" href="/reports/csv?type={{ d.type }}&period={{ d.period }}&date={{ d.date }}&month={{ d.month }}&year={{ d.year }}">⬇ CSV</a>
+  </span>
 </div>
 
-<div class="cards" style="grid-template-columns:repeat(auto-fill,minmax(150px,1fr))">
-  <div class="stat"><div class="top"><span class="lbl">TOTAL JOB ORDERS</span><span class="ic ic-navy">🗂️</span></div><div class="num">{{ order_stats.total }}</div><div class="sub">{{ order_stats.done }} done · {{ order_stats.pending }} pending</div></div>
-  <div class="stat"><div class="top"><span class="lbl">TOTAL ORDER VALUE</span><span class="ic ic-blue">💰</span></div><div class="num" style="font-size:17px">{{ order_stats.total_value|inr }}</div></div>
-  <div class="stat"><div class="top"><span class="lbl">TOTAL BILLED</span><span class="ic ic-gray">🧾</span></div><div class="num" style="font-size:17px">{{ revenue.billed|inr }}</div><div class="sub">{{ revenue.collected|inr }} collected</div></div>
-  <div class="stat"><div class="top"><span class="lbl">OUTSTANDING</span><span class="ic ic-peach">⏰</span></div><div class="num" style="font-size:17px;color:#b3401c">{{ revenue.outstanding|inr }}</div></div>
-</div>
+<script>
+function goP(k, v){
+  var q = new URLSearchParams(window.location.search);
+  q.set(k, v); q.set('type', '{{ d.type }}'); q.set('period', '{{ d.period }}');
+  window.location.search = q.toString();
+}
+</script>
 
-<div class="grid2">
-  <div class="panel">
-    <div class="panel-head"><h3>👥 Employee Attendance Summary</h3></div>
-    <div class="panel-body" style="padding:0">
-      <table>
-        <thead><tr><th>Employee</th><th>Department</th><th class="t-right">Present</th><th class="t-right">Absent</th></tr></thead>
-        <tbody>
-          {% for a in att %}
-          <tr>
-            <td><b>{{ a.name }}</b></td>
-            <td class="muted small">{{ a.department or '—' }}</td>
-            <td class="t-right"><span class="badge b-green">{{ a.present }}</span></td>
-            <td class="t-right"><span class="badge b-red">{{ a.absent }}</span></td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
+<h3 style="margin:0 0 12px">📊 {{ d.type_label }} Report — <span style="color:#b45309">{{ d.period_label }}</span></h3>
+
+{% if d.type == 'dispatch' %}
+<div class="snap">
+  <div class="s"><div class="n" style="color:#1d4ed8">{{ d.total }}</div><div class="l">📦 Total Dispatches</div></div>
+  <div class="s"><div class="n" style="color:#15803d">{{ d.orders }}</div><div class="l">🗂 Orders Dispatched</div></div>
+  <div class="s"><div class="n" style="color:#7c3aed">₹{{ d.value|inr0 }}</div><div class="l">💰 Dispatch Value</div></div>
+  <div class="s"><div class="n" style="color:#0e7490">{{ d.qty }}</div><div class="l">🔢 Total Qty</div></div>
+  <div class="s"><div class="n" style="color:#b45309">{{ d.photos }}</div><div class="l">📷 Photos</div></div>
+</div>
+<div class="panel" style="margin-bottom:14px">
+  <div class="panel-head"><h3>🚚 Mode-wise Breakdown</h3></div>
+  <div class="panel-body">
+    {% for mode, c in d.modes %}
+    <span class="modechip">{{ mode }} <span class="c">{{ c }}</span></span>
+    {% else %}
+    <span class="muted small">Is period me koi dispatch nahi hua.</span>
+    {% endfor %}
   </div>
-
-  <div class="panel">
-    <div class="panel-head"><h3>🏭 Machine Status</h3></div>
-    <div class="panel-body" style="padding:0">
-      <table>
-        <thead><tr><th>Status</th><th class="t-right">Count</th></tr></thead>
-        <tbody>
-          <tr><td><span class="badge b-done">RUNNING</span></td><td class="t-right mono"><b>{{ machine_counts.get('running',0) }}</b></td></tr>
-          <tr><td><span class="badge b-gray">IDLE</span></td><td class="t-right mono"><b>{{ machine_counts.get('idle',0) }}</b></td></tr>
-          <tr><td><span class="badge b-amber">MAINTENANCE</span></td><td class="t-right mono"><b>{{ machine_counts.get('maintenance',0) }}</b></td></tr>
-        </tbody>
-      </table>
-      <div style="padding:14px 18px;border-top:1px solid var(--border)">
-        <b class="small">⚠️ Low Stock Items:</b>
-        <div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px">
-          {% for i in inventory_low %}
-          <span class="badge b-urgent">{{ i.name }} ({{ i.stock }} {{ i.unit }})</span>
-          {% else %}
-          <span class="muted small">None — all stock OK</span>
-          {% endfor %}
-        </div>
-      </div>
-    </div>
-  </div>
 </div>
-
 <div class="panel">
-  <div class="panel-head"><h3>📊 Orders by Party</h3></div>
-  <div class="panel-body" style="padding:0">
+  <div class="panel-head"><h3>🧾 Dispatch Entries ({{ d.total }})</h3></div>
+  <div class="panel-body" style="padding:0;overflow-x:auto">
     <table>
-      <thead><tr><th>Party</th><th class="t-right">Orders</th><th class="t-right">Total Value</th></tr></thead>
+      <thead><tr><th>Date</th><th>Order</th><th>Model</th><th>Party</th><th>Mode</th><th>Details</th><th>By</th><th class="t-right">Value</th><th>Photo</th></tr></thead>
       <tbody>
-        {% for p in orders_by_party %}
+        {% for r in d.rows %}
         <tr>
-          <td><b>{{ p.party }}</b></td>
-          <td class="t-right mono">{{ p.c }}</td>
-          <td class="t-right"><b>{{ p.v|inr }}</b></td>
+          <td class="mono small">{{ r.ddate }}</td>
+          <td class="mono">{% if r.order_id and r.order_no %}<a href="/jobcard/{{ r.order_id }}{% if request.args.get('token') %}?token={{ request.args.get('token') }}{% endif %}" title="Job Order kholo">{{ r.order_no }}</a>{% else %}<b>{{ r.order_no or '—' }}</b>{% endif %}</td>
+          <td class="small">{{ r|modelname }}</td>
+          <td>{{ r.party or '—' }}</td>
+          <td><span class="badge b-blue">{{ r.mode }}</span></td>
+          <td class="small muted">{{ r.details or '—' }}</td>
+          <td class="small">{{ r.dispatched_by or '—' }}</td>
+          <td class="t-right mono">₹{{ r.value|inr0 }}</td>
+          <td style="white-space:nowrap">
+            {% if r.photo_data %}<a class="btn btn-outline btn-xs" target="_blank" href="/dispatch/{{ r.id }}/photo{% if request.args.get('token') %}?token={{ request.args.get('token') }}{% endif %}" title="Photo dekho">📷 View</a>{% endif %}
+            <form method="post" action="/dispatch/{{ r.id }}/attach_photo" enctype="multipart/form-data" style="display:inline-flex;gap:4px;align-items:center">
+              <input type="file" name="photo" accept="image/*" required style="width:100px;font-size:10px">
+              <button class="btn btn-outline btn-xs" type="submit" title="{{'Photo badlo' if r.photo_data else 'Photo/screenshot attach karo'}}">{{'📷 Replace' if r.photo_data else '📷 Attach'}}</button>
+            </form>
+          </td>
         </tr>
+        {% else %}
+        <tr><td colspan="9"><div class="empty">Is period me koi dispatch nahi hua.</div></td></tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
 </div>
+
+{% elif d.type == 'production' %}
+<div class="snap">
+  <div class="s"><div class="n" style="color:#1d4ed8">{{ d.total }}</div><div class="l">📋 Orders ({{ d.period_label }})</div></div>
+  <div class="s"><div class="n" style="color:#7c3aed">₹{{ d.value|inr0 }}</div><div class="l">💰 Order Value</div></div>
+  <div class="s"><div class="n" style="color:#0e7490">{{ d.qty }}</div><div class="l">🔢 Total Qty</div></div>
+  <div class="s"><div class="n" style="color:#15803d">{{ d.procs_done }}</div><div class="l">✅ Processes Finished</div></div>
+  <div class="s"><div class="n" style="color:#b45309">{{ d.procs_started }}</div><div class="l">▶ Processes Started</div></div>
+</div>
+<div class="panel" style="margin-bottom:14px">
+  <div class="panel-head"><h3>🔴 LIVE STATUS — abhi ka production snapshot</h3></div>
+  <div class="panel-body">
+    <div class="snap" style="margin:0">
+      <div class="s"><div class="n">{{ d.active_orders.total }}</div><div class="l">TOTAL orders</div></div>
+      <div class="s"><div class="n" style="color:#1d4ed8">{{ d.active_orders.running }}</div><div class="l">⏱ RUNNING</div></div>
+      <div class="s"><div class="n" style="color:#b45309">{{ d.active_orders.pending }}</div><div class="l">⏳ PENDING</div></div>
+      <div class="s"><div class="n" style="color:#15803d">{{ d.active_orders.done }}</div><div class="l">✅ DONE</div></div>
+    </div>
+  </div>
+</div>
+<div class="panel">
+  <div class="panel-head"><h3>📋 Orders — {{ d.period_label }} ({{ d.total }})</h3></div>
+  <div class="panel-body" style="padding:0;overflow-x:auto">
+    <table>
+      <thead><tr><th>Order</th><th>Party</th><th>Product</th><th class="t-right">Qty</th><th class="t-right">Value</th><th>Status</th><th>Current Process</th><th>Delivery</th></tr></thead>
+      <tbody>
+        {% for r in d.rows %}
+        <tr>
+          <td class="mono"><b>{{ r.order_no }}</b></td>
+          <td>{{ r.party or '—' }}</td>
+          <td class="small">{{ r.product or '—' }}</td>
+          <td class="t-right mono">{{ r.qty }}</td>
+          <td class="t-right mono">₹{{ r.value|inr0 }}</td>
+          <td>{% if r.status=='done' %}<span class="badge b-done">✅ DONE</span>
+              {% elif r.status=='running' %}<span class="badge b-blue">⏱ RUNNING</span>
+              {% else %}<span class="badge b-amber">⏳ PENDING</span>{% endif %}</td>
+          <td class="small">{{ r.current_process or '—' }}</td>
+          <td class="mono small">{{ r.delivery_date or '—' }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="8"><div class="empty">Is period me koi order nahi bana.</div></td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% else %}
+<div class="snap">
+  <div class="s"><div class="n" style="color:#1d4ed8">{{ d.emp_count }}</div><div class="l">👷 Total Employees</div></div>
+  <div class="s"><div class="n" style="color:#7c3aed">₹{{ d.payroll|inr0 }}</div><div class="l">💰 {{ 'Yearly' if d.period=='yearly' else 'Monthly' }} Payroll</div></div>
+  <div class="s"><div class="n" style="color:#0e7490">₹{{ d.earned_tot|inr0 }}</div><div class="l">📈 Earned</div></div>
+  <div class="s"><div class="n" style="color:#b45309">₹{{ d.advance_tot|inr0 }}</div><div class="l">🏦 Advance</div></div>
+  <div class="s"><div class="n" style="color:{{'#b91c1c' if d.net_tot < 0 else '#15803d'}}">₹{{ d.net_tot|inr0 }}</div><div class="l">💸 Net Payable</div></div>
+</div>
+<div class="panel">
+  <div class="panel-head"><h3>👷 Salary Report — {{ d.period_label }}</h3></div>
+  <div class="panel-body" style="padding:0;overflow-x:auto">
+    <table>
+      <thead><tr><th>Code</th><th>Name</th><th>Role</th><th class="t-right">Salary</th>
+        <th class="t-right">P</th><th class="t-right">A</th><th class="t-right">L</th><th class="t-right">HD</th><th class="t-right">LT</th>
+        <th class="t-right">Earned</th><th class="t-right">Advance</th><th class="t-right">Net Payable</th><th>Paid</th></tr></thead>
+      <tbody>
+        {% for r in d.rows %}
+        <tr>
+          <td class="mono small">{{ r.emp_code }}</td>
+          <td><b>{{ r.name }}</b></td>
+          <td class="small muted">{{ r.designation or '—' }}</td>
+          <td class="t-right mono">₹{{ r.salary|inr0 }}</td>
+          <td class="t-right mono" style="color:#15803d">{{ r.present }}</td>
+          <td class="t-right mono" style="color:#b91c1c">{{ r.absent }}</td>
+          <td class="t-right mono" style="color:#b45309">{{ r.leave }}</td>
+          <td class="t-right mono" style="color:#0e7490">{{ r.halfday }}</td>
+          <td class="t-right mono" style="color:#d97706">{{ r.late }}</td>
+          <td class="t-right mono"><b>₹{{ r.earned|inr0 }}</b></td>
+          <td class="t-right mono">₹{{ r.advance|inr0 }}</td>
+          <td class="t-right mono"><b style="color:{{'#b91c1c' if r.net < 0 else '#15803d'}}">₹{{ r.net|inr0 }}</b></td>
+          <td>{% if d.period=='yearly' %}{{ r.paid_months }} mo{% else %}{% if r.paid %}<span class="badge b-done">PAID ✓</span>{% else %}<span class="badge b-amber">NOT PAID</span>{% endif %}{% endif %}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="13"><div class="empty">Koi active employee nahi.</div></td></tr>
+        {% endfor %}
+        {% if d.rows %}
+        <tr class="totrow">
+          <td colspan="3">TOTAL</td>
+          <td class="t-right mono">₹{{ d.payroll|inr0 }}</td>
+          <td class="t-right mono">{{ d.rows|sum(attribute='present') }}</td>
+          <td class="t-right mono">{{ d.rows|sum(attribute='absent') }}</td>
+          <td class="t-right mono">{{ d.rows|sum(attribute='leave') }}</td>
+          <td class="t-right mono">{{ d.rows|sum(attribute='halfday') }}</td>
+          <td class="t-right mono">{{ d.rows|sum(attribute='late') }}</td>
+          <td class="t-right mono">₹{{ d.earned_tot|inr0 }}</td>
+          <td class="t-right mono">₹{{ d.advance_tot|inr0 }}</td>
+          <td class="t-right mono">₹{{ d.net_tot|inr0 }}</td>
+          <td></td>
+        </tr>
+        {% endif %}
+      </tbody>
+    </table>
+    <p class="muted small" style="padding:8px 14px">💡 P=Present, A=Absent, L=Leave, HD=Half Day, LT=Late. Earned = salary − absent/half day deduction (late par koi deduction nahi). Advance/Paid status Attendance &amp; Salary page se update hota hai. Yearly me future months count nahi hote.</p>
+  </div>
+</div>
+{% endif %}
 {% endblock %}

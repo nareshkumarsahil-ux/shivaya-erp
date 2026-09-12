@@ -46,6 +46,17 @@
     </div>
 
     <div class="panel">
+      <div class="panel-head"><h3>💰 PCB PRICE</h3></div>
+      <div class="panel-body">
+        <div style="display:flex;gap:12px">
+          <div class="field" style="flex:1"><label>PER SQUARE INCH (₹)</label><input type="number" step="0.001" name="per_sq_inch" id="cl_per_sq_inch" value="{{ fields.per_sq_inch }}" placeholder="e.g. 1.5"></div>
+          <div class="field" style="flex:1"><label>PCB PRICE (₹)</label><input type="number" step="0.01" name="pcb_price" id="cl_pcb_price" value="{{ fields.pcb_price }}" placeholder="e.g. 25"></div>
+        </div>
+        <p class="muted small" style="margin-top:8px">💡 <b>PER SQUARE INCH</b> bharein → <b>PCB PRICE</b> auto aayega; ya <b>PCB PRICE</b> bharein → <b>PER SQ.INCH</b> auto aayega. Area = PCB SIZE (Length × Width mm) se. <b id="cl_price_info" style="color:#b45309"></b></p>
+      </div>
+    </div>
+
+    <div class="panel">
       <div class="panel-head"><h3>🔗 PANEL MULTIPLIER (GANG PANEL)</h3></div>
       <div class="panel-body">
         <div style="display:flex;gap:12px">
@@ -533,5 +544,44 @@ document.querySelectorAll('.preset-btn').forEach(function(b){
   document.getElementById('panel_w').readOnly = locked;
   computeLive();
 })();
+
+/* ---- PCB PRICE two-way calc: PER SQ.INCH <-> PCB PRICE ----
+   Area (sq.inch) = PCB SIZE (Length x Width mm) se.
+   PER SQUARE INCH bharein -> PCB PRICE = RATE x AREA
+   PCB PRICE bharein       -> PER SQ.INCH = PRICE / AREA        */
+var _clLastPriceEdit = 'rate';
+function clPcbAreaSqIn(){
+  var l = parseFloat((document.getElementById('pcb_len') || {}).value) || 0;
+  var w = parseFloat((document.getElementById('pcb_w') || {}).value) || 0;
+  return (l > 0 && w > 0) ? (l / 25.4) * (w / 25.4) : 0;
+}
+function calcClPrice(){
+  var sqIn = clPcbAreaSqIn();
+  var rate = parseFloat((document.getElementById('cl_per_sq_inch') || {}).value) || 0;
+  var price = parseFloat((document.getElementById('cl_pcb_price') || {}).value) || 0;
+  var re = document.getElementById('cl_per_sq_inch');
+  var pe = document.getElementById('cl_pcb_price');
+  if (re && pe && sqIn > 0) {
+    if (_clLastPriceEdit === 'price') {
+      re.value = price > 0 ? String(Math.round((price / sqIn) * 1000) / 1000) : '';
+      price = parseFloat(pe.value) || 0;
+    } else {
+      pe.value = String(Math.round(rate * sqIn * 100) / 100);
+      price = parseFloat(pe.value) || 0;
+    }
+  }
+  var info = document.getElementById('cl_price_info');
+  if (info) info.textContent = '| AREA: ' + sqIn.toFixed(3) + ' sq.inch | 1 PCB PRICE: ₹' + price;
+}
+(function(){
+  var re = document.getElementById('cl_per_sq_inch');
+  var pe = document.getElementById('cl_pcb_price');
+  if (re) re.addEventListener('input', function(){ _clLastPriceEdit = 'rate'; calcClPrice(); });
+  if (pe) pe.addEventListener('input', function(){ _clLastPriceEdit = 'price'; calcClPrice(); });
+  var l = document.getElementById('pcb_len'), w = document.getElementById('pcb_w');
+  if (l) l.addEventListener('input', calcClPrice);
+  if (w) w.addEventListener('input', calcClPrice);
+})();
+calcClPrice();
 </script>
 {% endblock %}
