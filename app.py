@@ -880,6 +880,24 @@ def cutlist():
         result = compute_layout(fields)
 
         if action == "save_model" and result:
+            # PCB PRICE + PER SQ.INCH — cutlist ka area = PCB SIZE (mm -> sq.inch)
+            pm_price = pm_rs = None
+            cl_price = (f.get("pcb_price") or "").strip()
+            cl_rate = (f.get("per_sq_inch") or "").strip()
+            sq_in = (result["pcb_len"] * result["pcb_w"]) / (25.4 * 25.4) \
+                if result["pcb_len"] > 0 and result["pcb_w"] > 0 else 0.0
+            if cl_price:
+                try:
+                    pm_price = round(float(cl_price), 2)
+                    pm_rs = round(pm_price / sq_in, 3) if sq_in > 0 else None
+                except ValueError:
+                    pm_price = None
+            if cl_rate and pm_price is None:
+                try:
+                    pm_rs = round(float(cl_rate), 3)
+                    pm_price = round(pm_rs * sq_in, 2) if sq_in > 0 else None
+                except ValueError:
+                    pm_rs = None
             name = f.get("save_name", "").strip()
             sel = f.get("save_select", "").strip()
             if sel:
@@ -891,11 +909,14 @@ def cutlist():
                     name = name or model["name"]
                     cutting_len = result["cutting_len"] if result["gang_active"] else result["panel_len"]
                     cutting_w = result["cutting_w"] if result["gang_active"] else result["panel_w"]
+                    up_price = pm_price if pm_price is not None else (model["pcb_price"] or 0)
+                    up_rs = pm_rs if pm_rs is not None else (model["per_sq_inch"] or 0)
                     db.execute(
                         "UPDATE product_models SET name=?, pcb_len=?, pcb_w=?, pcbs_x=?, pcbs_y=?, gap_x=?, gap_y=?, "
                         "border_l=?, border_r=?, border_t=?, border_b=?, gang_x=?, gang_y=?, sheet_len=?, sheet_w=?, "
                         "panel_len=?, panel_w=?, cutting_len=?, cutting_w=?, kerf_x=?, kerf_y=?, orientation=?, "
-                        "pcs_panel=?, panels_sheet=?, sheets=?, x_qty=?, y_qty=?, cnc_margin_x=?, cnc_margin_y=? WHERE id=?",
+                        "pcs_panel=?, panels_sheet=?, sheets=?, x_qty=?, y_qty=?, cnc_margin_x=?, cnc_margin_y=?, "
+                        "pcb_price=?, per_sq_inch=? WHERE id=?",
                         (name, result["pcb_len"], result["pcb_w"], result["pcbs_x"], result["pcbs_y"],
                          result["gap_x"], result["gap_y"],
                          result["border_l"], result["border_r"], result["border_t"], result["border_b"],
@@ -904,8 +925,9 @@ def cutlist():
                          result["kerf_x"], result["kerf_y"],
                          result["best"], result["pcs_panel"], result["panels_per_sheet"], result["sheets"],
                          result["grid_x"], result["grid_y"],
-                         result["border_l"], result["border_t"], model["id"]))
-                    flash(f"Model '{name}' updated — saari cut list details save ho gayi.", "success")
+                         result["border_l"], result["border_t"],
+                         up_price, up_rs, model["id"]))
+                    flash(f"Model '{name}' updated — saari cut list details + price save ho gayi.", "success")
                 else:
                     flash("Select a valid finished product.", "error")
             elif name:
@@ -915,8 +937,8 @@ def cutlist():
                     "INSERT INTO product_models (name, pcb_len, pcb_w, pcbs_x, pcbs_y, gap_x, gap_y, border_l, "
                     "border_r, border_t, border_b, gang_x, gang_y, sheet_len, sheet_w, panel_len, panel_w, "
                     "cutting_len, cutting_w, kerf_x, kerf_y, orientation, pcs_panel, panels_sheet, sheets, "
-                    "x_qty, y_qty, cnc_margin_x, cnc_margin_y, created_on) "
-                    "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    "x_qty, y_qty, cnc_margin_x, cnc_margin_y, pcb_price, per_sq_inch, created_on) "
+                    "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                     (name, result["pcb_len"], result["pcb_w"], result["pcbs_x"], result["pcbs_y"],
                      result["gap_x"], result["gap_y"],
                      result["border_l"], result["border_r"], result["border_t"], result["border_b"],
@@ -926,8 +948,9 @@ def cutlist():
                      result["best"], result["pcs_panel"], result["panels_per_sheet"], result["sheets"],
                      result["grid_x"], result["grid_y"],
                      result["border_l"], result["border_t"],
+                     pm_price or 0, pm_rs or 0,
                      datetime.date.today().isoformat()))
-                flash(f"Model '{name}' saved to Finished Products.", "success")
+                flash(f"Model '{name}' saved to Finished Products (price ke saath).", "success")
             else:
                 flash("Enter a name to save as finished product.", "error")
 
@@ -943,7 +966,53 @@ def cutlist():
                                (info, result["total_pcs"],
                                 f"{order['product']} \u00b7 Panel {result['panel_len']:g}\u00d7{result['panel_w']:g}mm",
                                 result["total_panels"], result["pcs_panel"], order_id))
-                    flash(f"Layout applied to {order['order_no']} ({order['party']}). Qty set to {result['total_pcs']} pcs.", "success")
+                    # JOB CARD bhi save karo — cut list ki saari details (sheet/panel/pcs/price) jobcard table me
+                    cut_x = result["cutting_len"] if result["gang_active"] else result["panel_len"]
+                    cut_y = result["cutting_w"] if result["gang_active"] else result["panel_w"]
+                    # PCB PRICE — cut list ke PCB PRICE / PER SQ.INCH se (jobcard wahi area formula use karta hai)
+                    price = rs_pcb = None
+                    cl_price = (f.get("pcb_price") or "").strip()
+                    cl_rate = (f.get("per_sq_inch") or "").strip()
+                    sq_in = 0.0
+                    if cut_x > 0 and cut_y > 0 and result["pcs_panel"] > 0:
+                        sq_in = (cut_x / 25.4) * (cut_y / 25.4) / result["pcs_panel"]
+                    elif result["pcb_len"] > 0 and result["pcb_w"] > 0:
+                        sq_in = (result["pcb_len"] / 25.4) * (result["pcb_w"] / 25.4)
+                    if cl_price:
+                        try:
+                            price = round(float(cl_price), 2)
+                            rs_pcb = round(price / sq_in, 3) if sq_in > 0 else None
+                        except ValueError:
+                            price = None
+                    if cl_rate and price is None:
+                        try:
+                            rs_pcb = round(float(cl_rate), 3)
+                            price = round(rs_pcb * sq_in, 2) if sq_in > 0 else None
+                        except ValueError:
+                            rs_pcb = None
+                    db.execute("INSERT OR IGNORE INTO jobcard (order_id) VALUES (?)", (order_id,))
+                    sets, vals = [], []
+                    for col, val in (("actual_pcb_x", result["pcb_len"]), ("actual_pcb_y", result["pcb_w"]),
+                                     ("x_size", cut_x), ("x_qty", result["grid_x"]),
+                                     ("y_size", cut_y), ("y_qty", result["grid_y"]),
+                                     ("cnc_margin_x", result["border_l"]), ("cnc_margin_y", result["border_t"]),
+                                     ("panel_x", cut_x), ("panel_y", cut_y),
+                                     ("sheet_len", result["sheet_len"]), ("sheet_w", result["sheet_w"]),
+                                     ("panels_per_sheet", result["panels_per_sheet"]), ("sheets", result["sheets"]),
+                                     ("qty_panel", result["total_panels"]), ("pcs_panel", result["pcs_panel"])):
+                        sets.append(f"{col}=?")
+                        vals.append(val)
+                    if price is not None:
+                        sets.append("price=?")
+                        vals.append(price)
+                    if rs_pcb is not None:
+                        sets.append("rs_pcb=?")
+                        vals.append(rs_pcb)
+                    vals.append(order_id)
+                    db.execute(f"UPDATE jobcard SET {', '.join(sets)} WHERE order_id=?", tuple(vals))
+                    flash(f"Layout applied to {order['order_no']} ({order['party']}). "
+                          f"Qty set to {result['total_pcs']} pcs — Job Card bhi update ho gaya "
+                          f"(sheet, panels/sheet, qty panel, pcs/panel, price).", "success")
                 else:
                     flash("Select a valid job order.", "error")
             except (ValueError, TypeError):
@@ -2621,6 +2690,12 @@ def proc_assignment(order_id, process):
                     (order_id,), one=True)
 
 
+def _op_names(val):
+    """Operator field me comma-separated naam (multi-employee: 2+ log milkar) —
+    clean unique list deta hai."""
+    return [x.strip() for x in (val or "").split(",") if x.strip() and x.strip() != "Unassigned"]
+
+
 DESIGNATION_JOBS = {
     "CNC": ["CNC DRILLING", "DIE/CNC", "DRILLING"],
     "DRILL": ["CNC DRILLING", "DIE/CNC", "DRILLING"],
@@ -2727,7 +2802,7 @@ def operator_view():
         asg = proc_assignment(o["id"], prow["process"])
         d["assigned_op"] = asg["operator"] if asg else "Unassigned"
         d["assigned_machine"] = asg["machine"] if asg else "Unassigned"
-        d["mine"] = ((asg and asg["operator"] == op)
+        d["mine"] = ((asg and op in _op_names(asg["operator"]))
                      or (prow["start_name"] or "") == op
                      or (o["operator"] or "") == op)
         d["my_work"] = (d["mine"] or designation_matches(designation, prow["process"]))
@@ -3289,8 +3364,14 @@ def jobcard_process(order_id):
         start_dt = _dt_pair(f, f"start_date_{pid}", f"start_time_{pid}")
         end_dt = _dt_pair(f, f"end_date_{pid}", f"end_time_{pid}")
         # per-process assignment: kaun karega + kaunsi machine (PENDING PROCESS)
-        asg_op = f.get(f"asg_op_{pid}", "").strip()
+        # multi-employee: 2+ bande milkar karte hain to saare selects se naam lo
         asg_machine = f.get(f"asg_machine_{pid}", "").strip()
+        op_names = []
+        for x in request.form.getlist(f"asg_op_{pid}"):
+            x = x.strip()
+            if x and x not in op_names:
+                op_names.append(x)
+        asg_op = ", ".join(op_names)
         if asg_op or asg_machine:
             db.execute(
                 "INSERT OR REPLACE INTO order_assignments (order_id, process, machine, shift, operator, planned_start) "

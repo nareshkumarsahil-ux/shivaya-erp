@@ -65,7 +65,8 @@
             data-cnx="{{ m.cnc_margin_x|gfmt }}" data-cny="{{ m.cnc_margin_y|gfmt }}"
             data-qp="{{ m.panels_sheet * m.sheets }}"
             data-pcs="{{ m.pcs_panel }}" data-pps="{{ m.panels_sheet }}" data-sheets="{{ m.sheets }}"
-            data-sl="{{ m.sheet_len|gfmt }}" data-sw="{{ m.sheet_w|gfmt }}">{% if m.cutting_len %}{{ m.name }} (Cutting {{ m.cutting_len|gfmt }}×{{ m.cutting_w|gfmt }}mm · {{ m.pcs_panel }} PCS){% else %}{{ m.name }} ({{ m.panel_len|gfmt }}×{{ m.panel_w|gfmt }}mm · {{ m.pcs_panel }} PCS){% endif %}</option>
+            data-sl="{{ m.sheet_len|gfmt }}" data-sw="{{ m.sheet_w|gfmt }}"
+            data-pp="{{ m.pcb_price|gfmt }}" data-rs="{{ m.per_sq_inch|gfmt }}">{% if m.cutting_len %}{{ m.name }} (Cutting {{ m.cutting_len|gfmt }}×{{ m.cutting_w|gfmt }}mm · {{ m.pcs_panel }} PCS){% else %}{{ m.name }} ({{ m.panel_len|gfmt }}×{{ m.panel_w|gfmt }}mm · {{ m.pcs_panel }} PCS){% endif %}</option>
           {% endfor %}
           {% if pm_extra %}<option value="{{ jc.party_model }}" selected>{{ jc.party_model }} (custom)</option>{% endif %}
         </select>
@@ -266,16 +267,27 @@
             <b class="small">{{ p.process }}</b>{% if p.fixed %}<span class="badge b-gray" style="margin-left:5px">🔒 FIXED</span>{% endif %}
             {% endif %}
             {% if p.status == 'pending' %}
-            <div style="margin-top:5px;display:flex;gap:4px;flex-wrap:wrap;align-items:center">
+            <div style="margin-top:5px;display:flex;gap:4px;flex-wrap:wrap;align-items:flex-start">
               <select name="asg_machine_{{ p.id }}" style="padding:3px 5px;border:1px solid var(--border);border-radius:6px;font-size:11px;background:#fff">
                 <option value="">🖥 Machine?</option>
                 {% for m in machines %}<option value="{{ m.name }}" {{'selected' if p.asg_machine == m.name}}>{{ m.code }} · {{ m.name }}</option>{% endfor %}
               </select>
-              <select name="asg_op_{{ p.id }}" style="padding:3px 5px;border:1px solid var(--border);border-radius:6px;font-size:11px;background:#fff">
-                <option value="">👤 Kaun karega?</option>
-                {% for e2 in all_employees %}<option value="{{ e2.name }}" {{'selected' if p.asg_op == e2.name}}>{{ e2.name }}</option>{% endfor %}
-              </select>
-              {% if p.asg_op %}<span class="badge b-blue" style="font-size:10px">👤 {{ p.asg_op }} karega</span>{% endif %}
+              <div id="oppicks_{{ p.id }}" style="display:flex;flex-direction:column;gap:3px;min-width:150px">
+                {% set opnames = (p.asg_op or '').split(',') %}
+                {% for on in opnames if on.strip() %}
+                <select name="asg_op_{{ p.id }}" style="padding:3px 5px;border:1px solid var(--border);border-radius:6px;font-size:11px;background:#fff">
+                  <option value="">— koi nahi —</option>
+                  {% for e2 in all_employees %}<option value="{{ e2.name }}" {{'selected' if on.strip() == e2.name}}>{{ e2.name }}</option>{% endfor %}
+                </select>
+                {% endfor %}
+                <select name="asg_op_{{ p.id }}" style="padding:3px 5px;border:1px solid var(--border);border-radius:6px;font-size:11px;background:#fff">
+                  <option value="">👤 Kaun karega?</option>
+                  {% for e2 in all_employees %}<option value="{{ e2.name }}">{{ e2.name }}</option>{% endfor %}
+                </select>
+              </div>
+              <button type="button" class="btn btn-outline btn-xs" style="padding:2px 6px;font-size:11px"
+                      onclick="addOpPick({{ p.id }})" title="Ek aur employee add karo (milkarke kaam)">＋</button>
+              {% if p.asg_op %}<span class="badge b-blue" style="font-size:10px">👤 {{ p.asg_op|replace(',', ' +') }} karega</span>{% endif %}
             </div>
             {% endif %}
           </td>
@@ -658,8 +670,8 @@ function syncPreview(){
   set('pr_cnc', fmt(val('jc_cnc_margin_x')) + 'x' + fmt(val('jc_cnc_margin_y')) + 'mm');
   set('pr_pcs_panel', val('jc_pcs_panel') || '0');
   var xin = Math.round(parseFloat(val('jc_sheet_len'))/25.4), yin = Math.round(parseFloat(val('jc_sheet_w'))/25.4);
-  set('pr_xcut', 'L-' + fmt(val('jc_panel_x')) + '(' + (xin||0) + '″)×' + (val('jc_x_qty')||'0'));
-  set('pr_ycut', 'W-' + fmt(val('jc_panel_y')) + '(' + (yin||0) + '″)×' + (val('jc_y_qty')||'0'));
+  set('pr_xcut', 'L-' + fmt(val('jc_panel_x')) + '(' + fmt(val('jc_sheet_len')) + ')×' + (val('jc_x_qty')||'0'));
+  set('pr_ycut', 'W-' + fmt(val('jc_panel_y')) + '(' + fmt(val('jc_sheet_w')) + ')×' + (val('jc_y_qty')||'0'));
   set('pr_pcb_sheet', (parseInt(val('jc_pcs_panel'))||0) * (parseInt(val('jc_panels_per_sheet'))||0));
   set('pr_sheets', (val('jc_sheets')||'0') + ' SHEET');
   set('pr_sheet_material', val('jc_sheet_material') || '—');
@@ -818,6 +830,11 @@ document.getElementById('jc_party_model').addEventListener('change', function(){
   setField('jc_sheet_len', opt.getAttribute('data-sl'));
   setField('jc_sheet_w', opt.getAttribute('data-sw'));
   setField('jc_qty_panel', opt.getAttribute('data-qp'));
+  var pp = parseFloat(opt.getAttribute('data-pp')) || 0;
+  var pr = parseFloat(opt.getAttribute('data-rs')) || 0;
+  if (pp > 0) setField('jc_price', pp);
+  if (pr > 0) setField('jc_rs_pcb', pr);
+  if (typeof calcPcbPrice === 'function') calcPcbPrice();
   var code = opt.getAttribute('data-code') || '';
   if (code) {
     var msel = document.getElementById('jc_model');
@@ -829,6 +846,17 @@ document.getElementById('jc_party_model').addEventListener('change', function(){
   calcPcbPrice();
   if (document.getElementById('printArea').style.display === 'block') syncPreview();
 });
+
+/* ---- multi-employee: ek process par 2+ bande milkar (＋ button) ---- */
+function addOpPick(pid){
+  var box = document.getElementById('oppicks_' + pid);
+  if (!box) return;
+  if (box.querySelectorAll('select').length >= 5) return;
+  var sels = box.querySelectorAll('select');
+  var sel = sels[sels.length - 1].cloneNode(true);
+  sel.value = '';
+  box.appendChild(sel);
+}
 
 /* ---- PCB PRICE two-way calc: PER SQ.INCH <-> PCB PRICE ----
    Area (sq.inch per PCB) = CUTTING PANEL (X×Y mm) ÷ PCS/PANEL;

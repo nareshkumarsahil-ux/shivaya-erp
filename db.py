@@ -292,6 +292,7 @@ CREATE TABLE IF NOT EXISTS product_models (
     x_qty INTEGER DEFAULT 1, y_qty INTEGER DEFAULT 1,
     cnc_margin_x REAL DEFAULT 0, cnc_margin_y REAL DEFAULT 0,
     party TEXT DEFAULT '', note TEXT DEFAULT '',
+    pcb_price REAL DEFAULT 0, per_sq_inch REAL DEFAULT 0,
     attachment_name TEXT DEFAULT '', attachment_mime TEXT DEFAULT '', attachment_data TEXT DEFAULT '',
     order_id INTEGER,
     created_on TEXT DEFAULT ''
@@ -754,6 +755,10 @@ def migrate(conn):
         conn.execute("ALTER TABLE product_models ADD COLUMN attachment_mime TEXT DEFAULT ''")
     if pcols and "attachment_data" not in pcols:
         conn.execute("ALTER TABLE product_models ADD COLUMN attachment_data TEXT DEFAULT ''")
+    if pcols and "pcb_price" not in pcols:
+        conn.execute("ALTER TABLE product_models ADD COLUMN pcb_price REAL DEFAULT 0")
+    if pcols and "per_sq_inch" not in pcols:
+        conn.execute("ALTER TABLE product_models ADD COLUMN per_sq_inch REAL DEFAULT 0")
     jcols = [r[1] for r in conn.execute("PRAGMA table_info(jobcard)")]
     if jcols and "mat_code" not in jcols:
         conn.execute("ALTER TABLE jobcard ADD COLUMN mat_code TEXT DEFAULT ''")

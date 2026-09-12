@@ -27,8 +27,8 @@
     <div class="ps-cell"><span class="ps-lbl">CNC MARGIN</span><span class="ps-val" id="pr_cnc">{{ jc.cnc_margin_x|gfmt }}x{{ jc.cnc_margin_y|gfmt }}mm</span></div>
     <div class="ps-cell"><span class="ps-lbl">PCB IN ONE PANEL</span><span class="ps-val" id="pr_pcs_panel">{{ jc.pcs_panel }}</span></div>
 
-    <div class="ps-cell"><span class="ps-lbl">X CUTTING SIZE</span><span class="ps-val" id="pr_xcut">L-{{ jc.panel_x|gfmt }}({{ (jc.sheet_len/25.4)|round(0)|int }}″)×{{ jc.x_qty }}</span></div>
-    <div class="ps-cell"><span class="ps-lbl">Y CUTTING SIZE</span><span class="ps-val" id="pr_ycut">W-{{ jc.panel_y|gfmt }}({{ (jc.sheet_w/25.4)|round(0)|int }}″)×{{ jc.y_qty }}</span></div>
+    <div class="ps-cell"><span class="ps-lbl">X CUTTING SIZE</span><span class="ps-val" id="pr_xcut">L-{{ jc.panel_x|gfmt }}({{ jc.sheet_len|gfmt }})×{{ jc.x_qty }}</span></div>
+    <div class="ps-cell"><span class="ps-lbl">Y CUTTING SIZE</span><span class="ps-val" id="pr_ycut">W-{{ jc.panel_y|gfmt }}({{ jc.sheet_w|gfmt }})×{{ jc.y_qty }}</span></div>
     <div class="ps-cell"><span class="ps-lbl">PCB IN ONE SHEET</span><span class="ps-val" id="pr_pcb_sheet">{{ jc.pcs_panel * jc.panels_per_sheet }}</span></div>
     <div class="ps-cell"><span class="ps-lbl">NO. OF SHEET</span><span class="ps-val" id="pr_sheets">{{ jc.sheets }} SHEET</span></div>
 

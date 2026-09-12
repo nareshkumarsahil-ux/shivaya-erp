@@ -86,7 +86,7 @@
       <div>▶ RUNNING: <b>{{ j.proc }}</b></div>
       <div>
         {% if j.next_proc %}
-        NEXT: <b style="color:#0f766e">{{ j.next_proc }}</b>{% if j.next_op %} · 👤 <b>{{ j.next_op }}</b> karega{% endif %}
+        NEXT: <b style="color:#0f766e">{{ j.next_proc }}</b>{% if j.next_op %} · 👤 <b>{{ j.next_op|replace(',', ' +') }}</b> karega{% endif %}
         {% else %}
         NEXT: <span class="muted">— Sab processes ho gaye —</span>
         {% endif %}
