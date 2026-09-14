@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>PO {{ po.po_no }} — Shivaya Circuit</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; background: #e2e8f0; color: #111; padding: 24px; }
+  .toolbar { max-width: 820px; margin: 0 auto 14px; display: flex; gap: 10px; align-items: center; }
+  .toolbar button, .toolbar a {
+    padding: 10px 18px; border-radius: 8px; border: 0; cursor: pointer;
+    font-size: 14px; font-weight: 700; text-decoration: none; display: inline-block;
+  }
+  .btn-print { background: #1d4ed8; color: #fff; }
+  .btn-back { background: #fff; color: #1d4ed8; border: 1px solid #cbd5e1 !important; }
+  .po-sheet {
+    max-width: 820px; margin: 0 auto; background: #fff; padding: 38px 42px;
+    border-radius: 10px; box-shadow: 0 8px 30px rgba(15,23,42,.12); position: relative;
+  }
+  .hd { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid #111; padding-bottom: 14px; }
+  .hd .co { display: flex; gap: 12px; }
+  .co-logo { width: 54px; height: 54px; border-radius: 10px; background: #111; color: #f59e0b;
+    display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 22px; flex: 0 0 auto; }
+  .co-name { font-size: 21px; font-weight: 800; letter-spacing: .4px; }
+  .co-line { font-size: 11.5px; color: #444; margin-top: 3px; max-width: 420px; line-height: 1.45; }
+  .po-title { text-align: right; flex: 0 0 auto; }
+  .po-title .t1 { font-size: 23px; font-weight: 800; letter-spacing: 2.5px; }
+  .po-title .t2 { font-size: 12.5px; color: #333; margin-top: 4px; }
+  .po-title .t2 b { font-size: 14px; }
+  .meta { display: grid; grid-template-columns: 1fr 1fr; margin: 16px 0 4px; }
+  .cell { border: 1px solid #d4d4d4; padding: 9px 12px; font-size: 12px; background: #fff; }
+  .cell .lbl { font-size: 9.5px; text-transform: uppercase; letter-spacing: 1px; color: #777; display: block; margin-bottom: 3px; }
+  .cell .val { font-size: 13.5px; font-weight: 700; line-height: 1.4; white-space: pre-line; }
+  .items { width: 100%; border-collapse: collapse; margin-top: 12px; }
+  .items th { background: #111; color: #fff; font-size: 11px; text-transform: uppercase; letter-spacing: 1px;
+    padding: 9px 12px; text-align: left; }
+  .items td { border: 1px solid #d4d4d4; padding: 9px 12px; font-size: 13px; }
+  .items td.n, .items th.n { text-align: right; }
+  .totals { margin-top: 12px; display: flex; justify-content: flex-end; }
+  .totals table { border-collapse: collapse; width: 320px; }
+  .totals td { padding: 7px 12px; font-size: 13px; border: 1px solid #d4d4d4; }
+  .totals .lbl { color: #444; }
+  .totals .amt { text-align: right; font-weight: 700; }
+  .totals .grand td { background: #111; color: #fff; font-size: 15px; font-weight: 800; }
+  .words { margin-top: 10px; font-size: 12.5px; background: #f8f5ee; border: 1px solid #d4d4d4;
+    padding: 9px 12px; font-weight: 700; }
+  .note-box { margin-top: 10px; font-size: 12px; border: 1px dashed #b45309; background: #fffbeb;
+    padding: 9px 12px; color: #7c2d12; }
+  .terms { margin-top: 14px; font-size: 11.5px; color: #333; border: 1px solid #d4d4d4; padding: 12px 14px; background: #fafafa; }
+  .terms b { color: #111; }
+  .sign { margin-top: 40px; display: flex; justify-content: space-between; gap: 30px; }
+  .sign .box { flex: 1; }
+  .sign .line { border-top: 1.5px solid #333; margin-top: 50px; padding-top: 6px; font-size: 11px; color: #555; text-align: center; }
+  .status-band { margin-top: 20px; border-radius: 8px; padding: 10px 14px; font-size: 13px; font-weight: 700; }
+  .stamp {
+    position: absolute; top: 100px; right: 28px; transform: rotate(-8deg);
+    border: 3px solid; border-radius: 8px; padding: 6px 14px;
+    font-size: 16px; font-weight: 800; letter-spacing: 2px; opacity: .9; text-transform: uppercase;
+  }
+  .st-pending { color: #6b7280; border-color: #6b7280; }
+  .st-ordered { color: #1d4ed8; border-color: #1d4ed8; }
+  .st-in_transit { color: #b45309; border-color: #b45309; }
+  .st-received { color: #15803d; border-color: #15803d; }
+  .st-cancelled { color: #b91c1c; border-color: #b91c1c; }
+  .footer-note { margin-top: 22px; text-align: center; font-size: 10.5px; color: #888; border-top: 1px solid #e2e8f0; padding-top: 10px; }
+  @media print {
+    body { background: #fff; padding: 0; }
+    .toolbar { display: none; }
+    .po-sheet { box-shadow: none; border-radius: 0; max-width: 100%; padding: 20px 26px; }
+    @page { size: A4; margin: 12mm; }
+  }
+</style>
+</head>
+<body>
+  <div class="toolbar">
+    <button class="btn-print" onclick="window.print()">🖨 Print / Save as PDF</button>
+    <a class="btn-back" href="/purchase-orders{% if request.args.get('token') %}?token={{ request.args.get('token') }}{% endif %}">← Wapas PO list</a>
+  </div>
+
+  {% set st_map = {'pending': ('PENDING', 'st-pending', '#6b7280'),
+                    'ordered': ('ORDERED', 'st-ordered', '#1d4ed8'),
+                    'in_transit': ('IN TRANSIT', 'st-in_transit', '#b45309'),
+                    'received': ('RECEIVED', 'st-received', '#15803d'),
+                    'cancelled': ('CANCELLED', 'st-cancelled', '#b91c1c')} %}
+  {% set st = st_map.get(po.status, st_map['pending']) %}
+  {% set st_txt = {'pending': 'Order abhi place nahi hua hai',
+                   'ordered': 'Party ko order de diya hai — material aana baaki hai',
+                   'in_transit': 'Material raaste mein hai (in transit)',
+                   'received': 'Material received ho chuka hai',
+                   'cancelled': 'Ye order cancel ho gaya hai'} %}
+
+  <div class="po-sheet">
+    <div class="stamp {{ st[1] }}">{{ st[0] }}</div>
+
+    <div class="hd">
+      <div class="co">
+        <div class="co-logo">SC</div>
+        <div>
+          <div class="co-name">{{ comp.name }}</div>
+          <div class="co-line">
+            {% if comp.address %}{{ comp.address }}<br>{% endif %}
+            {% if comp.phone %}Ph: {{ comp.phone }}<br>{% endif %}
+            {% if comp.gstin %}GSTIN: {{ comp.gstin }}{% endif %}
+          </div>
+        </div>
+      </div>
+      <div class="po-title">
+        <div class="t1">PURCHASE ORDER</div>
+        <div class="t2">PO No. <b>{{ po.po_no }}</b><br>Date: <b>{{ po.date }}</b></div>
+      </div>
+    </div>
+
+    <div class="meta">
+      <div class="cell"><span class="lbl">Supplier (Bill To)</span>
+        <span class="val">{{ po.vendor }}{% if po.vendor_address %}&#10;{{ po.vendor_address }}{% endif %}{% if po.vendor_phone %} &#10;Ph: {{ po.vendor_phone }}{% endif %}</span></div>
+      <div class="cell"><span class="lbl">Delivery Date</span>
+        <span class="val">{{ po.delivery_date or 'As soon as possible' }}</span></div>
+    </div>
+
+    <table class="items">
+      <thead>
+        <tr>
+          <th style="width:32px">#</th>
+          <th>Item / Description</th>
+          <th style="width:110px" class="n">Qty</th>
+          <th style="width:110px" class="n">Rate (₹)</th>
+          <th style="width:130px" class="n">Amount (₹)</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for it in items %}
+        <tr>
+          <td>{{ loop.index }}</td>
+          <td>{{ it.item or '—' }}</td>
+          <td class="n">{{ it.qty or '—' }}</td>
+          <td class="n">{% if it.rate %}{{ it.rate|gfmt }}{% else %}—{% endif %}</td>
+          <td class="n">{{ it.amount|inr }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <div class="totals">
+      <table>
+        <tr><td class="lbl">Subtotal</td><td class="amt">{{ subtotal|inr }}</td></tr>
+        {% if tax > 0 %}<tr><td class="lbl">GST ({{ tax|gfmt }}%)</td><td class="amt">{{ tax_amt|inr }}</td></tr>{% endif %}
+        <tr class="grand"><td>GRAND TOTAL</td><td class="amt">{{ grand|inr }}</td></tr>
+      </table>
+    </div>
+
+    <div class="words">💰 Amount in words: <b>{{ grand_words }}</b></div>
+
+    {% if po.note %}<div class="note-box">📝 <b>Note:</b> {{ po.note }}</div>{% endif %}
+
+    <div class="terms">
+      <b>Terms &amp; Conditions:</b> 1. Material quality PCB manufacturing standard ke hisaab se honi chahiye.
+      2. Delivery time par hona zaroori hai — late delivery ki jaankari pehle se dein.
+      3. Bill / Challan ke saath material bhejein. 4. Koi bhi damage / short supply turant inform karein.
+      5. Payment terms: as agreed.
+    </div>
+
+    <div class="sign">
+      <div class="box"><div class="line">FOR {{ comp.name|upper }}<br>(Authorised Signatory)</div></div>
+      <div class="box"><div class="line">SUPPLIER SIGNATURE &amp; STAMP</div></div>
+    </div>
+
+    <div class="status-band" style="color:{{ st[2] }};background:{{ st[2] }}14;border:1px solid {{ st[2] }}55">
+      📦 STATUS: {{ st[0] }} — {{ st_txt.get(po.status, '') }}
+    </div>
+
+    <div class="footer-note">{{ comp.name }} · Purchase Order {{ po.po_no }} · Generated {{ po.date }} · Ye computer generated document hai</div>
+  </div>
+</body>
+</html>

@@ -524,25 +524,149 @@ def orders():
 
 
 # ---------------------------------------------------------------- purchase orders
+def _fl(v):
+    try:
+        return float(v or 0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _po_company():
+    """PO print ka company header — Purchase Orders page se editable (meta me save)."""
+    import json as _json
+    row = db.query("SELECT value FROM meta WHERE key='po_company'", one=True)
+    if row and row["value"]:
+        try:
+            d = _json.loads(row["value"])
+            return {"name": d.get("name") or "Shivaya Circuit Pvt. Ltd.",
+                    "address": d.get("address") or "", "phone": d.get("phone") or "",
+                    "gstin": d.get("gstin") or ""}
+        except Exception:
+            pass
+    return {"name": "Shivaya Circuit Pvt. Ltd.", "address": "", "phone": "", "gstin": ""}
+
+
+def _amt_words(n):
+    """Amount in words (Indian system): 25,000 -> Rupees Twenty Five Thousand Only."""
+    if n is None:
+        return ""
+    try:
+        n = round(float(n), 2)
+    except (TypeError, ValueError):
+        return ""
+    rupees = int(n)
+    paise = int(round((n - rupees) * 100))
+    ones = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten",
+            "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen",
+            "Eighteen", "Nineteen"]
+    tens = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"]
+    def two(x):
+        if x < 20:
+            return ones[x]
+        return (tens[x // 10] + (" " + ones[x % 10] if x % 10 else "")).strip()
+    def three(x):
+        h, r = x // 100, x % 100
+        return ((ones[h] + " Hundred " if h else "") + (two(r) if r else "")).strip()
+    if rupees == 0:
+        words = "Zero"
+    else:
+        parts = []
+        cr = rupees // 10000000
+        lk = (rupees // 100000) % 100
+        th = (rupees // 1000) % 100
+        rest = rupees % 1000
+        if cr:
+            parts.append(two(cr) + " Crore")
+        if lk:
+            parts.append(two(lk) + " Lakh")
+        if th:
+            parts.append(two(th) + " Thousand")
+        if rest:
+            parts.append(three(rest))
+        words = " ".join(parts)
+    out = "Rupees " + words
+    if paise:
+        out += " and " + two(paise) + " Paise"
+    return out + " Only"
+
+
+def _po_items_from_form(f):
+    """PO form se line items nikaalo: item/qty/rate/amount; legacy single item bhi chalega."""
+    items_in = f.getlist("item_n")
+    rows = []
+    for i, it in enumerate(items_in):
+        it = (it or "").strip()
+        if not it:
+            continue
+        qty = (f.getlist("qty_n")[i] if i < len(f.getlist("qty_n")) else "").strip()
+        rate = _fl(f.getlist("rate_n")[i] if i < len(f.getlist("rate_n")) else "")
+        amt = _fl(f.getlist("amt_n")[i] if i < len(f.getlist("amt_n")) else "")
+        if amt == 0 and rate > 0:
+            try:
+                amt = round(rate * float(qty), 2) if qty else 0
+            except ValueError:
+                amt = 0
+        rows.append((it, qty, rate, amt))
+    if not rows and (f.get("item") or "").strip():
+        rows = [(f.get("item", "").strip(), (f.get("qty") or "").strip(), 0.0, _fl(f.get("amount")))]
+    return rows
+
+
 @app.route("/purchase-orders", methods=["GET", "POST"])
 @login_required
 def purchase_orders():
     if request.method == "POST":
         f = request.form
-        if f.get("vendor", "").strip():
+        # COMPANY DETAILS (PO print ka header)
+        if f.get("action") == "company":
+            import json as _json
+            comp = {"name": (f.get("co_name") or "").strip() or "Shivaya Circuit Pvt. Ltd.",
+                    "address": (f.get("co_address") or "").strip(),
+                    "phone": (f.get("co_phone") or "").strip(),
+                    "gstin": (f.get("co_gstin") or "").strip()}
+            db.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('po_company', ?)",
+                       (_json.dumps(comp, ensure_ascii=False),))
+            flash("Company details save ho gaye — PO print me yahi dikhenge ✅", "success")
+            return redirect_with_token(url_for("purchase_orders"))
+        rows = _po_items_from_form(f)
+        vendor = (f.get("vendor") or "").strip()
+        if vendor:
+            subtotal = round(sum(r[3] for r in rows), 2)
+            tax = _fl(f.get("tax_percent"))
+            tax_amt = round(subtotal * tax / 100, 2)
+            grand = round(subtotal + tax_amt, 2)
             count = db.query("SELECT COUNT(*) c FROM purchase_orders", one=True)["c"]
-            db.execute(
-                "INSERT INTO purchase_orders (po_no, vendor, item, qty, amount, status, date) VALUES (?,?,?,?,?,?,?)",
-                (f"PO-{304 + count}", f.get("vendor").strip(), f.get("item", "").strip(), f.get("qty", "").strip(),
-                 float(f.get("amount", 0) or 0), f.get("status", "pending"), datetime.date.today().isoformat()))
-            flash("Purchase order created.", "success")
+            po_no = f"PO-{304 + count}"
+            po_id = db.execute(
+                "INSERT INTO purchase_orders (po_no, vendor, item, qty, amount, status, date, "
+                "vendor_address, vendor_phone, delivery_date, tax_percent, note) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+                (po_no, vendor, rows[0][0] + (f" +{len(rows) - 1} aur" if len(rows) > 1 else ""),
+                 rows[0][1], grand, f.get("status", "pending"), datetime.date.today().isoformat(),
+                 (f.get("vendor_address") or "").strip(), (f.get("vendor_phone") or "").strip(),
+                 (f.get("delivery_date") or "").strip(), tax, (f.get("note") or "").strip()))
+            for r in rows:
+                db.execute("INSERT INTO purchase_order_items (po_id, item, qty, rate, amount) "
+                           "VALUES (?,?,?,?,?)", (po_id, r[0], r[1], r[2], r[3]))
+            flash(f"Purchase order {po_no} create ho gaya ✅", "success")
         return redirect_with_token(url_for("purchase_orders"))
     rows = db.query("SELECT * FROM purchase_orders ORDER BY id DESC")
+    items_by_po = {}
+    for it in db.query("SELECT * FROM purchase_order_items ORDER BY id"):
+        items_by_po.setdefault(it["po_id"], []).append(it)
+    parties = db.query("SELECT * FROM parties ORDER BY name")
+    party_names = {p["name"] for p in parties}
+    import json as _json
+    parties_json = _json.dumps([{"name": p["name"], "phone": p["phone"], "address": p["address"]}
+                                for p in parties])
     edit_po = None
     eid = request.args.get("edit")
     if eid and eid.isdigit():
         edit_po = db.query("SELECT * FROM purchase_orders WHERE id=?", (int(eid),), one=True)
     return render_template("purchase_orders.html", active="purchase", rows=rows,
+                           items_by_po=items_by_po, comp=_po_company(),
+                           all_parties=parties, party_names=party_names, parties_json=parties_json,
+                           edit_items=items_by_po.get(edit_po["id"], []) if edit_po else [],
                            show_add=request.args.get("add"), edit_po=edit_po)
 
 
@@ -555,12 +679,24 @@ def po_edit(po_id):
     if not vendor:
         flash("Vendor zaroori hai.", "error")
         return redirect_with_token(url_for("purchase_orders", edit=po_id))
+    rows = _po_items_from_form(f)
+    subtotal = round(sum(r[3] for r in rows), 2)
+    tax = _fl(f.get("tax_percent"))
+    tax_amt = round(subtotal * tax / 100, 2)
+    grand = round(subtotal + tax_amt, 2)
     try:
         db.execute(
-            "UPDATE purchase_orders SET po_no=?, vendor=?, item=?, qty=?, amount=?, status=?, date=? WHERE id=?",
-            (po_no, vendor, (f.get("item") or "").strip(), (f.get("qty") or "").strip(),
-             float(f.get("amount", 0) or 0), f.get("status", "pending"),
-             f.get("date") or datetime.date.today().isoformat(), po_id))
+            "UPDATE purchase_orders SET po_no=?, vendor=?, item=?, qty=?, amount=?, status=?, date=?, "
+            "vendor_address=?, vendor_phone=?, delivery_date=?, tax_percent=?, note=? WHERE id=?",
+            (po_no, vendor, rows[0][0] + (f" +{len(rows) - 1} aur" if len(rows) > 1 else "") if rows else "",
+             rows[0][1] if rows else "", grand, f.get("status", "pending"),
+             f.get("date") or datetime.date.today().isoformat(),
+             (f.get("vendor_address") or "").strip(), (f.get("vendor_phone") or "").strip(),
+             (f.get("delivery_date") or "").strip(), tax, (f.get("note") or "").strip(), po_id))
+        db.execute("DELETE FROM purchase_order_items WHERE po_id=?", (po_id,))
+        for r in rows:
+            db.execute("INSERT INTO purchase_order_items (po_id, item, qty, rate, amount) "
+                       "VALUES (?,?,?,?,?)", (po_id, r[0], r[1], r[2], r[3]))
         flash(f"PO {po_no} update ho gaya ✅", "success")
     except Exception as e:
         flash(f"Update failed: {e}", "error")
@@ -583,9 +719,29 @@ def po_delete(po_id):
 @login_required
 def po_status(po_id):
     st = request.form.get("status")
-    if st in ("pending", "in_transit", "received", "cancelled"):
+    if st in ("pending", "ordered", "in_transit", "received", "cancelled"):
         db.execute("UPDATE purchase_orders SET status=? WHERE id=?", (st, po_id))
     return redirect_with_token(url_for("purchase_orders"))
+
+
+@app.route("/purchase-orders/<int:po_id>/print")
+@login_required
+def po_print(po_id):
+    po = db.query("SELECT * FROM purchase_orders WHERE id=?", (po_id,), one=True)
+    if not po:
+        flash("Purchase order nahi mila.", "error")
+        return redirect_with_token(url_for("purchase_orders"))
+    items = db.query("SELECT * FROM purchase_order_items WHERE po_id=? ORDER BY id", (po_id,))
+    if not items:
+        # purane single-item POs
+        items = [{"item": po["item"], "qty": po["qty"], "rate": 0, "amount": po["amount"]}]
+    subtotal = round(sum(float(i["amount"] or 0) for i in items), 2)
+    tax = float(po["tax_percent"] or 0)
+    tax_amt = round(subtotal * tax / 100, 2)
+    grand = round(subtotal + tax_amt, 2)
+    return render_template("po_print.html", po=po, items=items, active="purchase",
+                           comp=_po_company(), subtotal=subtotal, tax=tax,
+                           tax_amt=tax_amt, grand=grand, grand_words=_amt_words(grand))
 
 
 # ---------------------------------------------------------------- cut list optimizer (PCB Panel Builder)

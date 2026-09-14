@@ -15,7 +15,7 @@ import http.client
 import urllib.parse
 
 # Schema version — bump karo jab SCHEMA/migrate badle, taaki agla deploy tables update kare.
-SCHEMA_VERSION = "2026-09-12.5"
+SCHEMA_VERSION = "2026-09-12.6"
 
 DB_PATH = os.environ.get("DB_PATH") or (
     os.path.join(tempfile.gettempdir(), "circuit.db") if os.environ.get("VERCEL") else "circuit.db"
@@ -183,6 +183,15 @@ CREATE TABLE IF NOT EXISTS purchase_orders (
     amount REAL DEFAULT 0,
     status TEXT DEFAULT 'pending',
     date TEXT DEFAULT ''
+);
+
+CREATE TABLE IF NOT EXISTS purchase_order_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    po_id INTEGER,
+    item TEXT DEFAULT '',
+    qty TEXT DEFAULT '',
+    rate REAL DEFAULT 0,
+    amount REAL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS inventory (
@@ -764,6 +773,21 @@ def migrate(conn):
                  "per_sq_inch REAL DEFAULT 0, UNIQUE(material, thickness))")
     conn.execute("INSERT OR IGNORE INTO thickness_rates (material, thickness, per_sq_inch) VALUES "
                  "('METAL','1MM',2.00),('METAL','1.5MM',2.50),('FR4','1MM',2.70),('CEM-1','1.5MM',3.00)")
+    # PURCHASE ORDER INVOICE: line items table + vendor/company details
+    conn.execute("CREATE TABLE IF NOT EXISTS purchase_order_items ("
+                 "id INTEGER PRIMARY KEY AUTOINCREMENT, po_id INTEGER, item TEXT DEFAULT '', "
+                 "qty TEXT DEFAULT '', rate REAL DEFAULT 0, amount REAL DEFAULT 0)")
+    pocols = [r[1] for r in conn.execute("PRAGMA table_info(purchase_orders)")]
+    if pocols and "vendor_address" not in pocols:
+        conn.execute("ALTER TABLE purchase_orders ADD COLUMN vendor_address TEXT DEFAULT ''")
+    if pocols and "vendor_phone" not in pocols:
+        conn.execute("ALTER TABLE purchase_orders ADD COLUMN vendor_phone TEXT DEFAULT ''")
+    if pocols and "delivery_date" not in pocols:
+        conn.execute("ALTER TABLE purchase_orders ADD COLUMN delivery_date TEXT DEFAULT ''")
+    if pocols and "tax_percent" not in pocols:
+        conn.execute("ALTER TABLE purchase_orders ADD COLUMN tax_percent REAL DEFAULT 0")
+    if pocols and "note" not in pocols:
+        conn.execute("ALTER TABLE purchase_orders ADD COLUMN note TEXT DEFAULT ''")
     pcols = [r[1] for r in conn.execute("PRAGMA table_info(product_models)")]
     if pcols and "model_code" not in pcols:
         conn.execute("ALTER TABLE product_models ADD COLUMN model_code TEXT DEFAULT ''")
@@ -1013,6 +1037,18 @@ def ensure_db():
                                   "UNIQUE(material, thickness))")
                         c.execute("INSERT OR IGNORE INTO thickness_rates (material, thickness, per_sq_inch) VALUES "
                                   "('METAL','1MM',2.00),('METAL','1.5MM',2.50),('FR4','1MM',2.70),('CEM-1','1.5MM',3.00)")
+                        # PO invoice tables/cols (fast-path self-heal)
+                        c.execute("CREATE TABLE IF NOT EXISTS purchase_order_items ("
+                                  "id INTEGER PRIMARY KEY AUTOINCREMENT, po_id INTEGER, item TEXT DEFAULT '', "
+                                  "qty TEXT DEFAULT '', rate REAL DEFAULT 0, amount REAL DEFAULT 0)")
+                        try:
+                            _poc = [x[1] for x in c.execute("PRAGMA table_info(purchase_orders)").fetchall()]
+                            for _col in ("vendor_address", "vendor_phone", "delivery_date", "tax_percent", "note"):
+                                if _col not in _poc:
+                                    c.execute(f"ALTER TABLE purchase_orders ADD COLUMN {_col} "
+                                              + ("REAL DEFAULT 0" if _col == "tax_percent" else "TEXT DEFAULT ''"))
+                        except Exception:
+                            pass
                         # naye column: sheet thickness (price ke saath)
                         try:
                             _phc = [x[1] for x in c.execute("PRAGMA table_info(price_history)").fetchall()]

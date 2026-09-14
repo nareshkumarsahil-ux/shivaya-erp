@@ -3,28 +3,50 @@
 {% block page_title %}Purchase Orders{% endblock %}
 {% block content %}
 {% if edit_po %}
+{% set eitems = edit_items if edit_items else [{'item': edit_po.item, 'qty': edit_po.qty, 'rate': 0, 'amount': edit_po.amount}] %}
 <div class="panel">
   <div class="panel-head"><h3>✏️ Edit Purchase Order — {{ edit_po.po_no }}</h3><a class="btn btn-outline btn-sm" href="/purchase-orders">✕ Close</a></div>
   <div class="panel-body">
     <form method="post" action="/purchase-orders/{{ edit_po.id }}/edit">
       <div class="form-grid">
         <div class="field"><label>PO No.</label><input name="po_no" value="{{ edit_po.po_no }}"></div>
+        <div class="field"><label>Date</label><input type="date" name="date" value="{{ edit_po.date }}"></div>
         <div class="field full"><label>Vendor / Party *</label>
-          <select name="vendor" required>
+          <select name="vendor" id="po_vendor" required>
             <option value="">— Select party —</option>
             {% for p in all_parties %}<option value="{{ p.name }}" {{'selected' if edit_po.vendor == p.name}}>{{ p.name }} ({{ 'Supplier' if p.ptype=='supplier' else 'Customer' }})</option>{% endfor %}
             {% if edit_po.vendor and edit_po.vendor not in party_names %}<option value="{{ edit_po.vendor }}" selected>{{ edit_po.vendor }} (custom)</option>{% endif %}
           </select>
         </div>
-        <div class="field full"><label>Item Description</label><input name="item" value="{{ edit_po.item }}"></div>
-        <div class="field"><label>Quantity</label><input name="qty" value="{{ edit_po.qty }}"></div>
-        <div class="field"><label>Amount (₹)</label><input type="number" step="0.01" name="amount" value="{{ edit_po.amount }}"></div>
+        <div class="field full"><label>Vendor Address</label><input name="vendor_address" id="po_vaddr" value="{{ edit_po.vendor_address }}"></div>
+        <div class="field"><label>Vendor Phone</label><input name="vendor_phone" id="po_vphone" value="{{ edit_po.vendor_phone }}"></div>
+        <div class="field"><label>Delivery Date</label><input type="date" name="delivery_date" value="{{ edit_po.delivery_date }}"></div>
         <div class="field"><label>Status</label>
           <select name="status">
-            {% for s in ['pending','in_transit','received','cancelled'] %}<option value="{{ s }}" {{'selected' if edit_po.status==s}}>{{ s|replace('_',' ')|title }}</option>{% endfor %}
+            {% for s in ['pending','ordered','in_transit','received','cancelled'] %}<option value="{{ s }}" {{'selected' if edit_po.status==s}}>{{ s|replace('_',' ')|title }}</option>{% endfor %}
           </select>
         </div>
-        <div class="field"><label>Date</label><input type="date" name="date" value="{{ edit_po.date }}"></div>
+        <div class="field"><label>GST %</label><input type="number" step="0.1" name="tax_percent" id="po_tax" value="{{ edit_po.tax_percent }}"></div>
+        <div class="full">
+          <label style="font-size:11px;color:var(--muted);font-weight:700">ITEMS — kis party se KITNA order karna hai</label>
+          <table class="po-items-table" style="width:100%">
+            <thead><tr><th>Item / Description</th><th style="width:90px">Qty</th><th style="width:100px">Rate (₹)</th><th style="width:110px">Amount (₹)</th><th style="width:36px"></th></tr></thead>
+            <tbody id="po_items">
+              {% for it in eitems %}
+              <tr class="po-row">
+                <td><input name="item_n" value="{{ it.item }}" placeholder="e.g. FR4 Sheet 1.6MM"></td>
+                <td><input name="qty_n" class="po-qty" value="{{ it.qty }}" placeholder="Qty"></td>
+                <td><input name="rate_n" class="po-rate" type="number" step="0.01" value="{{ it.rate if it.rate else '' }}" placeholder="Rate"></td>
+                <td><input name="amt_n" class="po-amt" type="number" step="0.01" value="{{ it.amount if it.amount else '' }}" placeholder="Amount"></td>
+                <td><button type="button" class="btn btn-outline btn-xs" onclick="poDelRow(this)" title="Row hatao">✖</button></td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+          <button type="button" class="btn btn-outline btn-xs" onclick="poAddRow()" style="margin-top:6px">＋ Add Item</button>
+          <div id="po_totals" class="muted small" style="margin-top:6px"></div>
+        </div>
+        <div class="field full"><label>Note (print par dikhega)</label><input name="note" value="{{ edit_po.note }}" placeholder="e.g. Delivery 7 din ke andar"></div>
         <div class="full"><button class="btn" type="submit">💾 Save Changes</button></div>
       </div>
     </form>
@@ -37,25 +59,61 @@
     <form method="post">
       <div class="form-grid">
         <div class="field full"><label>Vendor / Party *</label>
-          <select name="vendor" required>
+          <select name="vendor" id="po_vendor" required>
             <option value="">— Select party —</option>
             {% for p in all_parties %}<option value="{{ p.name }}">{{ p.name }} ({{ 'Supplier' if p.ptype=='supplier' else 'Customer' }})</option>{% endfor %}
           </select>
           <a class="muted small" href="/parties?add=1" style="margin-top:4px;display:inline-block">➕ New Party →</a>
         </div>
-        <div class="field full"><label>Item Description</label><input name="item" placeholder="e.g. FR4 Sheets 1.6mm - 100 pcs"></div>
-        <div class="field"><label>Quantity</label><input name="qty" placeholder="e.g. 100 pcs"></div>
-        <div class="field"><label>Amount (₹)</label><input type="number" step="0.01" name="amount" value="0"></div>
+        <div class="field full"><label>Vendor Address</label><input name="vendor_address" id="po_vaddr" placeholder="(party select karne par auto-fill)"></div>
+        <div class="field"><label>Vendor Phone</label><input name="vendor_phone" id="po_vphone" placeholder="(auto-fill)"></div>
+        <div class="field"><label>Delivery Date</label><input type="date" name="delivery_date"></div>
         <div class="field"><label>Status</label>
-          <select name="status"><option value="pending">Pending</option><option value="in_transit">In Transit</option><option value="received">Received</option></select>
+          <select name="status"><option value="pending">Pending</option><option value="ordered">Ordered</option><option value="in_transit">In Transit</option><option value="received">Received</option></select>
         </div>
+        <div class="field"><label>GST %</label><input type="number" step="0.1" name="tax_percent" id="po_tax" value="18"></div>
+        <div class="full">
+          <label style="font-size:11px;color:var(--muted);font-weight:700">ITEMS — kis party se KITNA order karna hai</label>
+          <table class="po-items-table" style="width:100%">
+            <thead><tr><th>Item / Description</th><th style="width:90px">Qty</th><th style="width:100px">Rate (₹)</th><th style="width:110px">Amount (₹)</th><th style="width:36px"></th></tr></thead>
+            <tbody id="po_items">
+              <tr class="po-row">
+                <td><input name="item_n" placeholder="e.g. FR4 Sheet 1.6MM"></td>
+                <td><input name="qty_n" class="po-qty" placeholder="Qty"></td>
+                <td><input name="rate_n" class="po-rate" type="number" step="0.01" placeholder="Rate"></td>
+                <td><input name="amt_n" class="po-amt" type="number" step="0.01" placeholder="Amount"></td>
+                <td><button type="button" class="btn btn-outline btn-xs" onclick="poDelRow(this)" title="Row hatao">✖</button></td>
+              </tr>
+            </tbody>
+          </table>
+          <button type="button" class="btn btn-outline btn-xs" onclick="poAddRow()" style="margin-top:6px">＋ Add Item</button>
+          <div id="po_totals" class="muted small" style="margin-top:6px"></div>
+        </div>
+        <div class="field full"><label>Note (print par dikhega)</label><input name="note" placeholder="e.g. Delivery 7 din ke andar"></div>
         <div class="full"><button class="btn" type="submit">Create PO</button></div>
       </div>
     </form>
   </div>
 </div>
 {% else %}
-<div class="toolbar" style="justify-content:flex-end"><a class="btn" href="/purchase-orders?add=1">＋ New Purchase Order</a></div>
+<div class="toolbar" style="justify-content:flex-end;gap:8px"><a class="btn btn-outline" href="/purchase-orders?add=1" style="display:none"></a><a class="btn" href="/purchase-orders?add=1">＋ New Purchase Order</a></div>
+{% endif %}
+
+{% if not edit_po and not show_add %}
+<div class="panel" style="border-left:4px solid #0f766e">
+  <div class="panel-head"><h3>🏢 Company Details — PO print ke header me</h3></div>
+  <div class="panel-body">
+    <form method="post" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <input type="hidden" name="action" value="company">
+      <input name="co_name" value="{{ comp.name }}" placeholder="Company Name" style="min-width:190px">
+      <input name="co_address" value="{{ comp.address }}" placeholder="Address" style="min-width:260px;flex:1">
+      <input name="co_phone" value="{{ comp.phone }}" placeholder="Phone" style="min-width:130px">
+      <input name="co_gstin" value="{{ comp.gstin }}" placeholder="GSTIN" style="min-width:130px">
+      <button class="btn btn-sm" type="submit">💾 Save</button>
+    </form>
+    <p class="muted small" style="margin-top:6px">Ye details har Purchase Order ke print me header (name, address, phone, GSTIN) me dikhengi.</p>
+  </div>
+</div>
 {% endif %}
 
 <div class="panel">
@@ -71,12 +129,14 @@
           <td class="small">{{ r.item }}</td>
           <td class="mono">{{ r.qty }}</td>
           <td class="t-right">{{ r.amount|inr }}</td>
-          <td><span class="badge {{'b-green' if r.status=='received' else 'b-blue' if r.status=='in_transit' else 'b-gray' if r.status=='cancelled' else 'b-amber'}}">{{ r.status|replace('_',' ')|upper }}</span></td>
+          <td><span class="badge {{'b-green' if r.status=='received' else 'b-blue' if r.status=='ordered' else 'b-amber' if r.status=='in_transit' else 'b-urgent' if r.status=='cancelled' else 'b-gray'}}">{{ r.status|replace('_',' ')|upper }}</span></td>
           <td class="small">{{ r.date }}</td>
           <td class="t-right" style="white-space:nowrap">
+            <a class="btn btn-outline btn-xs" target="_blank" href="/purchase-orders/{{ r.id }}/print{% if request.args.get('token') %}?token={{ request.args.get('token') }}{% endif %}" title="Party ko bhejne wala print/PDF">🖨 Print</a>
             <form method="post" action="/purchase-orders/{{ r.id }}/status" style="display:inline">
               <select name="status" onchange="this.form.submit()" style="padding:4px 8px;border-radius:7px;border:1px solid var(--border);font-size:12px">
                 <option value="pending" {{'selected' if r.status=='pending'}}>Pending</option>
+                <option value="ordered" {{'selected' if r.status=='ordered'}}>Ordered</option>
                 <option value="in_transit" {{'selected' if r.status=='in_transit'}}>In Transit</option>
                 <option value="received" {{'selected' if r.status=='received'}}>Received</option>
                 <option value="cancelled" {{'selected' if r.status=='cancelled'}}>Cancelled</option>
@@ -97,4 +157,76 @@
     </table>
   </div>
 </div>
+
+<script>
+var PO_PARTIES = {{ parties_json|safe }};
+function poVendorFill(){
+  var v = document.getElementById('po_vendor');
+  var a = document.getElementById('po_vaddr'), ph = document.getElementById('po_vphone');
+  if (!v || !a || !ph) return;
+  for (var i = 0; i < PO_PARTIES.length; i++) {
+    if (PO_PARTIES[i].name === v.value) {
+      if (!a.value) a.value = PO_PARTIES[i].address || '';
+      if (!ph.value) ph.value = PO_PARTIES[i].phone || '';
+      return;
+    }
+  }
+}
+function poCalc(){
+  var total = 0;
+  document.querySelectorAll('#po_items .po-row').forEach(function(tr){
+    var amt = parseFloat((tr.querySelector('.po-amt')||{}).value) || 0;
+    total += amt;
+  });
+  var tax = parseFloat((document.getElementById('po_tax')||{}).value) || 0;
+  var gt = total + Math.round(total * tax) / 100;
+  var el = document.getElementById('po_totals');
+  if (el) el.innerHTML = 'Subtotal <b>₹' + total.toFixed(2) + '</b>' +
+    (tax ? ' + GST ' + tax + '% = <b style="color:#16a34a">₹' + gt.toFixed(2) + '</b>' : '');
+}
+function poBind(tr){
+  var q = tr.querySelector('.po-qty'), r = tr.querySelector('.po-rate'), a = tr.querySelector('.po-amt');
+  function calc(){
+    var qv = parseFloat(q.value), rv = parseFloat(r.value);
+    if (!isNaN(qv) && !isNaN(rv) && rv > 0) a.value = Math.round(qv * rv * 100) / 100;
+    poCalc();
+  }
+  if (q) q.addEventListener('input', calc);
+  if (r) r.addEventListener('input', calc);
+  if (a) a.addEventListener('input', poCalc);
+}
+function poAddRow(){
+  var tb = document.getElementById('po_items');
+  var tr = document.createElement('tr');
+  tr.className = 'po-row';
+  tr.innerHTML = '<td><input name="item_n" placeholder="e.g. FR4 Sheet 1.6MM"></td>' +
+    '<td><input name="qty_n" class="po-qty" placeholder="Qty"></td>' +
+    '<td><input name="rate_n" class="po-rate" type="number" step="0.01" placeholder="Rate"></td>' +
+    '<td><input name="amt_n" class="po-amt" type="number" step="0.01" placeholder="Amount"></td>' +
+    '<td><button type="button" class="btn btn-outline btn-xs" onclick="poDelRow(this)" title="Row hatao">✖</button></td>';
+  tb.appendChild(tr);
+  poBind(tr);
+}
+function poDelRow(btn){
+  var tb = document.getElementById('po_items');
+  var rows = tb.querySelectorAll('.po-row');
+  if (rows.length <= 1) {
+    rows.forEach(function(tr){
+      tr.querySelectorAll('input').forEach(function(i){ i.value = ''; });
+    });
+  } else {
+    btn.closest('.po-row').remove();
+  }
+  poCalc();
+}
+(function(){
+  var v = document.getElementById('po_vendor');
+  if (v) v.addEventListener('change', poVendorFill);
+  var tb = document.getElementById('po_items');
+  if (tb) tb.querySelectorAll('.po-row').forEach(poBind);
+  var t = document.getElementById('po_tax');
+  if (t) t.addEventListener('input', poCalc);
+  poCalc();
+})();
+</script>
 {% endblock %}
