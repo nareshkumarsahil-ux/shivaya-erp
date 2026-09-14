@@ -2307,6 +2307,7 @@ def billing():
                            items_by_bill=items_by_bill, all_parties=parties, party_names=party_names,
                            comp=_po_company(),
                            edit_items=items_by_bill.get(edit_inv["id"], []) if edit_inv else [],
+                           bill_models=db.query("SELECT * FROM product_models ORDER BY name"),
                            show_add=request.args.get("add"), edit_inv=edit_inv)
 
 
@@ -3991,6 +3992,29 @@ def jobcard_preset(order_id):
     return jsonify({"ok": True, "msg": label})
 
 
+@app.route("/jobcard/<int:order_id>/flow_preview")
+@login_required
+def jobcard_flow_preview(order_id):
+    """⚙️ PROCESS FLOW PREVIEW — Apply se PEHLE dikhao ki kaunse processes set honge.
+    JSON: plist (order me), label, has_data (table par kaam shuru hai kya), current rows."""
+    if session.get("user_role") != "admin":
+        return jsonify({"ok": False, "msg": "Sirf admin process flow set kar sakta hai."})
+    order = db.query("SELECT * FROM orders WHERE id=?", (order_id,), one=True)
+    if not order:
+        return jsonify({"ok": False, "msg": "Order not found."})
+    side = (request.args.get("side") or "").strip().upper()
+    material = (request.args.get("material") or "").strip()
+    if not side:
+        return jsonify({"ok": False, "msg": "Pehle SIDE chuno (SINGLE SIDE ya DOUBLE SIDE)."})
+    plist, label = db.process_preset_for(side, material)
+    rows = db.get_jc_processes(order_id)
+    has_data = any((r["start_dt"] or r["end_dt"] or r["qty"] or r["start_name"] or r["end_name"])
+                   for r in rows)
+    current = [r["process"] for r in rows]
+    return jsonify({"ok": True, "plist": plist, "label": label, "has_data": has_data,
+                    "current": current, "count": len(plist)})
+
+
 @app.route("/jobcard/<int:order_id>/process", methods=["POST"])
 @login_required
 def jobcard_process(order_id):
@@ -4144,6 +4168,19 @@ def jobcard_dispatch(order_id):
     # PRICE HISTORY: dispatch ke waqt item kis price pe gaya — record karo
     jcd = db.query("SELECT * FROM jobcard WHERE order_id=?", (order_id,), one=True)
     ord2 = db.query("SELECT * FROM orders WHERE id=?", (order_id,), one=True)
+    # FG STOCK: PCB dispatch hone par finished product ka stock LESS hota hai
+    # (agar stock bana hai) — ek order par ek hi baar deduct (repeat dispatch par dobara nahi)
+    if jcd and jcd.get("party_model") and ord2:
+        pmd = db.query("SELECT * FROM product_models WHERE name=?", (jcd["party_model"],), one=True)
+        if pmd and (pmd["fg_stock"] or 0) > 0 and not (jcd.get("fg_deducted") or 0):
+            dq = int(ord2["qty"] or 0)
+            if dq > 0:
+                new_stock = max(0, (pmd["fg_stock"] or 0) - dq)
+                deducted = (pmd["fg_stock"] or 0) - new_stock
+                db.execute("UPDATE product_models SET fg_stock=? WHERE id=?", (new_stock, pmd["id"]))
+                db.execute("UPDATE jobcard SET fg_deducted=1 WHERE order_id=?", (order_id,))
+                flash(f"📦 FG STOCK: '{jcd['party_model']}' −{deducted} PCS (dispatch) → ab {new_stock} PCS.",
+                      "success" if deducted == dq else "error")
     if jcd and (jcd["price"] or 0) > 0 and ord2:
         _record_price(jcd["party_model"], jcd["model"], jcd["price"], jcd["rs_pcb"], order_id,
                       ord2["order_no"], ord2["party"], ddate, _model_thickness(jcd["party_model"]))

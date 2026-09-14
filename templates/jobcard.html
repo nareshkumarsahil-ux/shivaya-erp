@@ -145,15 +145,27 @@
         <button type="button" class="btn" id="applyFlowBtn" onclick="applyProcessFlow()">⚙️ Apply Process Flow</button>
       </div>
       <div id="flowMsg" class="small" style="grid-column:1/-1;margin-top:-4px;min-height:16px"></div>
-      <div id="flowConfirm" style="display:none;grid-column:1/-1;background:#fffdf3;border:1px solid var(--amber);border-radius:9px;padding:10px 12px;margin-top:2px">
-        <span id="flowConfirmTxt" class="small"></span>
-        <div style="margin-top:8px;display:flex;gap:8px">
-          <button type="button" class="btn btn-sm" id="flowApplyYes" style="background:#16a34a">✅ Apply</button>
-          <button type="button" class="btn btn-outline btn-sm" id="flowApplyNo">✖ Cancel</button>
-        </div>
-      </div>
       <div class="muted small" style="grid-column:1/-1;margin-top:-4px">
-        💡 <b>SIDE + MATERIAL dono chunte hi</b> usi se related process flow <b>turant</b> neeche <b>PROCESS TABLE</b> mein set ho jayega — <b>Operator View aur Print mein bhi sab jagah</b> wahi processes dikhenge.
+        💡 <b>SIDE + MATERIAL chuno</b> → pehle <b>⚙️ PREVIEW</b> dikhega (kaunse processes set honge) → phir <b>✅ APPLY FLOW</b> dabao. Ye flow <b>PROCESS TABLE, Operator View aur Print</b> sab jagah dikhega.
+      </div>
+    </div>
+  </div>
+
+  <!-- ⚙️ PROCESS FLOW PREVIEW MODAL (Apply se pehle) -->
+  <div id="flowPreviewModal" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:100;align-items:flex-start;justify-content:center;padding:24px 16px">
+    <div style="background:#fff;border-radius:14px;max-width:500px;width:100%;max-height:84vh;overflow:auto;box-shadow:0 20px 50px rgba(0,0,0,.35);margin-top:5vh">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--border);background:#f8fbff;border-radius:14px 14px 0 0">
+        <h3 style="margin:0;font-size:15px">⚙️ PROCESS FLOW PREVIEW</h3>
+        <button type="button" class="btn btn-outline btn-xs" id="fpClose">✕</button>
+      </div>
+      <div style="padding:14px 18px">
+        <div class="small muted">Apply karne par ye <b style="color:#1d4ed8" id="fpTitle">—</b> flow set hoga:</div>
+        <div id="fpList" style="margin-top:10px"></div>
+        <div id="fpStatus" class="small" style="margin-top:12px;padding:9px 11px;border-radius:8px"></div>
+      </div>
+      <div style="padding:12px 18px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end">
+        <button type="button" class="btn btn-outline btn-sm" id="fpCancel">✖ Cancel</button>
+        <button type="button" class="btn btn-sm" id="fpApply" style="background:#16a34a;color:#fff;font-weight:800">✅ APPLY FLOW</button>
       </div>
     </div>
   </div>
@@ -761,7 +773,7 @@ function doApplyFlow(side, mat){
   /* preview/proxy iframe mein session cookie nahi jaati — URL wala token body mein bhejo */
   var t = new URLSearchParams(window.location.search).get('token');
   if (t) body.append('token', t);
-  document.getElementById('flowConfirm').style.display = 'none';
+  document.getElementById('flowPreviewModal').style.display = 'none';
   flowMsg('⏳ Process flow set ho raha hai...');
   fetch('/jobcard/{{ order.id }}/preset', { method: 'POST', body: body })
     .then(function(r){
@@ -789,33 +801,73 @@ function applyProcessFlow(){
     flowMsg('⚠️ <b>Pehle SIDE chuno: SINGLE SIDE ya DOUBLE SIDE.</b>', true);
     return;
   }
-  FLOW_FORCE = PROCS_STARTED;
-  if (!PROCS_STARTED) {
-    doApplyFlow(side, mat);   /* instant apply — koi confirm nahi */
-    return;
-  }
-  document.getElementById('flowConfirmTxt').innerHTML =
-    '⚙️ <b>' + side + (mat ? ' + ' + mat : '') + '</b> ka process flow PROCESS TABLE mein set karna hai?' +
-    '<br>⚠️ Table par pehle se kaam shuru hai (dates/qty bhare hain) — purani entries hat jayengi!';
-  document.getElementById('flowConfirm').style.display = 'block';
-  flowMsg('');
+  showFlowPreview(side, mat);   /* pehle PREVIEW — phir Apply */
 }
-document.getElementById('flowApplyYes').addEventListener('click', function(){
+/* ---- ⚙️ PROCESS FLOW PREVIEW: Apply se pehle poora flow dikhao ---- */
+function showFlowPreview(side, mat){
+  var u = '/jobcard/{{ order.id }}/flow_preview?side=' + encodeURIComponent(side) +
+          '&material=' + encodeURIComponent(mat || '');
+  var t = new URLSearchParams(window.location.search).get('token');
+  if (t) u += '&token=' + encodeURIComponent(t);
+  var modal = document.getElementById('flowPreviewModal');
+  modal.style.display = 'flex';
+  document.getElementById('fpTitle').textContent = side + (mat ? ' + ' + mat : '');
+  document.getElementById('fpList').innerHTML = '<div class="muted small">⏳ Preview load ho raha hai...</div>';
+  document.getElementById('fpStatus').innerHTML = '';
+  fetch(u)
+    .then(function(r){ return r.json(); })
+    .then(function(j){
+      if (!j || !j.ok) {
+        modal.style.display = 'none';
+        flowMsg('⚠️ <b>' + (j && j.msg ? j.msg : 'Preview load nahi hua') + '</b>', true);
+        return;
+      }
+      document.getElementById('fpTitle').textContent = j.label || side;
+      var items = '';
+      (j.plist || []).forEach(function(p, i){
+        items += '<div style="display:flex;gap:8px;align-items:center;padding:6px 8px;border-bottom:1px dashed #e2e8f0">' +
+                 '<span style="background:#1d4ed8;color:#fff;font-size:10px;font-weight:800;border-radius:50%;width:18px;height:18px;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0">' + (i + 1) + '</span>' +
+                 '<span style="font-weight:600">' + p + '</span></div>';
+      });
+      document.getElementById('fpList').innerHTML = items;
+      FLOW_FORCE = PROCS_STARTED || j.has_data;
+      var st = document.getElementById('fpStatus');
+      if (j.has_data) {
+        st.innerHTML = '⚠️ <b>Process table par pehle se kaam shuru hai</b> (dates/qty bhare hain). Apply karne par purani ' +
+                       ((j.current || []).length) + ' entries hatke ye ' + j.count + ' processes set honge.';
+        st.style.background = '#fff7ed'; st.style.border = '1px solid #f59e0b'; st.style.color = '#92400e';
+      } else if (j.current && j.current.length) {
+        st.innerHTML = 'ℹ️ Abhi table me ' + j.current.length + ' processes hain — Apply par naya ' + j.count + '-process flow set hoga (koi data loss nahi).';
+        st.style.background = '#f0fdf4'; st.style.border = '1px solid #16a34a'; st.style.color = '#166534';
+      } else {
+        st.innerHTML = '✅ Table khaali hai — Apply par ' + j.count + ' processes set honge.';
+        st.style.background = '#f0fdf4'; st.style.border = '1px solid #16a34a'; st.style.color = '#166534';
+      }
+    })
+    .catch(function(){
+      modal.style.display = 'none';
+      flowMsg('⚠️ <b>Preview load nahi hua — phir se try karo.</b>', true);
+    });
+}
+function hideFlowPreview(){ document.getElementById('flowPreviewModal').style.display = 'none'; }
+document.getElementById('fpApply').addEventListener('click', function(){
   var side = document.getElementById('jc_board_side').value;
   var mat = document.getElementById('jc_board_material').value;
   doApplyFlow(side, mat);
 });
-document.getElementById('flowApplyNo').addEventListener('click', function(){
-  document.getElementById('flowConfirm').style.display = 'none';
+document.getElementById('fpCancel').addEventListener('click', hideFlowPreview);
+document.getElementById('fpClose').addEventListener('click', hideFlowPreview);
+document.getElementById('flowPreviewModal').addEventListener('click', function(e){
+  if (e.target === this) hideFlowPreview();
 });
-/* side + material dono chune hi flow INSTANT apply hota hai */
+/* side + material dono chune hi PREVIEW khud dikh jata hai */
 ['jc_board_side','jc_board_material'].forEach(function(id){
   var el = document.getElementById(id);
   if (el) el.addEventListener('change', function(){
     var side = document.getElementById('jc_board_side').value;
     var mat = document.getElementById('jc_board_material').value;
     if (side && mat) applyProcessFlow();
-    else if (side && !mat) flowMsg('👉 Ab <b>BASE MATERIAL</b> bhi chuno — phir flow khud apply hoga.');
+    else if (side && !mat) flowMsg('👉 Ab <b>BASE MATERIAL</b> bhi chuno — phir flow ka preview khud dikhega.');
   });
 });
 

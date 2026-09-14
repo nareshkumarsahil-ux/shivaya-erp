@@ -140,6 +140,44 @@
 </div>
 
 <script>
+/* ---- FINISHED PRODUCT dropdown data: item select karte hi price auto (bas qty bharo) ---- */
+var BILL_PRODS = [
+{% for m in bill_models %}{"n": {{ m.name|tojson }}, "c": {{ (m.model_code or '')|tojson }}, "p": {{ m.pcb_price or 0 }}, "s": {{ m.fg_stock or 0 }}}{% if not loop.last %},{% endif %}{% endfor %}
+];
+function billEsc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function billItemOptionsHtml(cur){
+  var h = '<option value="">— Item chuno (model no + price) —</option>';
+  BILL_PRODS.forEach(function(m){
+    var lab = m.n + (m.c ? ' (' + m.c + ')' : '') + ' · ₹' + m.p + (m.s > 0 ? ' · Stock ' + m.s : '');
+    h += '<option value="' + billEsc(m.n) + '" data-price="' + m.p + '"' + (cur === m.n ? ' selected' : '') + '>' + billEsc(lab) + '</option>';
+  });
+  if (cur && !BILL_PRODS.some(function(m){ return m.n === cur; })) {
+    h += '<option value="' + billEsc(cur) + '" selected>' + billEsc(cur) + ' (custom)</option>';
+  }
+  return h;
+}
+function billMakeSelect(cur){
+  var sel = document.createElement('select');
+  sel.name = 'item_n';
+  sel.className = 'bill-item-sel';
+  sel.innerHTML = billItemOptionsHtml(cur || '');
+  sel.addEventListener('change', function(){
+    var o = sel.options[sel.selectedIndex];
+    var p = o ? (parseFloat(o.getAttribute('data-price')) || 0) : 0;
+    var row = sel.closest('tr');
+    if (row) {
+      if (p > 0) {
+        var r = row.querySelector('.bill-rate');
+        if (r) r.value = p;
+      }
+      var q = row.querySelector('.bill-qty'), a = row.querySelector('.bill-amt');
+      var qv = parseFloat(q ? q.value : 0);
+      if (a && p > 0 && !isNaN(qv) && qv > 0) a.value = Math.round(qv * p * 100) / 100;
+    }
+    billCalc();
+  });
+  return sel;
+}
 function billCalc(){
   var total = 0;
   document.querySelectorAll('#bill_items .bill-row').forEach(function(tr){
@@ -166,12 +204,13 @@ function billAddRow(){
   var tb = document.getElementById('bill_items');
   var tr = document.createElement('tr');
   tr.className = 'bill-row';
-  tr.innerHTML = '<td><input name="item_n" placeholder="e.g. 1000 PCBs RM 603 8W"></td>' +
+  tr.innerHTML = '<td></td>' +
     '<td><input name="qty_n" class="bill-qty" placeholder="Qty"></td>' +
     '<td><input name="rate_n" class="bill-rate" type="number" step="0.01" placeholder="Rate"></td>' +
     '<td><input name="amt_n" class="bill-amt" type="number" step="0.01" placeholder="Amount"></td>' +
     '<td><button type="button" class="btn btn-outline btn-xs" onclick="billDelRow(this)" title="Row hatao">✖</button></td>';
   tb.appendChild(tr);
+  tr.querySelector('td').appendChild(billMakeSelect(''));
   billBind(tr);
 }
 function billDelRow(btn){
@@ -180,6 +219,8 @@ function billDelRow(btn){
   if (rows.length <= 1) {
     rows.forEach(function(tr){
       tr.querySelectorAll('input').forEach(function(i){ i.value = ''; });
+      var s = tr.querySelector('select.bill-item-sel');
+      if (s) s.selectedIndex = 0;
     });
   } else {
     btn.closest('.bill-row').remove();
@@ -188,7 +229,14 @@ function billDelRow(btn){
 }
 (function(){
   var tb = document.getElementById('bill_items');
-  if (tb) tb.querySelectorAll('.bill-row').forEach(billBind);
+  if (tb) {
+    /* purane item input ko dropdown me badlo (edit mode me current value preserve) */
+    tb.querySelectorAll('.bill-row').forEach(function(tr){
+      var inp = tr.querySelector('input[name="item_n"]');
+      if (inp) inp.replaceWith(billMakeSelect(inp.value || ''));
+    });
+    tb.querySelectorAll('.bill-row').forEach(billBind);
+  }
   var t = document.getElementById('bill_tax');
   if (t) t.addEventListener('input', billCalc);
   billCalc();

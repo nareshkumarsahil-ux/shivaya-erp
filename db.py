@@ -15,7 +15,7 @@ import http.client
 import urllib.parse
 
 # Schema version — bump karo jab SCHEMA/migrate badle, taaki agla deploy tables update kare.
-SCHEMA_VERSION = "2026-09-12.8"
+SCHEMA_VERSION = "2026-09-12.9"
 
 DB_PATH = os.environ.get("DB_PATH") or (
     os.path.join(tempfile.gettempdir(), "circuit.db") if os.environ.get("VERCEL") else "circuit.db"
@@ -299,6 +299,7 @@ CREATE TABLE IF NOT EXISTS jobcard (
     sheet_len REAL DEFAULT 0, sheet_w REAL DEFAULT 0,
     customer_req TEXT DEFAULT '', raw_materials TEXT DEFAULT '',
     sheet_thickness TEXT DEFAULT '', instructions TEXT DEFAULT '',
+    fg_deducted INTEGER DEFAULT 0,
     total_qty INTEGER DEFAULT 0, short_qty INTEGER DEFAULT 0, short_reason TEXT DEFAULT '',
     handover_sign TEXT DEFAULT ''
 );
@@ -866,6 +867,8 @@ def migrate(conn):
         conn.execute("ALTER TABLE jobcard ADD COLUMN sheet_thickness TEXT DEFAULT ''")
     if jcols and "instructions" not in jcols:
         conn.execute("ALTER TABLE jobcard ADD COLUMN instructions TEXT DEFAULT ''")
+    if jcols and "fg_deducted" not in jcols:
+        conn.execute("ALTER TABLE jobcard ADD COLUMN fg_deducted INTEGER DEFAULT 0")
     # employees: salary column (attendance se salary banane ke liye)
     ecols = [r[1] for r in conn.execute("PRAGMA table_info(employees)")]
     if ecols and "salary" not in ecols:
@@ -1084,7 +1087,8 @@ def ensure_db():
                                 if _col not in _bc:
                                     c.execute(f"ALTER TABLE billing ADD COLUMN {_col} {_dfl}")
                             _jcc = [x[1] for x in c.execute("PRAGMA table_info(jobcard)").fetchall()]
-                            for _col, _dfl in (("sheet_thickness", "TEXT DEFAULT ''"), ("instructions", "TEXT DEFAULT ''")):
+                            for _col, _dfl in (("sheet_thickness", "TEXT DEFAULT ''"), ("instructions", "TEXT DEFAULT ''"),
+                                               ("fg_deducted", "INTEGER DEFAULT 0")):
                                 if _col not in _jcc:
                                     c.execute(f"ALTER TABLE jobcard ADD COLUMN {_col} {_dfl}")
                         except Exception:
