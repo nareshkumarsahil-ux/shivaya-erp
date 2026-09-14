@@ -139,6 +139,7 @@
         <div class="field"><label>CNC Margin Y (mm)</label><input type="number" step="0.1" name="cnc_margin_y" value="{{ edit_model.cnc_margin_y if edit_model else '' }}"></div>
         <div class="field"><label>PCB PRICE (₹)</label><input type="number" step="0.01" id="pm_pcb_price" name="pcb_price" value="{{ edit_model.pcb_price if edit_model else '' }}" style="font-weight:700;background:#fffdf3"></div>
         <div class="field"><label>PER SQUARE INCH (₹)</label><input type="number" step="0.001" id="pm_per_sq_inch" name="per_sq_inch" value="{{ edit_model.per_sq_inch if edit_model else '' }}"></div>
+        <div class="field"><label>Sheet Thickness</label><input name="sheet_thickness" placeholder="e.g. 1.6MM / 1.0MM" value="{{ edit_model.sheet_thickness if edit_model else '' }}"></div>
         <div class="full"><button class="btn" type="submit">{% if edit_model %}💾 Update Finished Product{% else %}➕ Add Finished Product{% endif %}</button></div>
       </div>
     </form>
@@ -151,13 +152,14 @@
   <div class="panel-body" style="padding:0;overflow-x:auto">
     {% if ph_rows %}
     <table>
-      <thead><tr><th>Date</th><th class="t-right">PCB Price (₹)</th><th class="t-right">₹/sq.inch</th><th>Party</th><th>Order</th></tr></thead>
+      <thead><tr><th>Date</th><th class="t-right">PCB Price (₹)</th><th class="t-right">₹/sq.inch</th><th>Thickness</th><th>Party</th><th>Order</th></tr></thead>
       <tbody>
         {% for p in ph_rows %}
         <tr>
           <td class="mono small">{{ p.ddate }}</td>
           <td class="t-right mono"><b>₹{{ p.price|inr0 }}</b></td>
           <td class="t-right mono">{{ p.rs_pcb|gfmt }}</td>
+          <td class="small">{% if p.sheet_thickness %}<span class="badge b-blue">{{ p.sheet_thickness }}</span>{% else %}—{% endif %}</td>
           <td class="small">{{ p.party or '—' }}</td>
           <td class="mono small">{% if p.order_id %}<a href="/jobcard/{{ p.order_id }}{% if request.args.get('token') %}?token={{ request.args.get('token') }}{% endif %}">{{ p.order_no or '#' ~ p.order_id }}</a>{% else %}—{% endif %}</td>
         </tr>
@@ -224,7 +226,7 @@ function pmPrice(){
   <div class="panel-body" style="padding:0;overflow-x:auto">
     <table>
       <thead>
-        <tr><th>Model</th><th>PCB (mm)</th><th>PCBs</th><th>Panel (mm)</th><th class="t-right">PCS/Panel</th><th class="t-right">Panels/Sheet</th><th class="t-right">FG Stock</th><th class="t-right">Last Price</th><th>Created</th><th></th></tr>
+        <tr><th>Model</th><th>PCB (mm)</th><th>PCBs</th><th>Panel (mm)</th><th class="t-right">PCS/Panel</th><th class="t-right">Panels/Sheet</th><th class="t-right">FG Stock</th><th class="t-right">Current / Last Price</th><th>Created</th><th></th></tr>
       </thead>
       <tbody>
         {% for m in models %}
@@ -236,7 +238,12 @@ function pmPrice(){
           <td class="t-right mono">{{ m.pcs_panel }}</td>
           <td class="t-right mono">{{ m.panels_sheet }}</td>
           <td class="t-right"><span class="badge {{'b-green' if (m.fg_stock or 0) > 0 else 'b-gray'}}">{{ m.fg_stock or 0 }} PCS</span></td>
-          <td class="t-right mono small">{% set lp = lp_map.get(m.name) %}{% if lp %}<b style="color:#b45309">₹{{ lp.price|inr0 }}</b><div class="muted" style="font-size:10px">{{ lp.ddate }} · {{ lp.order_no }}</div>{% else %}—{% endif %}</td>
+          <td class="t-right mono small" style="white-space:nowrap">
+            <b style="color:#166534">{% if m.pcb_price %}₹{{ m.pcb_price|inr0 }}{% else %}—{% endif %}</b>
+            {% if m.sheet_thickness %}<span class="badge b-gray" style="font-size:9px;margin-left:3px">{{ m.sheet_thickness }}</span>{% endif %}
+            {% set lp = lp_map.get(m.name) %}
+            {% if lp %}<div class="muted" style="font-size:10px">last ₹{{ lp.price|inr0 }}{% if lp.sheet_thickness %} · {{ lp.sheet_thickness }}{% endif %} · {{ lp.ddate }} · {{ lp.order_no }}</div>{% endif %}
+          </td>
           <td class="small muted">{{ m.created_on }}</td>
           <td class="t-right" style="white-space:nowrap">
             <button type="button" class="btn btn-xs" style="background:#16a34a;color:#fff" onclick="toggleProduce({{ m.id }})">🏭 Produce</button>

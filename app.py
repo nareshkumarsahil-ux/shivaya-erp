@@ -1016,7 +1016,7 @@ def cutlist():
                         base = (order["product"] or "").split(" · ")[0].strip()
                         _record_price(base, "", price, rs_pcb, order_id,
                                       order["order_no"], order["party"],
-                                      datetime.date.today().isoformat())
+                                      datetime.date.today().isoformat(), _model_thickness(base))
                     flash(f"Layout applied to {order['order_no']} ({order['party']}). "
                           f"Qty set to {result['total_pcs']} pcs — Job Card bhi update ho gaya "
                           f"(sheet, panels/sheet, qty panel, pcs/panel, price).", "success")
@@ -1137,7 +1137,8 @@ def products():
                 _clen, _cwid,
                 int(f.get("x_qty", 0) or 0), int(f.get("y_qty", 0) or 0),
                 float(f.get("cnc_margin_x", 0) or 0), float(f.get("cnc_margin_y", 0) or 0),
-                float(f.get("pcb_price", 0) or 0), float(f.get("per_sq_inch", 0) or 0))
+                float(f.get("pcb_price", 0) or 0), float(f.get("per_sq_inch", 0) or 0),
+                (f.get("sheet_thickness") or "").strip())
         # ---- EDIT: existing product update ----
         try:
             edit_id = int(f.get("edit_id", 0) or 0)
@@ -1150,7 +1151,7 @@ def products():
                     "gap_x=?, gap_y=?, border_l=?, border_r=?, border_t=?, border_b=?, gang_x=?, gang_y=?, "
                     "sheet_len=?, sheet_w=?, panel_len=?, panel_w=?, kerf_x=?, kerf_y=?, orientation=?, "
                     "pcs_panel=?, panels_sheet=?, sheets=?, cutting_len=?, cutting_w=?, x_qty=?, y_qty=?, "
-                    "cnc_margin_x=?, cnc_margin_y=?, pcb_price=?, per_sq_inch=? WHERE id=?",
+                    "cnc_margin_x=?, cnc_margin_y=?, pcb_price=?, per_sq_inch=?, sheet_thickness=? WHERE id=?",
                     vals + (edit_id,))
                 flash(f"Finished product '{name}' update ho gaya ✅ (cut list layout + price ke saath)", "success")
             else:
@@ -1162,8 +1163,9 @@ def products():
                     "INSERT INTO product_models (name, model_code, pcb_len, pcb_w, pcbs_x, pcbs_y, gap_x, gap_y, "
                     "border_l, border_r, border_t, border_b, gang_x, gang_y, sheet_len, sheet_w, panel_len, panel_w, "
                     "kerf_x, kerf_y, orientation, pcs_panel, panels_sheet, sheets, cutting_len, cutting_w, "
-                    "x_qty, y_qty, cnc_margin_x, cnc_margin_y, pcb_price, per_sq_inch, order_id, created_on) "
-                    "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    "x_qty, y_qty, cnc_margin_x, cnc_margin_y, pcb_price, per_sq_inch, sheet_thickness, "
+                    "order_id, created_on) "
+                    "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                     vals + (None, datetime.date.today().isoformat()))
                 flash(f"Finished product '{name}' manually add ho gaya ✅ — BOM set karne ke liye 🧪 BOM button dabao.", "success")
         except Exception as e:
@@ -1200,7 +1202,8 @@ def products():
     # PRICE HISTORY: har model ka last price (table ke liye) + edit form me poori list
     _ph_ensure()
     lp_map = {}
-    for lp in db.query("SELECT model_name, price, ddate, party, order_no FROM price_history ORDER BY id DESC"):
+    for lp in db.query("SELECT model_name, price, rs_pcb, sheet_thickness, ddate, party, order_no "
+                       "FROM price_history ORDER BY id DESC"):
         if lp["model_name"] not in lp_map:
             lp_map[lp["model_name"]] = lp
     ph_rows = []
@@ -3008,7 +3011,7 @@ def operator_action():
             if _jcd and (_jcd["price"] or 0) > 0 and _ord2:
                 _record_price(_jcd["party_model"], _jcd["model"], _jcd["price"], _jcd["rs_pcb"],
                               order_id, _ord2["order_no"], _ord2["party"],
-                              datetime.date.today().isoformat())
+                              datetime.date.today().isoformat(), _model_thickness(_jcd["party_model"]))
             flash(f"PCB dispatched: {mode} — date/time auto save ho gaya." + (" 📷 Photo bhi save hui." if ph_data else ""), "success")
         else:
             flash("Dispatch mode select karein.", "error")
@@ -3367,7 +3370,7 @@ def jobcard_update(order_id):
                           or float(jc["rs_pcb"] or 0) != _jc_num(f.get("rs_pcb"))):
         _record_price(party_model, model, new_price, _jc_num(f.get("rs_pcb")), order_id,
                       order["order_no"], f.get("party", "").strip(),
-                      datetime.date.today().isoformat())
+                      datetime.date.today().isoformat(), _model_thickness(party_model))
     flash("Job card saved. All changes saved.", "success")
     return redirect_with_token(url_for("jobcard", order_id=order_id))
 
@@ -3571,7 +3574,7 @@ def jobcard_dispatch(order_id):
     ord2 = db.query("SELECT * FROM orders WHERE id=?", (order_id,), one=True)
     if jcd and (jcd["price"] or 0) > 0 and ord2:
         _record_price(jcd["party_model"], jcd["model"], jcd["price"], jcd["rs_pcb"], order_id,
-                      ord2["order_no"], ord2["party"], ddate)
+                      ord2["order_no"], ord2["party"], ddate, _model_thickness(jcd["party_model"]))
     flash(f"PCB dispatched: {mode} · {ddate} {dtime}." + (" 📷 Photo bhi save hui." if ph_data else ""), "success")
     return redirect_with_token(url_for("jobcard", order_id=order_id))
 
@@ -3988,13 +3991,17 @@ def _ph_ensure():
         db.execute("CREATE TABLE IF NOT EXISTS price_history ("
                    "id INTEGER PRIMARY KEY AUTOINCREMENT, model_name TEXT DEFAULT '', "
                    "model_code TEXT DEFAULT '', price REAL DEFAULT 0, rs_pcb REAL DEFAULT 0, "
-                   "order_id INTEGER, order_no TEXT DEFAULT '', party TEXT DEFAULT '', "
-                   "ddate TEXT DEFAULT '', created_on TEXT DEFAULT '')")
+                   "sheet_thickness TEXT DEFAULT '', order_id INTEGER, order_no TEXT DEFAULT '', "
+                   "party TEXT DEFAULT '', ddate TEXT DEFAULT '', created_on TEXT DEFAULT '')")
+        phc = [r["name"] for r in db.query("PRAGMA table_info(price_history)")]
+        if "sheet_thickness" not in phc:
+            db.execute("ALTER TABLE price_history ADD COLUMN sheet_thickness TEXT DEFAULT ''")
     except Exception:
         pass
 
 
-def _record_price(model_name, model_code, price, rs_pcb, order_id, order_no, party, ddate=""):
+def _record_price(model_name, model_code, price, rs_pcb, order_id, order_no, party, ddate="",
+                  thickness=""):
     """PRICE HISTORY — item/model kis price pe bika/gaya, ye yaad rakho.
     Same order + same model + same price par duplicate nahi banega."""
     _ph_ensure()
@@ -4007,10 +4014,20 @@ def _record_price(model_name, model_code, price, rs_pcb, order_id, order_no, par
                    "ORDER BY id DESC LIMIT 1", (model_name, order_id or 0, price), one=True)
     if dup:
         return
-    db.execute("INSERT INTO price_history (model_name, model_code, price, rs_pcb, order_id, order_no, party, "
-               "ddate, created_on) VALUES (?,?,?,?,?,?,?,?,?)",
-               (model_name, model_code or "", price, rs, order_id or 0, order_no or "", party or "",
-                ddate or "", datetime.datetime.now().strftime("%Y-%m-%d %H:%M")))
+    db.execute("INSERT INTO price_history (model_name, model_code, price, rs_pcb, sheet_thickness, order_id, "
+               "order_no, party, ddate, created_on) VALUES (?,?,?,?,?,?,?,?,?,?)",
+               (model_name, model_code or "", price, rs, (thickness or "").strip(), order_id or 0,
+                order_no or "", party or "", ddate or "",
+                datetime.datetime.now().strftime("%Y-%m-%d %H:%M")))
+
+
+def _model_thickness(name):
+    """Finished product ki SHEET THICKNESS (e.g. 1.6MM) — price history ke saath record ke liye."""
+    if not name:
+        return ""
+    m = db.query("SELECT sheet_thickness FROM product_models WHERE name=? LIMIT 1",
+                 ((name or "").strip(),), one=True)
+    return (m["sheet_thickness"] or "") if m else ""
 
 
 def _model_name(r):

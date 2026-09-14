@@ -15,7 +15,7 @@ import http.client
 import urllib.parse
 
 # Schema version — bump karo jab SCHEMA/migrate badle, taaki agla deploy tables update kare.
-SCHEMA_VERSION = "2026-09-12.2"
+SCHEMA_VERSION = "2026-09-12.3"
 
 DB_PATH = os.environ.get("DB_PATH") or (
     os.path.join(tempfile.gettempdir(), "circuit.db") if os.environ.get("VERCEL") else "circuit.db"
@@ -306,6 +306,7 @@ CREATE TABLE IF NOT EXISTS product_models (
     cnc_margin_x REAL DEFAULT 0, cnc_margin_y REAL DEFAULT 0,
     party TEXT DEFAULT '', note TEXT DEFAULT '',
     pcb_price REAL DEFAULT 0, per_sq_inch REAL DEFAULT 0,
+    sheet_thickness TEXT DEFAULT '',
     attachment_name TEXT DEFAULT '', attachment_mime TEXT DEFAULT '', attachment_data TEXT DEFAULT '',
     order_id INTEGER,
     created_on TEXT DEFAULT ''
@@ -740,8 +741,8 @@ def migrate(conn):
     # PRICE HISTORY — item/model kis price pe gaya tha (last price memory)
     conn.execute("CREATE TABLE IF NOT EXISTS price_history ("
                  "id INTEGER PRIMARY KEY AUTOINCREMENT, model_name TEXT DEFAULT '', model_code TEXT DEFAULT '', "
-                 "price REAL DEFAULT 0, rs_pcb REAL DEFAULT 0, order_id INTEGER, order_no TEXT DEFAULT '', "
-                 "party TEXT DEFAULT '', ddate TEXT DEFAULT '', created_on TEXT DEFAULT '')")
+                 "price REAL DEFAULT 0, rs_pcb REAL DEFAULT 0, sheet_thickness TEXT DEFAULT '', order_id INTEGER, "
+                 "order_no TEXT DEFAULT '', party TEXT DEFAULT '', ddate TEXT DEFAULT '', created_on TEXT DEFAULT '')")
     pcols = [r[1] for r in conn.execute("PRAGMA table_info(product_models)")]
     if pcols and "model_code" not in pcols:
         conn.execute("ALTER TABLE product_models ADD COLUMN model_code TEXT DEFAULT ''")
@@ -777,6 +778,12 @@ def migrate(conn):
         conn.execute("ALTER TABLE product_models ADD COLUMN pcb_price REAL DEFAULT 0")
     if pcols and "per_sq_inch" not in pcols:
         conn.execute("ALTER TABLE product_models ADD COLUMN per_sq_inch REAL DEFAULT 0")
+    if pcols and "sheet_thickness" not in pcols:
+        conn.execute("ALTER TABLE product_models ADD COLUMN sheet_thickness TEXT DEFAULT ''")
+    # PRICE HISTORY columns (sheet thickness price ke saath)
+    phcols = [r[1] for r in conn.execute("PRAGMA table_info(price_history)")]
+    if phcols and "sheet_thickness" not in phcols:
+        conn.execute("ALTER TABLE price_history ADD COLUMN sheet_thickness TEXT DEFAULT ''")
     jcols = [r[1] for r in conn.execute("PRAGMA table_info(jobcard)")]
     if jcols and "mat_code" not in jcols:
         conn.execute("ALTER TABLE jobcard ADD COLUMN mat_code TEXT DEFAULT ''")
@@ -972,8 +979,15 @@ def ensure_db():
                         c.execute("CREATE TABLE IF NOT EXISTS price_history ("
                                   "id INTEGER PRIMARY KEY AUTOINCREMENT, model_name TEXT DEFAULT '', "
                                   "model_code TEXT DEFAULT '', price REAL DEFAULT 0, rs_pcb REAL DEFAULT 0, "
-                                  "order_id INTEGER, order_no TEXT DEFAULT '', party TEXT DEFAULT '', "
-                                  "ddate TEXT DEFAULT '', created_on TEXT DEFAULT '')")
+                                  "sheet_thickness TEXT DEFAULT '', order_id INTEGER, order_no TEXT DEFAULT '', "
+                                  "party TEXT DEFAULT '', ddate TEXT DEFAULT '', created_on TEXT DEFAULT '')")
+                        # naye column: sheet thickness (price ke saath)
+                        try:
+                            _phc = [x[1] for x in c.execute("PRAGMA table_info(price_history)").fetchall()]
+                            if "sheet_thickness" not in _phc:
+                                c.execute("ALTER TABLE price_history ADD COLUMN sheet_thickness TEXT DEFAULT ''")
+                        except Exception:
+                            pass
                         c.close()
                         _inited = True
                         return
