@@ -27,6 +27,7 @@ a{text-decoration:none;color:inherit}
 .saved-note .dot{width:7px;height:7px;border-radius:50%;background:#4ade80}
 .user-chip{display:flex;align-items:center;gap:8px;padding:8px 10px;background:rgba(255,255,255,.07);border-radius:8px;color:#e2e8f0;font-size:13px;margin-bottom:6px}
 .user-chip .role{font-size:10px;background:var(--amber);color:#192338;padding:2px 7px;border-radius:20px;margin-left:auto;font-weight:700}
+.ver-chip{padding:4px 8px;border:1px dashed rgba(255,255,255,.25);border-radius:6px;color:#93a3bd;font-size:10.5px;text-align:center;margin-bottom:6px;letter-spacing:.3px}
 .logout{display:block;text-align:center;padding:8px;border-radius:8px;color:#7d8aa5;font-size:12.5px}
 .logout:hover{background:rgba(220,38,38,.15);color:#fca5a5}
 

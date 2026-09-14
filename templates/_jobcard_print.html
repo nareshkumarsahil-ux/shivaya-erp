@@ -64,14 +64,18 @@
     </thead>
     <tbody>
       {% for p in procs %}
+      {% set is_disp = ('DISPATCH' in (p.process|upper)) or ('PACK' in (p.process|upper)) %}
+      {% set dd = dispatch if is_disp else none %}
       <tr class="proc-{{ p.id }}">
-        <td class="ps-procname">{% if p.idx %}<span class="pnum">{{ p.idx }}.</span>{% endif %} {{ p.process }}{% if p.skipped %} <b style="color:#b3401c">⏭ SKIPPED</b>{% endif %}</td>
-        <td class="s-date">{{ p.start_date }}</td>
-        <td class="s-time">{{ p.start_time }}</td>
-        <td class="s-name">{{ p.start_name }}</td>
-        <td class="e-date">{{ p.end_date }}</td>
-        <td class="e-time">{{ p.end_time }}</td>
-        <td class="e-name">{{ p.end_name }}</td>
+        <td class="ps-procname">{% if p.idx %}<span class="pnum">{{ p.idx }}.</span>{% endif %} {{ p.process }}{% if p.skipped %} <b style="color:#b3401c">⏭ SKIPPED</b>{% endif %}
+          {% if dd %}<div style="font-size:9px;color:#b3401c;font-weight:700;margin-top:2px">🚚 {{ dd.mode|upper }}{% if dd.details %} · {{ dd.details }}{% endif %}</div>{% endif %}
+        </td>
+        <td class="s-date">{{ p.start_date or (dd.ddate if dd else '') }}</td>
+        <td class="s-time">{{ p.start_time or (dd.dtime if dd else '') }}</td>
+        <td class="s-name">{{ p.start_name or (dd.dispatched_by if dd else '') }}</td>
+        <td class="e-date">{{ p.end_date or (dd.ddate if dd else '') }}</td>
+        <td class="e-time">{{ p.end_time or (dd.dtime if dd else '') }}</td>
+        <td class="e-name">{{ p.end_name or (dd.dispatched_by if dd else '') }}</td>
         <td class="t-total">{{ p.total }}</td>
         <td class="t-qty">{{ p.qty or '' }}</td>
       </tr>

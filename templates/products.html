@@ -139,7 +139,14 @@
         <div class="field"><label>CNC Margin Y (mm)</label><input type="number" step="0.1" name="cnc_margin_y" value="{{ edit_model.cnc_margin_y if edit_model else '' }}"></div>
         <div class="field"><label>PCB PRICE (₹)</label><input type="number" step="0.01" id="pm_pcb_price" name="pcb_price" value="{{ edit_model.pcb_price if edit_model else '' }}" style="font-weight:700;background:#fffdf3"></div>
         <div class="field"><label>PER SQUARE INCH (₹)</label><input type="number" step="0.001" id="pm_per_sq_inch" name="per_sq_inch" value="{{ edit_model.per_sq_inch if edit_model else '' }}"></div>
-        <div class="field"><label>Sheet Thickness</label><input name="sheet_thickness" placeholder="e.g. 1.6MM / 1.0MM" value="{{ edit_model.sheet_thickness if edit_model else '' }}"></div>
+        <div class="field">
+          <label>Sheet Thickness (material + mm)</label>
+          <input name="sheet_thickness" id="pm_sheet_thickness" list="pm_thick_opts" placeholder="e.g. FR4 1.6MM / METAL 1MM" value="{{ edit_model.sheet_thickness if edit_model else '' }}">
+          <datalist id="pm_thick_opts">
+            {% for r in rates %}<option value="{{ r.material }} {{ r.thickness }}">{% endfor %}
+          </datalist>
+          <div class="muted" style="font-size:10px" id="pm_thick_hint">Rate card se auto ₹/sq.inch aayega (e.g. METAL 1MM → ₹2)</div>
+        </div>
         <div class="full"><button class="btn" type="submit">{% if edit_model %}💾 Update Finished Product{% else %}➕ Add Finished Product{% endif %}</button></div>
       </div>
     </form>
@@ -218,20 +225,84 @@ function pmPrice(){
   if (re) re.addEventListener('input', function(){ _pmLastEdit = 'rate'; pmPrice(); });
   if (pe) pe.addEventListener('input', function(){ _pmLastEdit = 'price'; pmPrice(); });
 })();
+/* ---- THICKNESS → RATE CARD auto price (metal-1mm ₹2, fr4-1mm ₹2.70 …) ---- */
+var PM_RATES = {};
+{% for r in rates %}PM_RATES['{{ r.material|e }} {{ r.thickness|e }}'] = {{ r.per_sq_inch }};{% endfor %}
+function pmNorm(s){ return (s||'').toUpperCase().replace(/[^0-9A-Z]/g,' ').replace(/\s+/g,' ').trim(); }
+function pmThickRate(){
+  var t = document.getElementById('pm_sheet_thickness');
+  var re = document.getElementById('pm_per_sq_inch');
+  var hint = document.getElementById('pm_thick_hint');
+  if (!t || !re) return;
+  var key = pmNorm(t.value);
+  var rate = PM_RATES[key];
+  if (!rate && key) {
+    Object.keys(PM_RATES).forEach(function(k){
+      var nk = pmNorm(k);
+      if (!rate && (nk === key || nk.indexOf(key) === 0 || key.indexOf(nk) === 0)) rate = PM_RATES[k];
+    });
+  }
+  if (rate) {
+    re.value = String(rate);
+    _pmLastEdit = 'rate';
+    pmPrice();
+    if (hint) hint.innerHTML = '✅ Rate card: <b>' + key + ' → ₹' + rate + '/sq.inch</b> — PCB price auto set ho gaya';
+  } else if (hint) {
+    hint.innerHTML = '⚠️ Rate card me ye thickness nahi mili — ₹/sq.inch khud bharo ya neeche Rate Card me add karo';
+  }
+}
+(function(){
+  var t = document.getElementById('pm_sheet_thickness');
+  if (t) { t.addEventListener('input', pmThickRate); t.addEventListener('change', pmThickRate); }
+})();
 </script>
 {% endif %}
+
+<div class="panel" style="border-left:4px solid #2563eb">
+  <div class="panel-head"><h3>🧾 Sheet Thickness Rate Card — material + thickness → ₹/sq.inch</h3></div>
+  <div class="panel-body">
+    <table>
+      <thead><tr><th>Material</th><th>Thickness</th><th class="t-right">₹ / sq.inch</th><th></th></tr></thead>
+      <tbody>
+        {% for r in rates %}
+        <tr>
+          <td class="mono">{{ r.material }}</td>
+          <td class="mono">{{ r.thickness }}</td>
+          <td class="t-right mono"><b>₹{{ r.per_sq_inch|inr0 }}</b></td>
+          <td class="t-right">
+            <form method="post" action="/products" style="display:inline" onsubmit="return confirm('Delete {{ r.material }} {{ r.thickness }} rate?')">
+              <input type="hidden" name="rate_action" value="del">
+              <input type="hidden" name="rate_id" value="{{ r.id }}">
+              <button class="btn btn-outline btn-xs" title="Delete">🗑</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <form method="post" action="/products" style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;align-items:center">
+      <input type="hidden" name="rate_action" value="add">
+      <input name="rate_material" placeholder="Material (METAL / FR4 / CEM-1)" required style="min-width:150px">
+      <input name="rate_thickness" placeholder="Thickness (1MM / 1.5MM / 1.6MM)" required style="min-width:130px">
+      <input name="rate_per_sq_inch" type="number" step="0.01" min="0.01" placeholder="₹/sq.inch (2.50)" required style="min-width:110px">
+      <button class="btn" type="submit">➕ Add Rate</button>
+    </form>
+    <p class="muted small" style="margin-top:6px">💡 Finished Product form me Sheet Thickness select karte hi ₹/sq.inch + PCB PRICE is card ke hisaab se auto set ho jata hai. Apne rates yahan badal sakte ho (METAL 1MM ₹2, METAL 1.5MM ₹2.50, FR4 1MM ₹2.70, CEM-1 1.5MM ₹3…).</p>
+  </div>
+</div>
 
 <div class="panel">
   <div class="panel-head"><h3>🗂️ Saved Models ({{ models|length }})</h3></div>
   <div class="panel-body" style="padding:0;overflow-x:auto">
     <table>
       <thead>
-        <tr><th>Model</th><th>PCB (mm)</th><th>PCBs</th><th>Panel (mm)</th><th class="t-right">PCS/Panel</th><th class="t-right">Panels/Sheet</th><th class="t-right">FG Stock</th><th class="t-right">Current / Last Price</th><th>Created</th><th></th></tr>
+        <tr><th>Model</th><th>Sheet Thickness</th><th>PCB (mm)</th><th>PCBs</th><th>Panel (mm)</th><th class="t-right">PCS/Panel</th><th class="t-right">Panels/Sheet</th><th class="t-right">FG Stock</th><th class="t-right">Current / Last Price</th><th>Created</th><th></th></tr>
       </thead>
       <tbody>
         {% for m in models %}
         <tr>
           <td><b>{{ m.name }}</b>{% if m.model_code %} <span class="muted small mono">{{ m.model_code }}</span>{% endif %}{% if m.attachment_data %}<span title="{{ m.attachment_name or 'attachment hai' }}" style="cursor:default"> 📎</span>{% endif %}{% if m.party %}<div class="muted" style="font-size:10px">👤 {{ m.party }}</div>{% endif %}</td>
+          <td class="small mono" style="white-space:nowrap">{% if m.sheet_thickness %}<span class="badge b-blue">{{ m.sheet_thickness }}</span>{% else %}<span class="muted">—</span>{% endif %}</td>
           <td class="mono small">{{ m.pcb_len|gfmt }}×{{ m.pcb_w|gfmt }}</td>
           <td class="mono small">{{ m.pcbs_x }}×{{ m.pcbs_y }}</td>
           <td class="mono small">{% if m.cutting_len %}<b style="color:#166534">{{ m.cutting_len|gfmt }}×{{ m.cutting_w|gfmt }}</b><div class="muted" style="font-size:10px">panel {{ m.panel_len|gfmt }}×{{ m.panel_w|gfmt }} · {{ m.gang_x }}×{{ m.gang_y }} gang</div>{% else %}{{ m.panel_len|gfmt }}×{{ m.panel_w|gfmt }}{% endif %}{% if m.note %}<div class="muted" style="font-size:10px">🔧 {{ m.note }}</div>{% endif %}</td>

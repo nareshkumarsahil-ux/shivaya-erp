@@ -146,8 +146,13 @@ def inject_globals():
 
 @app.template_filter("inr0")
 def inr0_filter(value):
+    # Paise exact dikhate hain (₹3.50 / ₹7.75), round NAHI hota —
+    # lekin .00 hone par clean integer (₹4 / ₹45,000).
     try:
-        return f"{float(value):,.0f}"
+        s = f"{float(value):,.2f}"
+        if s.endswith(".00"):
+            s = s[:-3]
+        return s
     except (TypeError, ValueError):
         return "0"
 
@@ -1151,6 +1156,29 @@ def cutlist():
 def products():
     if request.method == "POST":
         f = request.form
+        # ---- THICKNESS RATE CARD: add / delete (product form se alag) ----
+        if f.get("rate_action") == "add":
+            _mat = (f.get("rate_material") or "").strip().upper()
+            _thk = (f.get("rate_thickness") or "").strip().upper()
+            try:
+                _rate = float(f.get("rate_per_sq_inch") or 0)
+            except ValueError:
+                _rate = 0
+            if _mat and _thk and _rate > 0:
+                db.execute("INSERT INTO thickness_rates (material, thickness, per_sq_inch) VALUES (?,?,?) "
+                           "ON CONFLICT(material, thickness) DO UPDATE SET per_sq_inch=excluded.per_sq_inch",
+                           (_mat, _thk, _rate))
+                flash(f"Rate card: {_mat} {_thk} → ₹{_rate:g}/sq.inch save ho gaya ✅", "success")
+            else:
+                flash("Rate add nahi hua — Material, Thickness aur Rate teeno chahiye.", "error")
+            return redirect_with_token(url_for("products"))
+        if f.get("rate_action") == "del":
+            try:
+                db.execute("DELETE FROM thickness_rates WHERE id=?", (int(f.get("rate_id") or 0),))
+                flash("Rate card entry delete ho gayi.", "success")
+            except ValueError:
+                pass
+            return redirect_with_token(url_for("products"))
         name = (f.get("name") or "").strip()
         if not name:
             flash("Product name zaroori hai.", "error")
@@ -1169,6 +1197,13 @@ def products():
                 _clen = _plen * _gang_x + _kx * (_gang_x - 1)
             if _cwid <= 0 and _pwid > 0:
                 _cwid = _pwid * _gang_y + _ky * (_gang_y - 1)
+        # THICKNESS → RATE: per sq.inch khali hai aur thickness rate card me hai to auto price
+        _thick = (f.get("sheet_thickness") or "").strip()
+        _per_sq = float(f.get("per_sq_inch", 0) or 0)
+        if _per_sq <= 0 and _thick:
+            _tr = _rate_for_thickness(_thick)
+            if _tr:
+                _per_sq = _tr
         vals = (name, (f.get("model_code") or "").strip(),
                 float(f.get("pcb_len", 0) or 0), float(f.get("pcb_w", 0) or 0),
                 int(f.get("pcbs_x", 0) or 0), int(f.get("pcbs_y", 0) or 0),
@@ -1185,8 +1220,8 @@ def products():
                 _clen, _cwid,
                 int(f.get("x_qty", 0) or 0), int(f.get("y_qty", 0) or 0),
                 float(f.get("cnc_margin_x", 0) or 0), float(f.get("cnc_margin_y", 0) or 0),
-                float(f.get("pcb_price", 0) or 0), float(f.get("per_sq_inch", 0) or 0),
-                (f.get("sheet_thickness") or "").strip())
+                float(f.get("pcb_price", 0) or 0), _per_sq,
+                _thick)
         # ---- EDIT: existing product update ----
         try:
             edit_id = int(f.get("edit_id", 0) or 0)
@@ -1268,6 +1303,7 @@ def products():
                            show_add=request.args.get("add"),
                            edit_model=edit_model,
                            lp_map=lp_map, ph_rows=ph_rows,
+                           rates=db.query("SELECT * FROM thickness_rates ORDER BY material, thickness"),
                            import_preview=_import_preview(request.args.get("import_batch")))
 
 
@@ -2826,6 +2862,29 @@ def designation_matches(designation, process):
     return False
 
 
+def _dispatch_proc_row(order_id):
+    """Job card ki Dispatch/Packing process row (naam se dhundo — flow ke hisaab se alag ho sakta hai)."""
+    return db.query("SELECT * FROM jobcard_process WHERE order_id=? AND "
+                    "(UPPER(process) LIKE '%DISPATCH%' OR UPPER(process) LIKE '%PACK%') "
+                    "ORDER BY ord DESC, id DESC LIMIT 1", (order_id,), one=True)
+
+
+def _mark_dispatch_process(order_id, by_name, ddate, dtime):
+    """Dispatch entry hote hi job card ki Dispatch/Packing row me DATE + TIME + NAME auto bharo
+    (row DONE ho jaye) — Job Card aur Print Preview me dispatch row date/time ke saath dikhe."""
+    row = _dispatch_proc_row(order_id)
+    if not row:
+        return
+    dts = f"{ddate} {dtime}"
+    db.execute("UPDATE jobcard_process SET "
+               "start_dt=CASE WHEN COALESCE(start_dt,'')='' THEN ? ELSE start_dt END, "
+               "end_dt=?, "
+               "start_name=CASE WHEN COALESCE(start_name,'')='' THEN ? ELSE start_name END, "
+               "end_name=? WHERE id=?",
+               (dts, dts, by_name, by_name, row["id"]))
+    advance_current(order_id)
+
+
 def advance_current(order_id):
     """finish ke baad: latest finished row ka NEXT; NONE = agla process hoga hi nahi (skip);
     warna pehla unfinished; sab done -> Completed."""
@@ -3077,6 +3136,9 @@ def operator_action():
                 _record_price(_jcd["party_model"], _jcd["model"], _jcd["price"], _jcd["rs_pcb"],
                               order_id, _ord2["order_no"], _ord2["party"],
                               datetime.date.today().isoformat(), _model_thickness(_jcd["party_model"]))
+            # JOB CARD + PREVIEW: Dispatch row me date/time/name auto bharo (row done)
+            _mark_dispatch_process(order_id, op, datetime.date.today().isoformat(),
+                                   datetime.datetime.now().strftime("%H:%M"))
             flash(f"PCB dispatched: {mode} — date/time auto save ho gaya." + (" 📷 Photo bhi save hui." if ph_data else ""), "success")
         else:
             flash("Dispatch mode select karein.", "error")
@@ -3230,6 +3292,12 @@ def prep_jobcard(order_id):
     if not order:
         return None, None, None
     jc = ensure_jobcard(order_id)
+    # SELF-HEAL: dispatch entry hai par job card ki Dispatch row khaali (purane orders) —
+    # row me date/time/name bhar do taaki job card + preview me dikhe
+    dl = db.query("SELECT * FROM dispatch_log WHERE order_id=? ORDER BY id DESC LIMIT 1", (order_id,), one=True)
+    if dl:
+        _mark_dispatch_process(order_id, dl["dispatched_by"], dl["ddate"], dl["dtime"])
+        order = db.query("SELECT * FROM orders WHERE id=?", (order_id,), one=True) or order
     flat_next = db.all_process_options()
     procs = []
     raw_rows = db.get_jc_processes(order_id)
@@ -3640,6 +3708,8 @@ def jobcard_dispatch(order_id):
     if jcd and (jcd["price"] or 0) > 0 and ord2:
         _record_price(jcd["party_model"], jcd["model"], jcd["price"], jcd["rs_pcb"], order_id,
                       ord2["order_no"], ord2["party"], ddate, _model_thickness(jcd["party_model"]))
+    # JOB CARD + PREVIEW: Dispatch row me date/time/name auto bharo (row done)
+    _mark_dispatch_process(order_id, by, ddate, dtime)
     flash(f"PCB dispatched: {mode} · {ddate} {dtime}." + (" 📷 Photo bhi save hui." if ph_data else ""), "success")
     return redirect_with_token(url_for("jobcard", order_id=order_id))
 
@@ -4095,6 +4165,28 @@ def _model_thickness(name):
     m = db.query("SELECT sheet_thickness FROM product_models WHERE name=? LIMIT 1",
                  ((name or "").strip(),), one=True)
     return (m["sheet_thickness"] or "") if m else ""
+
+
+def _norm_thick(s):
+    """'metal-1mm' / 'FR4 1.0MM' -> 'METAL 1MM' / 'FR4 1 0MM' jaisa compare-able key."""
+    import re
+    return re.sub(r"\s+", " ", re.sub(r"[^0-9A-Z]", " ", (s or "").upper())).strip()
+
+
+def _rate_for_thickness(thickness):
+    """Rate card se material+thickness ka ₹/sq.inch — exact match, phir flexible match."""
+    if not thickness:
+        return None
+    key = _norm_thick(thickness)
+    rows = db.query("SELECT material, thickness, per_sq_inch FROM thickness_rates ORDER BY id")
+    for r in rows:
+        if key == _norm_thick(f"{r['material']} {r['thickness']}"):
+            return float(r["per_sq_inch"] or 0)
+    for r in rows:
+        rk = _norm_thick(f"{r['material']} {r['thickness']}")
+        if rk and (rk in key or key in rk):
+            return float(r["per_sq_inch"] or 0)
+    return None
 
 
 def _model_name(r):

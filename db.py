@@ -15,7 +15,7 @@ import http.client
 import urllib.parse
 
 # Schema version — bump karo jab SCHEMA/migrate badle, taaki agla deploy tables update kare.
-SCHEMA_VERSION = "2026-09-12.4"
+SCHEMA_VERSION = "2026-09-12.5"
 
 DB_PATH = os.environ.get("DB_PATH") or (
     os.path.join(tempfile.gettempdir(), "circuit.db") if os.environ.get("VERCEL") else "circuit.db"
@@ -102,6 +102,20 @@ CREATE TABLE IF NOT EXISTS price_history (
     ddate TEXT DEFAULT '',
     created_on TEXT DEFAULT ''
 );
+
+CREATE TABLE IF NOT EXISTS thickness_rates (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    material TEXT DEFAULT '',
+    thickness TEXT DEFAULT '',
+    per_sq_inch REAL DEFAULT 0,
+    UNIQUE(material, thickness)
+);
+
+INSERT OR IGNORE INTO thickness_rates (material, thickness, per_sq_inch) VALUES
+    ('METAL', '1MM', 2.00),
+    ('METAL', '1.5MM', 2.50),
+    ('FR4', '1MM', 2.70),
+    ('CEM-1', '1.5MM', 3.00);
 
 CREATE TABLE IF NOT EXISTS jobcard_log (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -744,6 +758,12 @@ def migrate(conn):
                  "id INTEGER PRIMARY KEY AUTOINCREMENT, model_name TEXT DEFAULT '', model_code TEXT DEFAULT '', "
                  "price REAL DEFAULT 0, rs_pcb REAL DEFAULT 0, sheet_thickness TEXT DEFAULT '', order_id INTEGER, "
                  "order_no TEXT DEFAULT '', party TEXT DEFAULT '', ddate TEXT DEFAULT '', created_on TEXT DEFAULT '')")
+    # THICKNESS RATE CARD — material+thickness ke hisaab se default ₹/sq.inch
+    conn.execute("CREATE TABLE IF NOT EXISTS thickness_rates ("
+                 "id INTEGER PRIMARY KEY AUTOINCREMENT, material TEXT DEFAULT '', thickness TEXT DEFAULT '', "
+                 "per_sq_inch REAL DEFAULT 0, UNIQUE(material, thickness))")
+    conn.execute("INSERT OR IGNORE INTO thickness_rates (material, thickness, per_sq_inch) VALUES "
+                 "('METAL','1MM',2.00),('METAL','1.5MM',2.50),('FR4','1MM',2.70),('CEM-1','1.5MM',3.00)")
     pcols = [r[1] for r in conn.execute("PRAGMA table_info(product_models)")]
     if pcols and "model_code" not in pcols:
         conn.execute("ALTER TABLE product_models ADD COLUMN model_code TEXT DEFAULT ''")
@@ -986,6 +1006,13 @@ def ensure_db():
                                   "model_code TEXT DEFAULT '', price REAL DEFAULT 0, rs_pcb REAL DEFAULT 0, "
                                   "sheet_thickness TEXT DEFAULT '', order_id INTEGER, order_no TEXT DEFAULT '', "
                                   "party TEXT DEFAULT '', ddate TEXT DEFAULT '', created_on TEXT DEFAULT '')")
+                        # THICKNESS RATE CARD (fast-path self-heal)
+                        c.execute("CREATE TABLE IF NOT EXISTS thickness_rates ("
+                                  "id INTEGER PRIMARY KEY AUTOINCREMENT, material TEXT DEFAULT '', "
+                                  "thickness TEXT DEFAULT '', per_sq_inch REAL DEFAULT 0, "
+                                  "UNIQUE(material, thickness))")
+                        c.execute("INSERT OR IGNORE INTO thickness_rates (material, thickness, per_sq_inch) VALUES "
+                                  "('METAL','1MM',2.00),('METAL','1.5MM',2.50),('FR4','1MM',2.70),('CEM-1','1.5MM',3.00)")
                         # naye column: sheet thickness (price ke saath)
                         try:
                             _phc = [x[1] for x in c.execute("PRAGMA table_info(price_history)").fetchall()]
