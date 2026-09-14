@@ -532,7 +532,7 @@ def _fl(v):
 
 
 def _po_company():
-    """PO print ka company header — Purchase Orders page se editable (meta me save)."""
+    """PO/Invoice print ka company header — Purchase Orders page se editable (meta me save)."""
     import json as _json
     row = db.query("SELECT value FROM meta WHERE key='po_company'", one=True)
     if row and row["value"]:
@@ -590,8 +590,8 @@ def _amt_words(n):
     return out + " Only"
 
 
-def _po_items_from_form(f):
-    """PO form se line items nikaalo: item/qty/rate/amount; legacy single item bhi chalega."""
+def _items_from_form(f):
+    """PO/Billing form se line items nikaalo: item/qty/rate/amount; legacy single item bhi chalega."""
     items_in = f.getlist("item_n")
     rows = []
     for i, it in enumerate(items_in):
@@ -612,6 +612,12 @@ def _po_items_from_form(f):
     return rows
 
 
+def _totals(items, tax):
+    subtotal = round(sum(r[3] for r in items), 2)
+    tax_amt = round(subtotal * (float(tax or 0)) / 100, 2)
+    return subtotal, tax_amt, round(subtotal + tax_amt, 2)
+
+
 @app.route("/purchase-orders", methods=["GET", "POST"])
 @login_required
 def purchase_orders():
@@ -628,13 +634,10 @@ def purchase_orders():
                        (_json.dumps(comp, ensure_ascii=False),))
             flash("Company details save ho gaye — PO print me yahi dikhenge ✅", "success")
             return redirect_with_token(url_for("purchase_orders"))
-        rows = _po_items_from_form(f)
+        rows = _items_from_form(f)
         vendor = (f.get("vendor") or "").strip()
         if vendor:
-            subtotal = round(sum(r[3] for r in rows), 2)
-            tax = _fl(f.get("tax_percent"))
-            tax_amt = round(subtotal * tax / 100, 2)
-            grand = round(subtotal + tax_amt, 2)
+            subtotal, tax_amt, grand = _totals(rows, f.get("tax_percent"))
             count = db.query("SELECT COUNT(*) c FROM purchase_orders", one=True)["c"]
             po_no = f"PO-{304 + count}"
             po_id = db.execute(
@@ -644,7 +647,7 @@ def purchase_orders():
                 (po_no, vendor, rows[0][0] + (f" +{len(rows) - 1} aur" if len(rows) > 1 else ""),
                  rows[0][1], grand, f.get("status", "pending"), datetime.date.today().isoformat(),
                  (f.get("vendor_address") or "").strip(), (f.get("vendor_phone") or "").strip(),
-                 (f.get("delivery_date") or "").strip(), tax, (f.get("note") or "").strip()))
+                 (f.get("delivery_date") or "").strip(), _fl(f.get("tax_percent")), (f.get("note") or "").strip()))
             for r in rows:
                 db.execute("INSERT INTO purchase_order_items (po_id, item, qty, rate, amount) "
                            "VALUES (?,?,?,?,?)", (po_id, r[0], r[1], r[2], r[3]))
@@ -679,11 +682,8 @@ def po_edit(po_id):
     if not vendor:
         flash("Vendor zaroori hai.", "error")
         return redirect_with_token(url_for("purchase_orders", edit=po_id))
-    rows = _po_items_from_form(f)
-    subtotal = round(sum(r[3] for r in rows), 2)
-    tax = _fl(f.get("tax_percent"))
-    tax_amt = round(subtotal * tax / 100, 2)
-    grand = round(subtotal + tax_amt, 2)
+    rows = _items_from_form(f)
+    subtotal, tax_amt, grand = _totals(rows, f.get("tax_percent"))
     try:
         db.execute(
             "UPDATE purchase_orders SET po_no=?, vendor=?, item=?, qty=?, amount=?, status=?, date=?, "
@@ -692,7 +692,8 @@ def po_edit(po_id):
              rows[0][1] if rows else "", grand, f.get("status", "pending"),
              f.get("date") or datetime.date.today().isoformat(),
              (f.get("vendor_address") or "").strip(), (f.get("vendor_phone") or "").strip(),
-             (f.get("delivery_date") or "").strip(), tax, (f.get("note") or "").strip(), po_id))
+             (f.get("delivery_date") or "").strip(), _fl(f.get("tax_percent")), (f.get("note") or "").strip(),
+             po_id))
         db.execute("DELETE FROM purchase_order_items WHERE po_id=?", (po_id,))
         for r in rows:
             db.execute("INSERT INTO purchase_order_items (po_id, item, qty, rate, amount) "
@@ -735,12 +736,10 @@ def po_print(po_id):
     if not items:
         # purane single-item POs
         items = [{"item": po["item"], "qty": po["qty"], "rate": 0, "amount": po["amount"]}]
-    subtotal = round(sum(float(i["amount"] or 0) for i in items), 2)
-    tax = float(po["tax_percent"] or 0)
-    tax_amt = round(subtotal * tax / 100, 2)
-    grand = round(subtotal + tax_amt, 2)
+    subtotal, tax_amt, grand = _totals([(i["item"], i["qty"], i["rate"], i["amount"]) for i in items],
+                                       po["tax_percent"])
     return render_template("po_print.html", po=po, items=items, active="purchase",
-                           comp=_po_company(), subtotal=subtotal, tax=tax,
+                           comp=_po_company(), subtotal=subtotal, tax=float(po["tax_percent"] or 0),
                            tax_amt=tax_amt, grand=grand, grand_words=_amt_words(grand))
 
 
@@ -951,7 +950,7 @@ def svg_panel_preview(r):
     for a in range(gx):
         for b in range(gy):
             xp, yp = x0 + a * (P + Kx), y0 + b * (Q + Ky)
-            s.append(f'<rect x="{xp:.1f}" y="{yp:.1f}" width="{P:.1f}" height="{Q:.1f}" fill="#fdf3df" stroke="#d97706" stroke-width="2" rx="3"/>')
+            s.append(f'<rect x="{xp:.1f}" y="{yp:.1f}" width="{P:.1f}" height="{Q:.1f}" fill="#dbeafe" stroke="#2563eb" stroke-width="2" rx="3"/>')
             if cw > 2.4 and ch > 2.4:
                 # HAR boundary ka apna gap — positions accumulate karte hain
                 ox = bx
@@ -965,9 +964,9 @@ def svg_panel_preview(r):
                 if r["border_l"] or r["border_r"] or r["border_t"] or r["border_b"]:
                     cw2 = r["pcbs_x"] * cw + sum(gaps_x_s) * scale
                     ch2 = r["pcbs_y"] * ch + sum(gaps_y_s) * scale
-                    s.append(f'<rect x="{xp + bx:.1f}" y="{yp + by:.1f}" width="{cw2:.1f}" height="{ch2:.1f}" fill="none" stroke="#9a8a5a" stroke-width="1" stroke-dasharray="4 3"/>')
+                    s.append(f'<rect x="{xp + bx:.1f}" y="{yp + by:.1f}" width="{cw2:.1f}" height="{ch2:.1f}" fill="none" stroke="#64748b" stroke-width="1" stroke-dasharray="4 3"/>')
     if gx > 1 or gy > 1:
-        s.append(f'<rect x="{x0:.1f}" y="{y0:.1f}" width="{GL:.1f}" height="{GW:.1f}" fill="none" stroke="#16a34a" stroke-width="1.8" stroke-dasharray="6 4" rx="5"/>')
+        s.append(f'<rect x="{x0:.1f}" y="{y0:.1f}" width="{GL:.1f}" height="{GW:.1f}" fill="#dcfce7" fill-opacity="0.4" stroke="#16a34a" stroke-width="2" rx="5"/>')
         pcs_gang = r["pcs_panel"] * gx * gy
         s.append(f'<text x="{x0 + GL/2:.0f}" y="{y0 - 6:.1f}" text-anchor="middle" font-size="11" fill="#16a34a" font-family="Segoe UI,Arial">TOTAL WITH MULTIPLIER: {gl:.2f}\u00d7{gw:.2f} mm \u00b7 {pcs_gang} PCS ({gx}\u00d7{gy} + kerf)</text>')
     if (sum(gaps_x_s) > 0.1 or sum(gaps_y_s) > 0.1) and Q > 24:
@@ -981,14 +980,15 @@ def svg_panel_preview(r):
     return "".join(s)
 
 
-def _svg_gang(s, cx, cy, cl, cw, gx, gy, kx, ky, fill, stroke, sw_):
+def _svg_gang(s, cx, cy, cl, cw, gx, gy, kx, ky, fill, stroke, sw_,
+              in_fill="#bfdbfe", in_stroke="#2563eb"):
     s.append(f'<rect x="{cx:.1f}" y="{cy:.1f}" width="{cl:.1f}" height="{cw:.1f}" fill="{fill}" stroke="{stroke}" stroke-width="{sw_}" rx="2"/>')
     if gx > 1 or gy > 1:
         p = (cl - kx * (gx - 1)) / gx
         q = (cw - ky * (gy - 1)) / gy
         for a in range(gx):
             for b in range(gy):
-                s.append(f'<rect x="{cx + a * (p + kx):.1f}" y="{cy + b * (q + ky):.1f}" width="{p:.1f}" height="{q:.1f}" fill="#fde68a" stroke="#f59e0b" stroke-width="0.7"/>')
+                s.append(f'<rect x="{cx + a * (p + kx):.1f}" y="{cy + b * (q + ky):.1f}" width="{p:.1f}" height="{q:.1f}" fill="{in_fill}" stroke="{in_stroke}" stroke-width="0.7"/>')
 
 
 def svg_sheet_preview(r):
@@ -1008,12 +1008,12 @@ def svg_sheet_preview(r):
         for _row in range(r["mixed_n"]):
             cl, cw = r["gang_len"] * scale, r["gang_w"] * scale
             for i in range(r["per_normal"]):
-                _svg_gang(s, x0 + i * (cl + kx), y, cl, cw, gx, gy, kx, ky, "#f7c948", "#b45309", 1.4)
+                _svg_gang(s, x0 + i * (cl + kx), y, cl, cw, gx, gy, kx, ky, "#dcfce7", "#16a34a", 1.4)
             y += cw + ky
         for _row in range(r["mixed_m"]):
             cl, cw = r["gang_w"] * scale, r["gang_len"] * scale
             for i in range(r["per_rot"]):
-                _svg_gang(s, x0 + i * (cl + kx), y, cl, cw, gx, gy, kx, ky, "#93c5fd", "#1d4ed8", 1.4)
+                _svg_gang(s, x0 + i * (cl + kx), y, cl, cw, gx, gy, kx, ky, "#bfdbfe", "#2563eb", 1.4)
             y += cw + ky
         cap = (f"Sheet {sl:.2f}\u00d7{sw:.2f} mm \u00b7 {r['mixed_n']}\u00d7 row of {r['per_normal']} + "
                f"{r['mixed_m']}\u00d7 row of {r['per_rot']} = {r['panels_per_sheet']} panels \u00b7 "
@@ -1023,13 +1023,57 @@ def svg_sheet_preview(r):
         for i in range(r["grid_x"]):
             for j in range(r["grid_y"]):
                 cx, cy = x0 + i * (cl + kx), y0 + j * (cw + ky)
-                _svg_gang(s, cx, cy, cl, cw, gx, gy, kx, ky, "#f7c948", "#b45309", 1.4)
+                _svg_gang(s, cx, cy, cl, cw, gx, gy, kx, ky, "#dcfce7", "#16a34a", 1.4)
         gang_cap = ""
         if gx > 1 or gy > 1:
             gang_cap = (f"{r['grid_x']}\u00d7{r['grid_y']} GANG \u00d7 {r['pcs_unit']} PCS = "
                         f"{r['pcs_per_sheet']} PCS \u00b7 ")
         cap = (f"Sheet {sl:.2f}\u00d7{sw:.2f} mm \u00b7 {gang_cap}"
                f"{r['grid_x']}\u00d7{r['grid_y']} = {r['panels_per_sheet']} panels \u00b7 "
+               f"{r['pcs_per_sheet']} PCS \u00b7 {r['wastage']}% waste")
+    s.append(f'<text x="{W/2:.0f}" y="{H - 6:.0f}" text-anchor="middle" font-size="12.5" fill="#8a8f98" font-family="Segoe UI,Arial">{cap}</text>')
+    s.append('</svg>')
+    return "".join(s)
+
+
+def svg_gang_preview(r):
+    """GANG PANEL PREVIEW SVG — BEST LAYOUT jitne hi GANG panels sheet par dikhte hain,
+    har gang panel ka border THICK + alag VIOLET color — taaki ek nazar me count match ho."""
+    W, H, pad = 430, 380, 26
+    sl, sw = r["sheet_len"], r["sheet_w"]
+    scale = min((W - 2 * pad) / sl, (H - 2 * pad) / sw)
+    S, T = sl * scale, sw * scale
+    x0, y0 = pad + (W - 2 * pad - S) / 2, pad + (H - 2 * pad - T) / 2
+    gx, gy = r["gang_x"], r["gang_y"]
+    kx, ky = r["kerf_x"] * scale, r["kerf_y"] * scale
+    s = [f'<svg viewBox="0 0 {W} {H}" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;display:block">']
+    s.append(f'<rect x="{x0:.1f}" y="{y0:.1f}" width="{S:.1f}" height="{T:.1f}" fill="#fffdf5" stroke="#b3ac99" stroke-width="2"/>')
+    if r["best"] == "mixed":
+        y = y0
+        for _row in range(r["mixed_n"]):
+            cl, cw = r["gang_len"] * scale, r["gang_w"] * scale
+            for i in range(r["per_normal"]):
+                _svg_gang(s, x0 + i * (cl + kx), y, cl, cw, gx, gy, kx, ky,
+                          "#ede9fe", "#7c3aed", 3.2, "#ddd6fe", "#8b5cf6")
+            y += cw + ky
+        for _row in range(r["mixed_m"]):
+            cl, cw = r["gang_w"] * scale, r["gang_len"] * scale
+            for i in range(r["per_rot"]):
+                _svg_gang(s, x0 + i * (cl + kx), y, cl, cw, gx, gy, kx, ky,
+                          "#fce7f3", "#db2777", 3.2, "#fbcfe8", "#ec4899")
+            y += cw + ky
+        cap = (f"Sheet {sl:.2f}\u00d7{sw:.2f} mm \u00b7 {r['mixed_n']}\u00d7 row of {r['per_normal']} + "
+               f"{r['mixed_m']}\u00d7 row of {r['per_rot']} = <tspan fill=\"#7c3aed\" font-weight=\"700\">{r['panels_per_sheet']} GANG panels</tspan> \u00b7 "
+               f"{r['pcs_per_sheet']} PCS \u00b7 {r['wastage']}% waste")
+    else:
+        cl, cw = r["cell_len"] * scale, r["cell_w"] * scale
+        for i in range(r["grid_x"]):
+            for j in range(r["grid_y"]):
+                cx, cy = x0 + i * (cl + kx), y0 + j * (cw + ky)
+                _svg_gang(s, cx, cy, cl, cw, gx, gy, kx, ky,
+                          "#ede9fe", "#7c3aed", 3.2, "#ddd6fe", "#8b5cf6")
+        cap = (f"Sheet {sl:.2f}\u00d7{sw:.2f} mm \u00b7 {r['grid_x']}\u00d7{r['grid_y']} = "
+               f"<tspan fill=\"#7c3aed\" font-weight=\"700\">{r['panels_per_sheet']} GANG panels</tspan> \u00b7 "
                f"{r['pcs_per_sheet']} PCS \u00b7 {r['wastage']}% waste")
     s.append(f'<text x="{W/2:.0f}" y="{H - 6:.0f}" text-anchor="middle" font-size="12.5" fill="#8a8f98" font-family="Segoe UI,Arial">{cap}</text>')
     s.append('</svg>')
@@ -1293,6 +1337,7 @@ def cutlist():
     svg_panel = svg_panel_preview(result) if result else ""
     svg_sheet = svg_sheet_preview(result) if result else ""
     gang_info = gang_info_for(result)
+    svg_gang_sheet = svg_gang_preview(result) if gang_info else ""
     # PANEL fields display: gang active -> cutting size; warna single panel
     disp_pl = disp_pw = None
     if result:
@@ -1303,6 +1348,7 @@ def cutlist():
     return render_template("cutlist.html", active="cutlist", fields=fields, result=result,
                            models=models, orders=orders, SHEET_PRESETS=SHEET_PRESETS,
                            svg_panel=svg_panel, svg_sheet=svg_sheet, gang_info=gang_info,
+                           svg_gang_sheet=svg_gang_sheet,
                            disp_pl=disp_pl, disp_pw=disp_pw)
 
 
@@ -1334,6 +1380,18 @@ def products():
                 flash("Rate card entry delete ho gayi.", "success")
             except ValueError:
                 pass
+            return redirect_with_token(url_for("products"))
+        if f.get("rate_action") == "edit":
+            try:
+                _rid = int(f.get("rate_id") or 0)
+                _nrate = float(f.get("rate_per_sq_inch") or 0)
+                if _rid and _nrate > 0:
+                    db.execute("UPDATE thickness_rates SET per_sq_inch=? WHERE id=?", (_nrate, _rid))
+                    flash(f"Rate update ho gaya → ₹{_nrate:g}/sq.inch ✅", "success")
+                else:
+                    flash("Rate 0 se bada hona chahiye.", "error")
+            except (ValueError, TypeError):
+                flash("Rate update nahi hua.", "error")
             return redirect_with_token(url_for("products"))
         name = (f.get("name") or "").strip()
         if not name:
@@ -2214,22 +2272,41 @@ def inventory_delete(item_id):
 def billing():
     if request.method == "POST":
         f = request.form
-        if f.get("party", "").strip():
+        party = (f.get("party") or "").strip()
+        if party:
+            rows = _items_from_form(f)
+            if not rows:
+                # legacy: sirf amount diya ho
+                rows = [("", "", 0.0, _fl(f.get("amount")))]
+            subtotal, tax_amt, grand = _totals(rows, f.get("tax_percent"))
             count = db.query("SELECT COUNT(*) c FROM billing", one=True)["c"]
-            db.execute("INSERT INTO billing (invoice_no, party, amount, status, date) VALUES (?,?,?,?,?)",
-                       (f"INV-{105 + count}", f.get("party").strip(), float(f.get("amount", 0) or 0),
-                        f.get("status", "pending"), datetime.date.today().isoformat()))
+            inv_id = db.execute(
+                "INSERT INTO billing (invoice_no, party, amount, status, date, tax_percent, note) "
+                "VALUES (?,?,?,?,?,?,?)",
+                (f"INV-{105 + count}", party, grand, f.get("status", "pending"),
+                 datetime.date.today().isoformat(), _fl(f.get("tax_percent")), (f.get("note") or "").strip()))
+            for r in rows:
+                db.execute("INSERT INTO billing_items (bill_id, item, qty, rate, amount) "
+                           "VALUES (?,?,?,?,?)", (inv_id, r[0], r[1], r[2], r[3]))
             flash("Invoice created.", "success")
         return redirect_with_token(url_for("billing"))
     rows = db.query("SELECT * FROM billing ORDER BY id DESC")
     totals = db.query("SELECT COALESCE(SUM(amount),0) total, "
                       "COALESCE(SUM(CASE WHEN status='paid' THEN amount END),0) paid, "
                       "COALESCE(SUM(CASE WHEN status!='paid' THEN amount END),0) pending FROM billing", one=True)
+    items_by_bill = {}
+    for it in db.query("SELECT * FROM billing_items ORDER BY id"):
+        items_by_bill.setdefault(it["bill_id"], []).append(it)
+    parties = db.query("SELECT * FROM parties ORDER BY name")
+    party_names = {p["name"] for p in parties}
     edit_inv = None
     eid = request.args.get("edit")
     if eid and eid.isdigit():
         edit_inv = db.query("SELECT * FROM billing WHERE id=?", (int(eid),), one=True)
     return render_template("billing.html", active="billing", rows=rows, totals=totals,
+                           items_by_bill=items_by_bill, all_parties=parties, party_names=party_names,
+                           comp=_po_company(),
+                           edit_items=items_by_bill.get(edit_inv["id"], []) if edit_inv else [],
                            show_add=request.args.get("add"), edit_inv=edit_inv)
 
 
@@ -2251,10 +2328,20 @@ def billing_edit(inv_id):
     if not party:
         flash("Party zaroori hai.", "error")
         return redirect_with_token(url_for("billing", edit=inv_id))
+    rows = _items_from_form(f)
+    if not rows:
+        rows = [("", "", 0.0, _fl(f.get("amount")))]
+    subtotal, tax_amt, grand = _totals(rows, f.get("tax_percent"))
     try:
-        db.execute("UPDATE billing SET invoice_no=?, party=?, amount=?, status=?, date=? WHERE id=?",
-                   (invoice_no, party, float(f.get("amount", 0) or 0), f.get("status", "pending"),
-                    f.get("date") or datetime.date.today().isoformat(), inv_id))
+        db.execute("UPDATE billing SET invoice_no=?, party=?, amount=?, status=?, date=?, "
+                   "tax_percent=?, note=? WHERE id=?",
+                   (invoice_no, party, grand, f.get("status", "pending"),
+                    f.get("date") or datetime.date.today().isoformat(),
+                    _fl(f.get("tax_percent")), (f.get("note") or "").strip(), inv_id))
+        db.execute("DELETE FROM billing_items WHERE bill_id=?", (inv_id,))
+        for r in rows:
+            db.execute("INSERT INTO billing_items (bill_id, item, qty, rate, amount) "
+                       "VALUES (?,?,?,?,?)", (inv_id, r[0], r[1], r[2], r[3]))
         flash(f"Invoice {invoice_no} update ho gaya ✅", "success")
     except Exception as e:
         flash(f"Update failed: {e}", "error")
@@ -2268,9 +2355,28 @@ def billing_delete(inv_id):
     if not inv:
         flash("Invoice nahi mila.", "error")
     else:
+        db.execute("DELETE FROM billing_items WHERE bill_id=?", (inv_id,))
         db.execute("DELETE FROM billing WHERE id=?", (inv_id,))
         flash(f"Invoice {inv['invoice_no']} delete ho gaya 🗑", "success")
     return redirect_with_token(url_for("billing"))
+
+
+@app.route("/billing/<int:inv_id>/print")
+@login_required
+def billing_print(inv_id):
+    inv = db.query("SELECT * FROM billing WHERE id=?", (inv_id,), one=True)
+    if not inv:
+        flash("Invoice nahi mila.", "error")
+        return redirect_with_token(url_for("billing"))
+    items = db.query("SELECT * FROM billing_items WHERE bill_id=? ORDER BY id", (inv_id,))
+    if not items:
+        # purane single-amount invoices
+        items = [{"item": "", "qty": "", "rate": 0, "amount": inv["amount"]}]
+    subtotal, tax_amt, grand = _totals([(i["item"], i["qty"], i["rate"], i["amount"]) for i in items],
+                                       inv["tax_percent"])
+    return render_template("bill_print.html", inv=inv, items=items, active="billing",
+                           comp=_po_company(), subtotal=subtotal, tax=float(inv["tax_percent"] or 0),
+                           tax_amt=tax_amt, grand=grand, grand_words=_amt_words(grand))
 
 
 # ---------------------------------------------------------------- payments & receipts
@@ -2395,6 +2501,40 @@ def employee_reset_password(emp_id):
         flash(f"'{u['username']}' ka password reset ho gaya ✅", "success")
     else:
         flash("Login account nahi mila.", "error")
+    return redirect_with_token(url_for("employees"))
+
+
+@app.route("/employees/<int:emp_id>/login_edit", methods=["POST"])
+@login_required
+def employee_login_edit(emp_id):
+    """EMPLOYEE LOGIN ACCESS — username/password/role EDIT (sirf admin)."""
+    if session.get("user_role") != "admin":
+        flash("Sirf admin login access edit kar sakta hai.", "error")
+        return redirect_with_token(url_for("employees"))
+    username = (request.form.get("username") or "").strip().lower()
+    password = (request.form.get("password") or "").strip()
+    role = (request.form.get("role") or "operator").strip().lower()
+    if role not in ("admin", "operator"):
+        role = "operator"
+    u = db.query("SELECT * FROM users WHERE employee_id=?", (emp_id,), one=True)
+    if not u:
+        db.provision_employee_logins()
+        u = db.query("SELECT * FROM users WHERE employee_id=?", (emp_id,), one=True)
+    if not u:
+        flash("Login account nahi mila — pehle 'Sab ke logins banao' dabao.", "error")
+        return redirect_with_token(url_for("employees"))
+    if not username:
+        flash("Username khaali nahi ho sakta.", "error")
+        return redirect_with_token(url_for("employees"))
+    dup = db.query("SELECT * FROM users WHERE username=? AND id!=?", (username, u["id"]), one=True)
+    if dup:
+        flash(f"Username '{username}' pehle se kisi aur ka hai — dusra chuno.", "error")
+        return redirect_with_token(url_for("employees"))
+    final_pw = password if password else u["password"]
+    db.execute("UPDATE users SET username=?, password=?, role=? WHERE id=?",
+               (username, final_pw, role, u["id"]))
+    flash(f"Login access update ho gaya ✅ {username} · role {role.upper()}" +
+          (" · password bhi badla" if password else ""), "success")
     return redirect_with_token(url_for("employees"))
 
 

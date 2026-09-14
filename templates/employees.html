@@ -176,7 +176,7 @@
       <thead><tr><th>Employee</th><th>Username</th><th>Password</th><th>Role</th><th>Kaam (designation se)</th><th></th></tr></thead>
       <tbody>
         {% for e in employees %}
-        <tr>
+        <tr id="login_view_{{ e.id }}">
           <td><b>{{ e.name }}</b></td>
           {% if e.login %}
           <td class="mono"><b>{{ e.login.username }}</b></td>
@@ -186,18 +186,59 @@
           <td class="muted small" colspan="3">Login nahi bana — "Sab ke logins banao" dabao</td>
           {% endif %}
           <td class="small muted">{{ e.designation or '—' }}</td>
-          <td class="t-right">
-            <form method="post" action="/employees/{{ e.id }}/reset_password" style="display:flex;gap:6px;align-items:center;justify-content:flex-end">
+          <td class="t-right" style="white-space:nowrap">
+            {% if e.login %}
+            <button type="button" class="btn btn-outline btn-xs" onclick="loginEdit({{ e.id }})" title="Username / password / role edit karo">✏️ Edit</button>
+            {% endif %}
+            <form method="post" action="/employees/{{ e.id }}/reset_password" style="display:inline-flex;gap:6px;align-items:center;justify-content:flex-end">
               <input type="text" name="new_password" placeholder="naya password" style="width:130px;padding:4px 8px;font-size:11px;border:1px solid var(--border);border-radius:6px">
               <button class="btn btn-outline btn-xs" type="submit">Reset</button>
             </form>
           </td>
         </tr>
+        {% if e.login %}
+        <tr id="login_edit_{{ e.id }}" style="display:none;background:#fffbeb">
+          <td colspan="6">
+            <form method="post" action="/employees/{{ e.id }}/login_edit" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+              <b class="small" style="min-width:90px">✏️ {{ e.name }}</b>
+              <label class="small">Username
+                <input type="text" name="username" value="{{ e.login.username }}" style="padding:5px 8px;border:1.5px solid var(--blue);border-radius:6px;font-size:12px;min-width:110px" required>
+              </label>
+              <label class="small">Password (khaali = wahi)
+                <input type="text" name="password" placeholder="naya password" style="padding:5px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;min-width:110px">
+              </label>
+              <label class="small">Role
+                <select name="role" style="padding:5px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px">
+                  <option value="operator" {{'selected' if e.login.role=='operator'}}>Operator</option>
+                  <option value="admin" {{'selected' if e.login.role=='admin'}}>Admin</option>
+                </select>
+              </label>
+              <button class="btn btn-xs" type="submit" style="background:#16a34a;color:#fff">💾 Save</button>
+              <button type="button" class="btn btn-outline btn-xs" onclick="loginCancel({{ e.id }})">✕ Cancel</button>
+            </form>
+          </td>
+        </tr>
+        {% endif %}
         {% endfor %}
       </tbody>
     </table>
-    <p class="muted small" style="padding:8px 14px">💡 Naya employee add karte hi uska login khud ban jata hai — username = naam ka pehla word, default password <b>shivaya@123</b>. Employee apne login mein sirf apna kaam dekhta hai (designation ke hisaab se): CNC Operator ko CNC ke saare jobs, Dispatch wale ko dispatch ki details, waghera.</p>
+    <p class="muted small" style="padding:8px 14px">💡 Naya employee add karte hi uska login khud ban jata hai — username = naam ka pehla word, default password <b>shivaya@123</b>. <b>✏️ Edit</b> se username, password aur role (Operator/Admin) badal sakte ho — password khaali chhodo to wahi rahega. Employee apne login mein sirf apna kaam dekhta hai (designation ke hisaab se): CNC Operator ko CNC ke saare jobs, Dispatch wale ko dispatch ki details, waghera.</p>
   </div>
 </div>
 {% endif %}
+<script>
+/* ---- EMPLOYEE LOGIN ACCESS: ✏️ Edit inline toggle ---- */
+function loginEdit(id){
+  var v = document.getElementById('login_view_' + id);
+  var f = document.getElementById('login_edit_' + id);
+  if (v) v.style.display = 'none';
+  if (f) f.style.display = '';
+}
+function loginCancel(id){
+  var v = document.getElementById('login_view_' + id);
+  var f = document.getElementById('login_edit_' + id);
+  if (v) v.style.display = '';
+  if (f) f.style.display = 'none';
+}
+</script>
 {% endblock %}

@@ -268,8 +268,9 @@ function pmThickRate(){
         <tr>
           <td class="mono">{{ r.material }}</td>
           <td class="mono">{{ r.thickness }}</td>
-          <td class="t-right mono"><b>₹{{ r.per_sq_inch|inr0 }}</b></td>
-          <td class="t-right">
+          <td class="t-right mono"><span id="rc_rate_{{ r.id }}"><b>₹{{ r.per_sq_inch|inr0 }}</b></span></td>
+          <td class="t-right" style="white-space:nowrap">
+            <button type="button" class="btn btn-outline btn-xs" onclick="rcEdit({{ r.id }}, {{ r.per_sq_inch }})" title="Rate edit karo">✏️</button>
             <form method="post" action="/products" style="display:inline" onsubmit="return confirm('Delete {{ r.material }} {{ r.thickness }} rate?')">
               <input type="hidden" name="rate_action" value="del">
               <input type="hidden" name="rate_id" value="{{ r.id }}">
@@ -294,7 +295,7 @@ function pmThickRate(){
 <div class="panel">
   <div class="panel-head"><h3>🗂️ Saved Models ({{ models|length }})</h3></div>
   <div class="panel-body" style="padding:0;overflow-x:auto">
-    <table>
+    <table id="modelsTable">
       <thead>
         <tr><th>Model</th><th>Sheet Thickness</th><th>PCB (mm)</th><th>PCBs</th><th>Panel (mm)</th><th class="t-right">PCS/Panel</th><th class="t-right">Panels/Sheet</th><th class="t-right">FG Stock</th><th class="t-right">Current / Last Price</th><th>Created</th><th></th></tr>
       </thead>
@@ -480,5 +481,82 @@ document.getElementById('attDel').addEventListener('click', function(){
 document.getElementById('attModal').addEventListener('click', function(e){
   if (e.target === this) closeAtt();
 });
+/* ---- Sheet Rate Card: inline edit (✏️) ---- */
+function rcEdit(id, rate){
+  var cell = document.getElementById('rc_rate_' + id);
+  if (!cell) return;
+  cell.innerHTML =
+    '<form method="post" action="/products" style="display:inline-flex;gap:4px;align-items:center">' +
+    '<input type="hidden" name="rate_action" value="edit">' +
+    '<input type="hidden" name="rate_id" value="' + id + '">' +
+    '<input type="number" step="0.01" min="0.01" name="rate_per_sq_inch" value="' + rate + '" ' +
+    'style="width:84px;padding:3px 6px;border:1.5px solid var(--amber);border-radius:6px;font-size:12px;font-weight:700">' +
+    '<button class="btn btn-xs" type="submit" style="background:#16a34a;color:#fff">💾</button>' +
+    '<button type="button" class="btn btn-outline btn-xs" onclick="rcCancel(' + id + ',' + rate + ')">✕</button>' +
+    '</form>';
+}
+function rcCancel(id, rate){
+  var cell = document.getElementById('rc_rate_' + id);
+  if (cell) cell.innerHTML = '<b>₹' + (Math.round(rate * 100) / 100) + '</b>';
+}
 </script>
+<style>
+/* FINISHED PRODUCT table header — CSS fallback (container overflow ke andar kam kar sakta hai,
+   isliye neeche JS clone se pakka freeze kiya hai) */
+#modelsTable thead th {
+  position: sticky;
+  top: 0;
+  background: #fbfaf7;
+  z-index: 5;
+  box-shadow: 0 2px 4px rgba(0,0,0,.12);
+}
+#modelsHeadClone th { background: #fbfaf7; }
+</style>
+<script>
+/* ---- FINISHED PRODUCT header FREEZE (fixed clone — window scroll + panel scroll dono par) ----
+   .panel-body ka overflow-x:auto CSS sticky ko tod deta hai, isliye header ka fixed clone
+   banate hain jo scroll karte hi topbar ke neeche chipak jata hai. */
+(function(){
+  var table = document.getElementById('modelsTable');
+  if (!table) return;
+  var srcThead = table.querySelector('thead');
+  if (!srcThead) return;
+  var clone = document.createElement('table');
+  clone.id = 'modelsHeadClone';
+  clone.appendChild(srcThead.cloneNode(true));
+  clone.style.cssText = 'position:fixed;left:0;z-index:30;margin:0;display:none;' +
+    'border-collapse:collapse;table-layout:fixed;background:#fbfaf7;' +
+    'box-shadow:0 3px 8px rgba(0,0,0,.18);';
+  document.body.appendChild(clone);
+  var topbar = document.querySelector('.topbar');
+  function sync(){
+    var r = table.getBoundingClientRect();
+    var thH = srcThead.getBoundingClientRect().height || 40;
+    var off = topbar ? topbar.getBoundingClientRect().height : 0;
+    var show = r.top < off && r.bottom > thH + off + 10;
+    if (show) {
+      clone.style.display = 'table';
+      clone.style.top = off + 'px';
+      clone.style.left = r.left + 'px';
+      clone.style.width = r.width + 'px';
+      var srcs = srcThead.querySelectorAll('th');
+      var dsts = clone.querySelectorAll('th');
+      for (var i = 0; i < srcs.length && i < dsts.length; i++) {
+        var w = srcs[i].getBoundingClientRect().width;
+        dsts[i].style.width = w + 'px';
+        dsts[i].style.minWidth = w + 'px';
+        dsts[i].style.boxSizing = 'border-box';
+      }
+    } else {
+      clone.style.display = 'none';
+    }
+  }
+  window.addEventListener('scroll', sync, {passive: true});
+  window.addEventListener('resize', sync);
+  var sc = table.closest('.panel-body');
+  if (sc) sc.addEventListener('scroll', sync, {passive: true});
+  sync();
+})();
+</script>
+
 {% endblock %}

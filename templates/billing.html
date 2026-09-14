@@ -9,12 +9,14 @@
 </div>
 
 {% if edit_inv %}
+{% set eitems = edit_items if edit_items else [{'item': '', 'qty': '', 'rate': 0, 'amount': edit_inv.amount}] %}
 <div class="panel">
   <div class="panel-head"><h3>✏️ Edit Invoice — {{ edit_inv.invoice_no }}</h3><a class="btn btn-outline btn-sm" href="/billing">✕ Close</a></div>
   <div class="panel-body">
     <form method="post" action="/billing/{{ edit_inv.id }}/edit">
       <div class="form-grid">
         <div class="field"><label>Invoice No.</label><input name="invoice_no" value="{{ edit_inv.invoice_no }}"></div>
+        <div class="field"><label>Date</label><input type="date" name="date" value="{{ edit_inv.date }}"></div>
         <div class="field full"><label>Party *</label>
           <select name="party" required>
             <option value="">— Select party —</option>
@@ -22,13 +24,32 @@
             {% if edit_inv.party and edit_inv.party not in party_names %}<option value="{{ edit_inv.party }}" selected>{{ edit_inv.party }} (custom)</option>{% endif %}
           </select>
         </div>
-        <div class="field"><label>Amount (₹) *</label><input type="number" step="0.01" name="amount" required value="{{ edit_inv.amount }}"></div>
         <div class="field"><label>Status</label>
           <select name="status">
             {% for s in ['pending','paid','overdue'] %}<option value="{{ s }}" {{'selected' if edit_inv.status==s}}>{{ s|title }}</option>{% endfor %}
           </select>
         </div>
-        <div class="field"><label>Date</label><input type="date" name="date" value="{{ edit_inv.date }}"></div>
+        <div class="field"><label>GST %</label><input type="number" step="0.1" name="tax_percent" id="bill_tax" value="{{ edit_inv.tax_percent }}"></div>
+        <div class="full">
+          <label style="font-size:11px;color:var(--muted);font-weight:700">ITEMS — bill ke line items</label>
+          <table class="po-items-table" style="width:100%">
+            <thead><tr><th>Item / Description</th><th style="width:90px">Qty</th><th style="width:100px">Rate (₹)</th><th style="width:110px">Amount (₹)</th><th style="width:36px"></th></tr></thead>
+            <tbody id="bill_items">
+              {% for it in eitems %}
+              <tr class="bill-row">
+                <td><input name="item_n" value="{{ it.item }}" placeholder="e.g. 1000 PCBs RM 603 8W"></td>
+                <td><input name="qty_n" class="bill-qty" value="{{ it.qty }}" placeholder="Qty"></td>
+                <td><input name="rate_n" class="bill-rate" type="number" step="0.01" value="{{ it.rate if it.rate else '' }}" placeholder="Rate"></td>
+                <td><input name="amt_n" class="bill-amt" type="number" step="0.01" value="{{ it.amount if it.amount else '' }}" placeholder="Amount"></td>
+                <td><button type="button" class="btn btn-outline btn-xs" onclick="billDelRow(this)" title="Row hatao">✖</button></td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+          <button type="button" class="btn btn-outline btn-xs" onclick="billAddRow()" style="margin-top:6px">＋ Add Item</button>
+          <div id="bill_totals" class="muted small" style="margin-top:6px"></div>
+        </div>
+        <div class="field full"><label>Note (print par dikhega)</label><input name="note" value="{{ edit_inv.note }}" placeholder="e.g. Payment 15 din me"></div>
         <div class="full"><button class="btn" type="submit">💾 Save Changes</button></div>
       </div>
     </form>
@@ -47,10 +68,28 @@
           </select>
           <a class="muted small" href="/parties?add=1" style="margin-top:4px;display:inline-block">➕ New Party →</a>
         </div>
-        <div class="field"><label>Amount (₹) *</label><input type="number" step="0.01" name="amount" required value="0"></div>
         <div class="field"><label>Status</label>
           <select name="status"><option value="pending">Pending</option><option value="paid">Paid</option><option value="overdue">Overdue</option></select>
         </div>
+        <div class="field"><label>GST %</label><input type="number" step="0.1" name="tax_percent" id="bill_tax" value="18"></div>
+        <div class="full">
+          <label style="font-size:11px;color:var(--muted);font-weight:700">ITEMS — bill ke line items</label>
+          <table class="po-items-table" style="width:100%">
+            <thead><tr><th>Item / Description</th><th style="width:90px">Qty</th><th style="width:100px">Rate (₹)</th><th style="width:110px">Amount (₹)</th><th style="width:36px"></th></tr></thead>
+            <tbody id="bill_items">
+              <tr class="bill-row">
+                <td><input name="item_n" placeholder="e.g. 1000 PCBs RM 603 8W"></td>
+                <td><input name="qty_n" class="bill-qty" placeholder="Qty"></td>
+                <td><input name="rate_n" class="bill-rate" type="number" step="0.01" placeholder="Rate"></td>
+                <td><input name="amt_n" class="bill-amt" type="number" step="0.01" placeholder="Amount"></td>
+                <td><button type="button" class="btn btn-outline btn-xs" onclick="billDelRow(this)" title="Row hatao">✖</button></td>
+              </tr>
+            </tbody>
+          </table>
+          <button type="button" class="btn btn-outline btn-xs" onclick="billAddRow()" style="margin-top:6px">＋ Add Item</button>
+          <div id="bill_totals" class="muted small" style="margin-top:6px"></div>
+        </div>
+        <div class="field full"><label>Note (print par dikhega)</label><input name="note" placeholder="e.g. Payment 15 din me"></div>
         <div class="full"><button class="btn" type="submit">Create Invoice</button></div>
       </div>
     </form>
@@ -64,16 +103,19 @@
   <div class="panel-head"><h3>🧾 Invoices ({{ rows|length }})</h3></div>
   <div class="panel-body" style="padding:0;overflow-x:auto">
     <table>
-      <thead><tr><th>Invoice #</th><th>Party</th><th class="t-right">Amount</th><th>Status</th><th>Date</th><th></th></tr></thead>
+      <thead><tr><th>Invoice #</th><th>Party</th><th>Items</th><th class="t-right">Amount</th><th>Status</th><th>Date</th><th></th></tr></thead>
       <tbody>
         {% for r in rows %}
+        {% set bits = items_by_bill.get(r.id, []) %}
         <tr>
           <td><b class="mono">{{ r.invoice_no }}</b></td>
           <td>{{ r.party }}</td>
+          <td class="small">{% if bits %}{{ bits[0].item or '—' }}{% if bits|length > 1 %} <span class="badge b-gray">+{{ bits|length - 1 }} aur</span>{% endif %}{% else %}—{% endif %}</td>
           <td class="t-right"><b>{{ r.amount|inr }}</b></td>
           <td><span class="badge {{'b-green' if r.status=='paid' else 'b-red' if r.status=='overdue' else 'b-amber'}}">{{ r.status|upper }}</span></td>
           <td class="small mono">{{ r.date }}</td>
           <td class="t-right" style="white-space:nowrap">
+            <a class="btn btn-outline btn-xs" target="_blank" href="/billing/{{ r.id }}/print{% if request.args.get('token') %}?token={{ request.args.get('token') }}{% endif %}" title="Invoice print/PDF">🖨 Print</a>
             <form method="post" action="/billing/{{ r.id }}/status" style="display:inline">
               <select name="status" onchange="this.form.submit()" style="padding:4px 8px;border-radius:7px;border:1px solid var(--border);font-size:12px">
                 <option value="pending" {{'selected' if r.status=='pending'}}>Pending</option>
@@ -90,10 +132,66 @@
           </td>
         </tr>
         {% else %}
-        <tr><td colspan="6"><div class="empty">No invoices yet</div></td></tr>
+        <tr><td colspan="7"><div class="empty">No invoices yet</div></td></tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
 </div>
+
+<script>
+function billCalc(){
+  var total = 0;
+  document.querySelectorAll('#bill_items .bill-row').forEach(function(tr){
+    total += parseFloat((tr.querySelector('.bill-amt')||{}).value) || 0;
+  });
+  var tax = parseFloat((document.getElementById('bill_tax')||{}).value) || 0;
+  var gt = total + Math.round(total * tax) / 100;
+  var el = document.getElementById('bill_totals');
+  if (el) el.innerHTML = 'Subtotal <b>₹' + total.toFixed(2) + '</b>' +
+    (tax ? ' + GST ' + tax + '% = <b style="color:#16a34a">₹' + gt.toFixed(2) + '</b>' : '');
+}
+function billBind(tr){
+  var q = tr.querySelector('.bill-qty'), r = tr.querySelector('.bill-rate'), a = tr.querySelector('.bill-amt');
+  function calc(){
+    var qv = parseFloat(q.value), rv = parseFloat(r.value);
+    if (!isNaN(qv) && !isNaN(rv) && rv > 0) a.value = Math.round(qv * rv * 100) / 100;
+    billCalc();
+  }
+  if (q) q.addEventListener('input', calc);
+  if (r) r.addEventListener('input', calc);
+  if (a) a.addEventListener('input', billCalc);
+}
+function billAddRow(){
+  var tb = document.getElementById('bill_items');
+  var tr = document.createElement('tr');
+  tr.className = 'bill-row';
+  tr.innerHTML = '<td><input name="item_n" placeholder="e.g. 1000 PCBs RM 603 8W"></td>' +
+    '<td><input name="qty_n" class="bill-qty" placeholder="Qty"></td>' +
+    '<td><input name="rate_n" class="bill-rate" type="number" step="0.01" placeholder="Rate"></td>' +
+    '<td><input name="amt_n" class="bill-amt" type="number" step="0.01" placeholder="Amount"></td>' +
+    '<td><button type="button" class="btn btn-outline btn-xs" onclick="billDelRow(this)" title="Row hatao">✖</button></td>';
+  tb.appendChild(tr);
+  billBind(tr);
+}
+function billDelRow(btn){
+  var tb = document.getElementById('bill_items');
+  var rows = tb.querySelectorAll('.bill-row');
+  if (rows.length <= 1) {
+    rows.forEach(function(tr){
+      tr.querySelectorAll('input').forEach(function(i){ i.value = ''; });
+    });
+  } else {
+    btn.closest('.bill-row').remove();
+  }
+  billCalc();
+}
+(function(){
+  var tb = document.getElementById('bill_items');
+  if (tb) tb.querySelectorAll('.bill-row').forEach(billBind);
+  var t = document.getElementById('bill_tax');
+  if (t) t.addEventListener('input', billCalc);
+  billCalc();
+})();
+</script>
 {% endblock %}

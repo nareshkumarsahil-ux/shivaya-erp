@@ -153,7 +153,13 @@
     </div>
 
     <div class="panel">
-      <div class="panel-head"><h3>🔲 Panel outline · Individual PCB · Multiplier</h3></div>
+      <div class="panel-head"><h3>🔲 Panel outline · Individual PCB · Multiplier</h3>
+        <span class="muted small" style="display:inline-flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:2px">
+          <span style="display:inline-flex;gap:4px;align-items:center"><span style="width:11px;height:11px;background:#dbeafe;border:1.5px solid #2563eb;border-radius:2px;display:inline-block"></span>Panel</span>
+          <span style="display:inline-flex;gap:4px;align-items:center"><span style="width:11px;height:11px;background:#fbbf24;border:1.5px solid #f59e0b;border-radius:2px;display:inline-block"></span>PCB</span>
+          <span style="display:inline-flex;gap:4px;align-items:center"><span style="width:11px;height:11px;background:#dcfce7;border:1.5px solid #16a34a;border-radius:2px;display:inline-block"></span>Gang (Multiplier)</span>
+        </span>
+      </div>
       <div class="panel-body" style="padding:10px">
         <div id="svgPanel">{{ svg_panel|safe }}</div>
       </div>
@@ -169,6 +175,12 @@
           <div class="gstat"><div class="glbl">PCS PER SHEET</div><div class="gnum" id="gangPcsSheet">{{ gang_info.pcs_sheet if gang_info else '—' }} <span class="u">PCS</span></div></div>
         </div>
         <div class="muted small" id="gangNote" style="margin-top:10px">{{ gang_info.note|safe if gang_info else '' }}</div>
+        <div style="margin-top:12px">
+          <span class="muted small" style="display:inline-flex;gap:10px;align-items:center;flex-wrap:wrap">
+            <span style="display:inline-flex;gap:4px;align-items:center"><span style="width:12px;height:12px;background:#ede9fe;border:3px solid #7c3aed;border-radius:2px;display:inline-block"></span><b style="color:#7c3aed">Gang Panel</b> (thick violet border)</span>
+          </span>
+          <div id="svgGangSheet" style="margin-top:8px">{{ svg_gang_sheet|safe }}</div>
+        </div>
       </div>
     </div>
 
@@ -452,6 +464,9 @@ function computeLive(){
       ' mm (' + pcsUnit + ' PCS/unit). Sheet ' + fmtNum(sl) + '×' + fmtNum(sw) + ' mm me <b>' + layTxt.toLowerCase() +
       '</b> fit hoti hai — calculation isi ke hisaab se: ' + gangCount + ' × ' + pcsUnit + ' PCS = ' +
       '<b>' + pcsSheet + ' PCS per sheet</b>.';
+    /* GANG PREVIEW SVG — BEST LAYOUT jitne hi gang panels, thick violet borders ke saath */
+    document.getElementById('svgGangSheet').innerHTML =
+      svgGangSheet(sl, sw, cl, cw, gx2, gy2, gx, gy, kx, ky, pps, waste, best, mN, mM, perN, perR, gl, gw, pcsPanel);
   } else {
     gpEl.style.display = 'none';
   }
@@ -479,7 +494,9 @@ function computeLive(){
   document.getElementById('svgPanel').innerHTML = svgPanel(pcbL, pcbW, px, py, gapXs, gapYs, bl, br, bt, bb, pL, pW, pcsPanel, gx, gy, kx, ky);
   document.getElementById('svgSheet').innerHTML = svgSheet(sl, sw, cl, cw, gx2, gy2, gx, gy, kx, ky, pps, waste, best, mN, mM, perN, perR, gl, gw, pcsPanel);
   var sheetHead = document.getElementById('sheetPreviewHead');
-  if (sheetHead) sheetHead.textContent = (best === 'mixed') ? '🔲 Normal rows · Rotated rows' : '🔲 Panel outline · Sheet';
+  if (sheetHead) sheetHead.innerHTML = (best === 'mixed')
+    ? '🔲 <span style="color:#16a34a;font-weight:700">Normal rows</span> · <span style="color:#2563eb;font-weight:700">Rotated rows</span> — <span style="display:inline-flex;gap:4px;align-items:center"><span style="width:10px;height:10px;background:#dcfce7;border:1.5px solid #16a34a;border-radius:2px;display:inline-block"></span>Gang</span> <span style="display:inline-flex;gap:4px;align-items:center"><span style="width:10px;height:10px;background:#bfdbfe;border:1.5px solid #2563eb;border-radius:2px;display:inline-block"></span>Panel</span>'
+    : '🔲 <span style="color:#16a34a;font-weight:700">Gang panels</span> · Sheet — <span style="display:inline-flex;gap:4px;align-items:center"><span style="width:10px;height:10px;background:#dcfce7;border:1.5px solid #16a34a;border-radius:2px;display:inline-block"></span>Gang</span> <span style="display:inline-flex;gap:4px;align-items:center"><span style="width:10px;height:10px;background:#bfdbfe;border:1.5px solid #2563eb;border-radius:2px;display:inline-block"></span>Panel</span>';
 }
 
 function svgPanel(pcbL, pcbW, px, py, gapXs, gapYs, bl, br, bt, bb, pL, pW, pcsPanel, gx, gy, kx, ky){
@@ -497,7 +514,7 @@ function svgPanel(pcbL, pcbW, px, py, gapXs, gapYs, bl, br, bt, bb, pL, pW, pcsP
   for (a = 0; a < gx; a++)
     for (b = 0; b < gy; b++) {
       var xp = x0 + a * (P + Kx), yp = y0 + b * (Q + Ky);
-      s += '<rect x="' + xp.toFixed(1) + '" y="' + yp.toFixed(1) + '" width="' + P.toFixed(1) + '" height="' + Q.toFixed(1) + '" fill="#fdf3df" stroke="#d97706" stroke-width="2" rx="3"/>';
+      s += '<rect x="' + xp.toFixed(1) + '" y="' + yp.toFixed(1) + '" width="' + P.toFixed(1) + '" height="' + Q.toFixed(1) + '" fill="#dbeafe" stroke="#2563eb" stroke-width="2" rx="3"/>';
       if (cw > 2.4 && ch > 2.4) {
         var ox = bx;
         for (i = 0; i < px; i++) {
@@ -509,11 +526,11 @@ function svgPanel(pcbL, pcbW, px, py, gapXs, gapYs, bl, br, bt, bb, pL, pW, pcsP
           if (i < px - 1) ox += cw + ((i < gapXs.length ? gapXs[i] : 0) * scale);
         }
         if (bl || br || bt || bb)
-          s += '<rect x="' + (xp + bx).toFixed(1) + '" y="' + (yp + by).toFixed(1) + '" width="' + (px*cw + _sumArr(gapXs)*scale).toFixed(1) + '" height="' + (py*ch + _sumArr(gapYs)*scale).toFixed(1) + '" fill="none" stroke="#9a8a5a" stroke-width="1" stroke-dasharray="4 3"/>';
+          s += '<rect x="' + (xp + bx).toFixed(1) + '" y="' + (yp + by).toFixed(1) + '" width="' + (px*cw + _sumArr(gapXs)*scale).toFixed(1) + '" height="' + (py*ch + _sumArr(gapYs)*scale).toFixed(1) + '" fill="none" stroke="#64748b" stroke-width="1" stroke-dasharray="4 3"/>';
       }
     }
   if (gx > 1 || gy > 1) {
-    s += '<rect x="' + x0.toFixed(1) + '" y="' + y0.toFixed(1) + '" width="' + GL.toFixed(1) + '" height="' + GW.toFixed(1) + '" fill="none" stroke="#16a34a" stroke-width="1.8" stroke-dasharray="6 4" rx="5"/>';
+    s += '<rect x="' + x0.toFixed(1) + '" y="' + y0.toFixed(1) + '" width="' + GL.toFixed(1) + '" height="' + GW.toFixed(1) + '" fill="#dcfce7" fill-opacity="0.4" stroke="#16a34a" stroke-width="2" rx="5"/>';
     s += '<text x="' + (x0 + GL/2) + '" y="' + (y0 - 6).toFixed(1) + '" text-anchor="middle" font-size="11" fill="#16a34a" font-family="Segoe UI,Arial">TOTAL WITH MULTIPLIER: ' + fmtNum(gl) + '×' + fmtNum(gw) + ' mm (' + gx + '×' + gy + ' + kerf)</text>';
   }
   if ((_sumArr(gapXs) > 0 || _sumArr(gapYs) > 0) && Q > 24)
@@ -541,28 +558,28 @@ function svgSheet(sl, sw, cl, cw, gx2, gy2, gx, gy, kx, ky, pps, waste, best, mN
       var p = (Cl - Kx * (gx - 1)) / gx, q = (Cw - Ky * (gy - 1)) / gy;
       for (a = 0; a < gx; a++)
         for (b = 0; b < gy; b++)
-          s += '<rect x="' + (cx + a*(p+Kx)).toFixed(1) + '" y="' + (cy + b*(q+Ky)).toFixed(1) + '" width="' + p.toFixed(1) + '" height="' + q.toFixed(1) + '" fill="#fde68a" stroke="#f59e0b" stroke-width="0.7"/>';
+          s += '<rect x="' + (cx + a*(p+Kx)).toFixed(1) + '" y="' + (cy + b*(q+Ky)).toFixed(1) + '" width="' + p.toFixed(1) + '" height="' + q.toFixed(1) + '" fill="#bfdbfe" stroke="#2563eb" stroke-width="0.7"/>';
     }
   }
   if (best === 'mixed') {
     var y = y0;
     var Cl = gl * scale, Cw = gw * scale;
     for (i = 0; i < mN; i++) {
-      for (j = 0; j < perN; j++) gangCell(x0 + j * (Cl + Kx), y, Cl, Cw, '#f7c948', '#b45309');
+      for (j = 0; j < perN; j++) gangCell(x0 + j * (Cl + Kx), y, Cl, Cw, '#dcfce7', '#16a34a');
       y += Cw + Ky;
     }
     var Cl2 = gw * scale, Cw2 = gl * scale;
     for (i = 0; i < mM; i++) {
-      for (j = 0; j < perR; j++) gangCell(x0 + j * (Cl2 + Kx), y, Cl2, Cw2, '#93c5fd', '#1d4ed8');
+      for (j = 0; j < perR; j++) gangCell(x0 + j * (Cl2 + Kx), y, Cl2, Cw2, '#bfdbfe', '#2563eb');
       y += Cw2 + Ky;
     }
-    s += '<text x="' + (W/2) + '" y="' + (H-6) + '" text-anchor="middle" font-size="12.5" fill="#8a8f98" font-family="Segoe UI,Arial">Normal rows · Rotated rows — ' +
+    s += '<text x="' + (W/2) + '" y="' + (H-6) + '" text-anchor="middle" font-size="12.5" fill="#8a8f98" font-family="Segoe UI,Arial"><tspan fill="#16a34a" font-weight="700">Normal rows</tspan> · <tspan fill="#2563eb" font-weight="700">Rotated rows</tspan> — ' +
          mN + '× row of ' + perN + ' + ' + mM + '× row of ' + perR + ' = ' + pps + ' panels · ' + waste + '% waste</text>';
   } else {
     var Cl = cl * scale, Cw = cw * scale;
     for (i = 0; i < gx2; i++)
       for (j = 0; j < gy2; j++)
-        gangCell(x0 + i * (Cl + Kx), y0 + j * (Cw + Ky), Cl, Cw, '#f7c948', '#b45309');
+        gangCell(x0 + i * (Cl + Kx), y0 + j * (Cw + Ky), Cl, Cw, '#dcfce7', '#16a34a');
     var gangCap = '';
     if (gx > 1 || gy > 1)
       gangCap = gx2 + '×' + gy2 + ' GANG × ' + (pcsPanel*gx*gy) + ' PCS = ' + (pps*pcsPanel*gx*gy) + ' PCS · ';
@@ -574,7 +591,51 @@ function svgSheet(sl, sw, cl, cw, gx2, gy2, gx, gy, kx, ky, pps, waste, best, mN
   return s;
 }
 
-/* --- bind live updates to every input --- */
+/* ---- GANG PANEL PREVIEW SVG — BEST LAYOUT jitne hi panels, gang borders THICK + VIOLET ---- */
+function svgGangSheet(sl, sw, cl, cw, gx2, gy2, gx, gy, kx, ky, pps, waste, best, mN, mM, perN, perR, gl, gw, pcsPanel){
+  var W = 430, H = 380, pad = 26;
+  var scale = Math.min((W - 2*pad) / sl, (H - 2*pad) / sw);
+  var S = sl * scale, T = sw * scale;
+  var x0 = pad + (W - 2*pad - S) / 2, y0 = pad + (H - 2*pad - T) / 2;
+  var Kx = kx * scale, Ky = ky * scale;
+  var s = '<svg viewBox="0 0 ' + W + ' ' + H + '" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;display:block">';
+  s += '<rect x="' + x0.toFixed(1) + '" y="' + y0.toFixed(1) + '" width="' + S.toFixed(1) + '" height="' + T.toFixed(1) + '" fill="#fffdf5" stroke="#b3ac99" stroke-width="2"/>';
+  var i, j, a, b;
+  function gangCell(cx, cy, Cl, Cw, fill, stroke, inFill, inStroke){
+    s += '<rect x="' + cx.toFixed(1) + '" y="' + cy.toFixed(1) + '" width="' + Cl.toFixed(1) + '" height="' + Cw.toFixed(1) + '" fill="' + fill + '" stroke="' + stroke + '" stroke-width="3.2" rx="2"/>';
+    if (gx > 1 || gy > 1) {
+      var p = (Cl - Kx * (gx - 1)) / gx, q = (Cw - Ky * (gy - 1)) / gy;
+      for (a = 0; a < gx; a++)
+        for (b = 0; b < gy; b++)
+          s += '<rect x="' + (cx + a*(p+Kx)).toFixed(1) + '" y="' + (cy + b*(q+Ky)).toFixed(1) + '" width="' + p.toFixed(1) + '" height="' + q.toFixed(1) + '" fill="' + inFill + '" stroke="' + inStroke + '" stroke-width="0.8"/>';
+    }
+  }
+  if (best === 'mixed') {
+    var y = y0;
+    var Cl = gl * scale, Cw = gw * scale;
+    for (i = 0; i < mN; i++) {
+      for (j = 0; j < perN; j++) gangCell(x0 + j * (Cl + Kx), y, Cl, Cw, '#ede9fe', '#7c3aed', '#ddd6fe', '#8b5cf6');
+      y += Cw + Ky;
+    }
+    var Cl2 = gw * scale, Cw2 = gl * scale;
+    for (i = 0; i < mM; i++) {
+      for (j = 0; j < perR; j++) gangCell(x0 + j * (Cl2 + Kx), y, Cl2, Cw2, '#fce7f3', '#db2777', '#fbcfe8', '#ec4899');
+      y += Cw2 + Ky;
+    }
+    s += '<text x="' + (W/2) + '" y="' + (H-6) + '" text-anchor="middle" font-size="12.5" fill="#8a8f98" font-family="Segoe UI,Arial"><tspan fill="#7c3aed" font-weight="700">Normal gang</tspan> · <tspan fill="#db2777" font-weight="700">Rotated gang</tspan> — ' +
+         mN + '× row of ' + perN + ' + ' + mM + '× row of ' + perR + ' = <tspan fill="#7c3aed" font-weight="700">' + pps + ' GANG panels</tspan> · ' + waste + '% waste</text>';
+  } else {
+    var Cl = cl * scale, Cw = cw * scale;
+    for (i = 0; i < gx2; i++)
+      for (j = 0; j < gy2; j++)
+        gangCell(x0 + i * (Cl + Kx), y0 + j * (Cw + Ky), Cl, Cw, '#ede9fe', '#7c3aed', '#ddd6fe', '#8b5cf6');
+    s += '<text x="' + (W/2) + '" y="' + (H-6) + '" text-anchor="middle" font-size="12.5" fill="#8a8f98" font-family="Segoe UI,Arial">Sheet ' +
+         fmtNum(sl) + '×' + fmtNum(sw) + ' mm · ' + gx2 + '×' + gy2 + ' = <tspan fill="#7c3aed" font-weight="700">' + pps + ' GANG panels</tspan> · ' +
+         (pps*pcsPanel*gx*gy) + ' PCS · ' + waste + '% waste</text>';
+  }
+  s += '</svg>';
+  return s;
+}
 ['pcb_len','pcb_w','pcbs_x','pcbs_y','gap_x','gap_y','border_l','border_r','border_t','border_b',
  'gang_x','gang_y','sheet_len','sheet_w','panel_len','panel_w','kerf_x','kerf_y','sheets'
 ].forEach(function(id){

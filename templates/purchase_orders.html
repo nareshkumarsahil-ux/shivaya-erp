@@ -26,7 +26,13 @@
             {% for s in ['pending','ordered','in_transit','received','cancelled'] %}<option value="{{ s }}" {{'selected' if edit_po.status==s}}>{{ s|replace('_',' ')|title }}</option>{% endfor %}
           </select>
         </div>
-        <div class="field"><label>GST %</label><input type="number" step="0.1" name="tax_percent" id="po_tax" value="{{ edit_po.tax_percent }}"></div>
+        <div class="field"><label>GST %</label>
+          {% set cur_tax = edit_po.tax_percent if edit_po and edit_po.tax_percent else 0 %}
+          <select name="tax_percent" id="po_tax">
+            {% if cur_tax not in [0,5,12,18,28] %}<option value="{{ cur_tax }}" selected>{{ cur_tax|gfmt }}%</option>{% endif %}
+            {% for t in [0,5,12,18,28] %}<option value="{{ t }}" {{'selected' if cur_tax == t}}>{{ t|gfmt }}%</option>{% endfor %}
+          </select>
+        </div>
         <div class="full">
           <label style="font-size:11px;color:var(--muted);font-weight:700">ITEMS — kis party se KITNA order karna hai</label>
           <table class="po-items-table" style="width:100%">
@@ -71,7 +77,15 @@
         <div class="field"><label>Status</label>
           <select name="status"><option value="pending">Pending</option><option value="ordered">Ordered</option><option value="in_transit">In Transit</option><option value="received">Received</option></select>
         </div>
-        <div class="field"><label>GST %</label><input type="number" step="0.1" name="tax_percent" id="po_tax" value="18"></div>
+        <div class="field"><label>GST %</label>
+          <select name="tax_percent" id="po_tax">
+            <option value="0">0%</option>
+            <option value="5">5%</option>
+            <option value="12">12%</option>
+            <option value="18" selected>18%</option>
+            <option value="28">28%</option>
+          </select>
+        </div>
         <div class="full">
           <label style="font-size:11px;color:var(--muted);font-weight:700">ITEMS — kis party se KITNA order karna hai</label>
           <table class="po-items-table" style="width:100%">
@@ -96,7 +110,7 @@
   </div>
 </div>
 {% else %}
-<div class="toolbar" style="justify-content:flex-end;gap:8px"><a class="btn btn-outline" href="/purchase-orders?add=1" style="display:none"></a><a class="btn" href="/purchase-orders?add=1">＋ New Purchase Order</a></div>
+<div class="toolbar" style="justify-content:flex-end"><a class="btn" href="/purchase-orders?add=1">＋ New Purchase Order</a></div>
 {% endif %}
 
 {% if not edit_po and not show_add %}
@@ -120,7 +134,7 @@
   <div class="panel-head"><h3>📦 Purchase Orders ({{ rows|length }})</h3></div>
   <div class="panel-body" style="padding:0;overflow-x:auto">
     <table>
-      <thead><tr><th>PO #</th><th>Vendor</th><th>Item</th><th>Qty</th><th class="t-right">Amount</th><th>Status</th><th>Date</th><th></th></tr></thead>
+      <thead><tr><th>PO #</th><th>Vendor</th><th>Item</th><th>Qty</th><th class="t-right">Amount</th><th class="t-right">GST</th><th>Status</th><th>Date</th><th></th></tr></thead>
       <tbody>
         {% for r in rows %}
         <tr>
@@ -129,6 +143,7 @@
           <td class="small">{{ r.item }}</td>
           <td class="mono">{{ r.qty }}</td>
           <td class="t-right">{{ r.amount|inr }}</td>
+          <td class="t-right mono small">{{ r.tax_percent|gfmt }}%</td>
           <td><span class="badge {{'b-green' if r.status=='received' else 'b-blue' if r.status=='ordered' else 'b-amber' if r.status=='in_transit' else 'b-urgent' if r.status=='cancelled' else 'b-gray'}}">{{ r.status|replace('_',' ')|upper }}</span></td>
           <td class="small">{{ r.date }}</td>
           <td class="t-right" style="white-space:nowrap">
@@ -151,7 +166,7 @@
           </td>
         </tr>
         {% else %}
-        <tr><td colspan="8"><div class="empty">No purchase orders yet</div></td></tr>
+        <tr><td colspan="9"><div class="empty">No purchase orders yet</div></td></tr>
         {% endfor %}
       </tbody>
     </table>
@@ -175,8 +190,7 @@ function poVendorFill(){
 function poCalc(){
   var total = 0;
   document.querySelectorAll('#po_items .po-row').forEach(function(tr){
-    var amt = parseFloat((tr.querySelector('.po-amt')||{}).value) || 0;
-    total += amt;
+    total += parseFloat((tr.querySelector('.po-amt')||{}).value) || 0;
   });
   var tax = parseFloat((document.getElementById('po_tax')||{}).value) || 0;
   var gt = total + Math.round(total * tax) / 100;
