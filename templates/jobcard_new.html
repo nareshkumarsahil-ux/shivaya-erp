@@ -1,0 +1,430 @@
+{% extends "base.html" %}
+{% block title %}New Job Card{% endblock %}
+{% block page_title %}🆕 New Job Card — Advanced{% endblock %}
+{% block content %}
+
+<form method="post" action="/jobcard/new" id="jcForm">
+<div class="grid2">
+  <div>
+    <!-- ============ STEP 1 : BASIC ============ -->
+    <div class="panel">
+      <div class="panel-head"><h3><span class="badge b-blue">1</span> BASIC DETAILS</h3></div>
+      <div class="panel-body">
+        <div class="field">
+          <label>PARTY NAME</label>
+          <input name="party" id="jcParty" list="partyList" placeholder="Party select ya naya naam type karo" required style="font-weight:700">
+          <datalist id="partyList">
+            {% for p in parties %}<option value="{{ p }}">{% endfor %}
+          </datalist>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <div class="field" style="flex:1;min-width:140px">
+            <label>BOARD TYPE</label>
+            <select name="board_type" id="jcBoardType">
+              <option value="Single Side" selected>SINGLE SIDE</option>
+              <option value="Double Side">DOUBLE SIDE</option>
+            </select>
+          </div>
+          <div class="field" style="flex:1;min-width:140px">
+            <label>PRIORITY</label>
+            <select name="priority" id="jcPriority">
+              <option value="normal" selected>Normal</option>
+              <option value="urgent">🔴 Urgent</option>
+            </select>
+          </div>
+          <div class="field" style="flex:1;min-width:140px">
+            <label>EXP. DELIVERY</label>
+            <input type="date" name="delivery_date" id="jcDelivery" value="">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ STEP 2 : PRODUCT SELECT + details ============ -->
+    <div class="panel">
+      <div class="panel-head"><h3><span class="badge b-blue">2</span> PRODUCT SELECT <span class="muted small" style="font-weight:400">— select karte hi saari details yahin aa jayengi</span></h3></div>
+      <div class="panel-body">
+        <div class="field">
+          <label>FINISHED PRODUCT</label>
+          <select name="product_id" id="prodSel">
+            <option value="">— Select product —</option>
+            {% for m in models %}
+            <option value="{{ m.id }}"
+              data-name="{{ m.name }}" data-code="{{ m.model_code or '' }}"
+              data-pcbx="{{ m.pcb_len|gfmt }}" data-pcby="{{ m.pcb_w|gfmt }}"
+              data-panelx="{{ m.panel_len|gfmt }}" data-panely="{{ m.panel_w|gfmt }}"
+              data-cutx="{{ m.cutting_len|gfmt }}" data-cuty="{{ m.cutting_w|gfmt }}"
+              data-xq="{{ m.x_qty }}" data-yq="{{ m.y_qty }}"
+              data-pcs="{{ m.pcs_panel }}" data-pps="{{ m.panels_sheet }}"
+              data-sl="{{ m.sheet_len|gfmt }}" data-sw="{{ m.sheet_w|gfmt }}"
+              data-kfx="{{ m.kerf_x|gfmt }}" data-kfy="{{ m.kerf_y|gfmt }}"
+              data-cnx="{{ m.cnc_margin_x|gfmt }}" data-cny="{{ m.cnc_margin_y|gfmt }}"
+              data-thick="{{ m.sheet_thickness }}"
+              data-price="{{ m.pcb_price|gfmt }}" data-rs="{{ m.per_sq_inch|gfmt }}">
+              {{ m.name }}{% if m.model_code %} ({{ m.model_code }}){% endif %} · {{ m.pcs_panel }} PCS/Panel</option>
+            {% endfor %}
+          </select>
+        </div>
+        <!-- product detail card -->
+        <div id="prodDetails" style="display:none;margin-top:10px;border:1.5px solid var(--blue);border-radius:10px;padding:12px 14px;background:#f8fbff">
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px">
+            <div class="gstat" style="border:1px solid var(--border);border-radius:8px;padding:8px 10px;background:#fff">
+              <div class="glbl" style="font-size:9.5px;letter-spacing:.8px;color:var(--muted);font-weight:700">SINGLE PCB SIZE</div>
+              <div id="pdPcb" style="font-size:15px;font-weight:800;margin-top:3px">—</div>
+            </div>
+            <div class="gstat" style="border:1px solid var(--border);border-radius:8px;padding:8px 10px;background:#fff">
+              <div class="glbl" style="font-size:9.5px;letter-spacing:.8px;color:var(--muted);font-weight:700">PANEL SIZE</div>
+              <div id="pdPanel" style="font-size:15px;font-weight:800;margin-top:3px">—</div>
+            </div>
+            <div class="gstat" style="border:1px solid var(--border);border-radius:8px;padding:8px 10px;background:#fff">
+              <div class="glbl" style="font-size:9.5px;letter-spacing:.8px;color:var(--muted);font-weight:700">PANELS / SHEET</div>
+              <div id="pdPps" style="font-size:15px;font-weight:800;margin-top:3px">—</div>
+            </div>
+            <div class="gstat" style="border:1px solid var(--border);border-radius:8px;padding:8px 10px;background:#fff">
+              <div class="glbl" style="font-size:9.5px;letter-spacing:.8px;color:var(--muted);font-weight:700">PCB / PANEL</div>
+              <div id="pdPcs" style="font-size:15px;font-weight:800;margin-top:3px">—</div>
+            </div>
+            <div class="gstat" style="border:1px solid var(--border);border-radius:8px;padding:8px 10px;background:#fff">
+              <div class="glbl" style="font-size:9.5px;letter-spacing:.8px;color:var(--muted);font-weight:700">PCB / SHEET</div>
+              <div id="pdPcsSheet" style="font-size:15px;font-weight:800;margin-top:3px">—</div>
+            </div>
+            <div class="gstat" style="border:1px solid var(--border);border-radius:8px;padding:8px 10px;background:#fff">
+              <div class="glbl" style="font-size:9.5px;letter-spacing:.8px;color:var(--muted);font-weight:700">THICKNESS</div>
+              <div id="pdThick" style="font-size:15px;font-weight:800;margin-top:3px">—</div>
+            </div>
+          </div>
+          <div id="pdSide" class="muted small" style="margin-top:8px"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ STEP 3 : QTY + SHEET SIZE + AUTO CALCULATION (cut list jaisi) ============ -->
+    <div class="panel">
+      <div class="panel-head"><h3><span class="badge b-blue">3</span> QUANTITY + SHEET SIZE + AUTO CALCULATION <span class="muted small" style="font-weight:400">— cut list ki tarah khud calculate</span></h3></div>
+      <div class="panel-body">
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <div class="field" style="flex:1;min-width:150px">
+            <label>QTY (PCS)</label>
+            <input type="number" name="qty" id="jcQty" min="0" step="1" placeholder="e.g. 500" style="font-size:17px;font-weight:800">
+          </div>
+          <div class="field" style="flex:1;min-width:150px">
+            <label>SHEET LENGTH (MM)</label>
+            <input type="number" step="1" name="sheet_len" id="jcSL" placeholder="1200" style="font-weight:700">
+          </div>
+          <div class="field" style="flex:1;min-width:150px">
+            <label>SHEET WIDTH (MM)</label>
+            <input type="number" step="1" name="sheet_w" id="jcSW" placeholder="1000" style="font-weight:700">
+          </div>
+        </div>
+        <div id="caCuts" style="margin-top:8px;padding:8px 12px;border:1.5px dashed #94a3b8;border-radius:8px;background:#f8fafc;font-size:13px;font-weight:700;color:#334155"></div>
+        <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:10px;align-items:flex-start">
+          <div style="flex:1;min-width:230px">
+            <div class="glbl" style="font-size:9.5px;letter-spacing:.8px;color:var(--muted);font-weight:700;margin-bottom:4px">🗺️ SHEET VISUAL — CUT LIST STYLE</div>
+            <div id="sheetVis" style="border:1px solid var(--border);border-radius:8px;padding:8px;background:#fff"></div>
+          </div>
+          <div style="flex:1;min-width:190px" id="calcPanel2">
+            <div style="border:1.5px solid #7c3aed;border-radius:10px;padding:10px 12px;background:#f5f3ff;margin-bottom:8px">
+              <div class="glbl" style="font-size:9.5px;letter-spacing:.8px;color:#6d28d9;font-weight:800">CALCULATION CHAIN</div>
+              <div id="caChain" class="small" style="margin-top:4px;line-height:1.7;color:#4c1d95">—</div>
+            </div>
+          </div>
+        </div>
+        <div id="calcPanel" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-top:10px">
+          <div style="border:1.5px solid #16a34a;border-radius:10px;padding:10px 12px;background:#f2fbf4">
+            <div class="glbl" style="font-size:9.5px;letter-spacing:.8px;color:#166534;font-weight:800">QTY OF PANELS</div>
+            <div id="caPanels" style="font-size:19px;font-weight:900;color:#166534;margin-top:3px">—</div>
+            <div id="caPanelsSub" class="small muted"></div>
+          </div>
+          <div style="border:1.5px solid #16a34a;border-radius:10px;padding:10px 12px;background:#f2fbf4">
+            <div class="glbl" style="font-size:9.5px;letter-spacing:.8px;color:#166534;font-weight:800">PANELS / SHEET</div>
+            <div id="caPps" style="font-size:19px;font-weight:900;color:#166534;margin-top:3px">—</div>
+            <div id="caPpsSub" class="small muted"></div>
+          </div>
+          <div style="border:1.5px solid #16a34a;border-radius:10px;padding:10px 12px;background:#f2fbf4">
+            <div class="glbl" style="font-size:9.5px;letter-spacing:.8px;color:#166534;font-weight:800">NO. OF SHEETS</div>
+            <div id="caSheets" style="font-size:19px;font-weight:900;color:#166534;margin-top:3px">—</div>
+            <div id="caSheetsSub" class="small muted"></div>
+          </div>
+          <div style="border:1.5px solid var(--blue);border-radius:10px;padding:10px 12px;background:#f8fbff">
+            <div class="glbl" style="font-size:9.5px;letter-spacing:.8px;color:#1d4ed8;font-weight:800">TOTAL PCB (PCS)</div>
+            <div id="caTotalPcs" style="font-size:19px;font-weight:900;color:#1d4ed8;margin-top:3px">—</div>
+            <div id="caTotalPcsSub" class="small muted"></div>
+          </div>
+          <div style="border:1.5px solid #d97706;border-radius:10px;padding:10px 12px;background:#fffaf0">
+            <div class="glbl" style="font-size:9.5px;letter-spacing:.8px;color:#b45309;font-weight:800">TOTAL VALUE</div>
+            <div id="caValue" style="font-size:19px;font-weight:900;color:#b45309;margin-top:3px">—</div>
+            <div id="caValueSub" class="small muted"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ STEP 4 : MATERIAL ============ -->
+    <div class="panel">
+      <div class="panel-head"><h3><span class="badge b-blue">4</span> SHEET MATERIAL + THICKNESS</h3></div>
+      <div class="panel-body">
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <div class="field" style="flex:1;min-width:220px">
+            <label>SHEET MATERIAL (stock list se)</label>
+            <select name="sheet_material" id="jcMat">
+              <option value="">— Select material —</option>
+              {% for it in inv_items %}
+              <option value="{{ it.name }}" data-stock="{{ it.stock|gfmt }}" data-unit="{{ it.unit }}">{{ it.name }} · {{ it.category }} · Stock: {{ it.stock|gfmt }} {{ it.unit }}</option>
+              {% endfor %}
+            </select>
+            <div id="matStock" class="muted small" style="margin-top:4px"></div>
+          </div>
+          <div class="field" style="flex:1;min-width:160px">
+            <label>THICKNESS</label>
+            <select name="sheet_thickness" id="jcThick">
+              <option value="">— Select —</option>
+              {% for t in thicknesses %}<option value="{{ t }}">{{ t }}</option>{% endfor %}
+            </select>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ STEP 5 : EXTRA INSTRUCTIONS ============ -->
+    <div class="panel">
+      <div class="panel-head"><h3><span class="badge b-blue">5</span> EXTRA INSTRUCTIONS <span class="muted small" style="font-weight:400">— employee ko dene ke liye</span></h3></div>
+      <div class="panel-body">
+        <textarea name="instructions" id="jcInstr" rows="3" style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px" placeholder="e.g. Cutting ke baad edge burr clean karna · V-grooving me PCB size 40×50 · Packing me har box 50 pcs"></textarea>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ RIGHT : LIVE SUMMARY ============ -->
+  <div>
+    <div class="panel" style="position:sticky;top:72px">
+      <div class="panel-head"><h3>📋 JOB CARD SUMMARY</h3></div>
+      <div class="panel-body">
+        <table style="width:100%;font-size:13px">
+          <tr><td class="muted">PARTY</td><td class="t-right"><b id="smParty">—</b></td></tr>
+          <tr><td class="muted">BOARD</td><td class="t-right"><b id="smBoard">—</b></td></tr>
+          <tr><td class="muted">PRIORITY</td><td class="t-right"><b id="smPriority">—</b></td></tr>
+          <tr><td class="muted">PRODUCT</td><td class="t-right"><b id="smProduct">—</b></td></tr>
+          <tr><td class="muted">QTY (PCS)</td><td class="t-right"><b id="smQty">—</b></td></tr>
+          <tr><td class="muted">SHEET SIZE</td><td class="t-right"><b id="smSheet">—</b></td></tr>
+          <tr><td class="muted">PANELS</td><td class="t-right"><b id="smPanels">—</b></td></tr>
+          <tr><td class="muted">SHEETS</td><td class="t-right"><b id="smSheets">—</b></td></tr>
+          <tr><td class="muted">TOTAL PCB</td><td class="t-right"><b id="smTotalPcb" style="color:#1d4ed8">—</b></td></tr>
+          <tr><td class="muted">MATERIAL</td><td class="t-right"><b id="smMat">—</b></td></tr>
+          <tr><td class="muted">THICKNESS</td><td class="t-right"><b id="smThick">—</b></td></tr>
+        </table>
+        <button class="btn" type="submit" style="width:100%;margin-top:12px;font-size:16px;font-weight:800;padding:12px;background:#16a34a;color:#fff">🚀 CREATE JOB CARD</button>
+        <p class="muted small" style="margin-top:8px">Create karte hi Job Card khul jayega — wahan processes, dispatch, print sab manage hoga.</p>
+      </div>
+    </div>
+  </div>
+</div>
+</form>
+
+<script>
+/* ---- product select → saari details + thickness ---- */
+var selM = {};  // current model data
+document.getElementById('prodSel').addEventListener('change', function(){
+  var o = this.options[this.selectedIndex];
+  var box = document.getElementById('prodDetails');
+  if (!o || !o.value) {
+    box.style.display = 'none'; selM = {};
+    document.getElementById('jcSL').value = '';
+    document.getElementById('jcSW').value = '';
+    recalc(); syncSummary(); return;
+  }
+  selM = {
+    name: o.getAttribute('data-name'), code: o.getAttribute('data-code'),
+    pcbx: parseFloat(o.getAttribute('data-pcbx'))||0, pcby: parseFloat(o.getAttribute('data-pcby'))||0,
+    panelx: parseFloat(o.getAttribute('data-panelx'))||0, panely: parseFloat(o.getAttribute('data-panely'))||0,
+    cutx: parseFloat(o.getAttribute('data-cutx'))||0, cuty: parseFloat(o.getAttribute('data-cuty'))||0,
+    xq: parseInt(o.getAttribute('data-xq'))||0, yq: parseInt(o.getAttribute('data-yq'))||0,
+    pcs: parseInt(o.getAttribute('data-pcs'))||0, pps: parseInt(o.getAttribute('data-pps'))||0,
+    sl: parseFloat(o.getAttribute('data-sl'))||0, sw: parseFloat(o.getAttribute('data-sw'))||0,
+    kfx: parseFloat(o.getAttribute('data-kfx'))||0, kfy: parseFloat(o.getAttribute('data-kfy'))||0,
+    cnx: parseFloat(o.getAttribute('data-cnx'))||0, cny: parseFloat(o.getAttribute('data-cny'))||0,
+    thick: o.getAttribute('data-thick')||'', price: parseFloat(o.getAttribute('data-price'))||0,
+    rs: parseFloat(o.getAttribute('data-rs'))||0
+  };
+  /* SHEET SIZE inputs bhi yahin fill karo (model se) — user badal bhi sakta hai */
+  if (selM.sl > 0) document.getElementById('jcSL').value = selM.sl;
+  if (selM.sw > 0) document.getElementById('jcSW').value = selM.sw;
+  box.style.display = 'block';
+  document.getElementById('pdPcb').textContent = selM.pcbx > 0 ? (selM.pcbx + ' × ' + selM.pcby + ' mm') : '—';
+  var px = selM.cutx || selM.panelx, py = selM.cuty || selM.panely;
+  document.getElementById('pdPanel').textContent = px > 0 ? (px + ' × ' + py + ' mm') : '—';
+  document.getElementById('pdPps').textContent = selM.pps || '—';
+  document.getElementById('pdPcs').textContent = selM.pcs || '—';
+  var pcsSheet = (selM.pcs || 0) * (selM.pps || 0);
+  document.getElementById('pdPcsSheet').textContent = pcsSheet || '—';
+  document.getElementById('pdThick').textContent = selM.thick || '—';
+  var px0 = selM.cutx || selM.panelx, py0 = selM.cuty || selM.panely;
+  var sideTxt = '';
+  if (px0 > 0 && py0 > 0 && selM.sl > 0 && selM.sw > 0) {
+    sideTxt = '📐 CUT LIST STYLE — X: <b>L-' + px0 + '(' + selM.sl + ')×' + selM.xq + '</b> · Y: <b>W-' + py0 + '(' + selM.sw + ')×' + selM.yq + '</b> = <b>' + ((selM.xq||0)*(selM.yq||0)) + ' panels/sheet</b>';
+  } else if (selM.pps) {
+    sideTxt = '📐 <b>' + selM.pps + ' panels/sheet</b>';
+  }
+  if (selM.cnx > 0 || selM.cny > 0)
+    sideTxt += ' · <b>CNC margin X/Y: ' + selM.cnx + '/' + selM.cny + 'mm</b>';
+  document.getElementById('pdSide').innerHTML = sideTxt;
+  /* thickness dropdown → model wali select karo (missing ho to add) */
+  var tsel = document.getElementById('jcThick');
+  if (selM.thick) {
+    var found = false;
+    for (var i = 0; i < tsel.options.length; i++) if (tsel.options[i].value === selM.thick) { found = true; break; }
+    if (!found) { var no = document.createElement('option'); no.value = selM.thick; no.textContent = selM.thick; tsel.appendChild(no); }
+    tsel.value = selM.thick;
+  }
+  recalc();
+  syncSummary();
+});
+
+/* ---- material select → stock hint ---- */
+document.getElementById('jcMat').addEventListener('change', function(){
+  var o = this.options[this.selectedIndex];
+  var el = document.getElementById('matStock');
+  el.innerHTML = (o && o.value) ? ('📦 Stock: <b>' + (o.getAttribute('data-stock')||'0') + ' ' + (o.getAttribute('data-unit')||'') + '</b>') : '';
+  syncSummary();
+});
+
+/* ---- CUT LIST style: panel + kerf se har side kitne panels ---- */
+function calcPps(){
+  var px = selM.cutx || selM.panelx, py = selM.cuty || selM.panely;
+  var sl = parseFloat(document.getElementById('jcSL').value) || 0;
+  var sw = parseFloat(document.getElementById('jcSW').value) || 0;
+  var kx = selM.kfx || 0, ky = selM.kfy || 0;
+  var xq = 0, yq = 0;
+  if (px > 0 && sl > 0) xq = Math.floor((sl + kx) / (px + kx));
+  if (py > 0 && sw > 0) yq = Math.floor((sw + ky) / (py + ky));
+  if (!xq) xq = selM.xq || 0;
+  if (!yq) yq = selM.yq || 0;
+  var pps = xq * yq;
+  if (!pps) pps = selM.pps || 0;
+  return {px: px, py: py, sl: sl, sw: sw, kx: kx, ky: ky, xq: xq, yq: yq, pps: pps};
+}
+
+/* ---- SHEET VISUAL: sheet par X×Y panel grid (cut list style) ---- */
+function drawSheetVis(){
+  var el = document.getElementById('sheetVis');
+  if (!el) return;
+  var C = calcPps();
+  if (!(C.px > 0 && C.py > 0 && C.sl > 0 && C.sw > 0 && C.xq > 0 && C.yq > 0)) {
+    el.innerHTML = '<div class="muted small">Pehle product select karo + sheet size bharo — grid yahan dikhega.</div>';
+    return;
+  }
+  var W = 380, H = 290, pad = 24;
+  var scale = Math.min((W - 2*pad) / C.sl, (H - 2*pad) / C.sw);
+  var S = C.sl * scale, T = C.sw * scale;
+  var x0 = pad + (W - 2*pad - S) / 2, y0 = pad + (H - 2*pad - T) / 2;
+  var px = C.px * scale, py = C.py * scale;
+  var kxs = C.kx * scale, kys = C.ky * scale;
+  var s = '<svg viewBox="0 0 ' + W + ' ' + H + '" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;display:block">';
+  s += '<rect x="' + x0.toFixed(1) + '" y="' + y0.toFixed(1) + '" width="' + S.toFixed(1) + '" height="' + T.toFixed(1) + '" fill="#fffdf5" stroke="#b3ac99" stroke-width="2"/>';
+  var a, b;
+  for (a = 0; a < C.xq; a++)
+    for (b = 0; b < C.yq; b++) {
+      var cx = x0 + a * (px + kxs), cy = y0 + b * (py + kys);
+      s += '<rect x="' + (cx + kxs/2).toFixed(1) + '" y="' + (cy + kys/2).toFixed(1) + '" width="' + px.toFixed(1) + '" height="' + py.toFixed(1) + '" fill="#dbeafe" stroke="#2563eb" stroke-width="1.4" rx="2"/>';
+      s += '<text x="' + (cx + kxs/2 + px/2).toFixed(1) + '" y="' + (cy + kys/2 + py/2 + 3).toFixed(1) + '" text-anchor="middle" font-size="' + Math.max(7, Math.min(11, py/4)).toFixed(1) + '" fill="#1d4ed8" font-family="Segoe UI,Arial">' + a + '×' + b + '</text>';
+    }
+  s += '<text x="' + (x0 + S/2).toFixed(1) + '" y="' + (y0 - 6).toFixed(1) + '" text-anchor="middle" font-size="11" font-weight="700" fill="#2563eb" font-family="Segoe UI,Arial">SHEET ' + C.sl + '×' + C.sw + ' mm — ' + C.xq + '×' + C.yq + ' = ' + C.pps + ' PANELS</text>';
+  s += '</svg>';
+  el.innerHTML = s;
+}
+
+/* ---- qty → cut list jaisi calculation ---- */
+function recalc(){
+  var qty = parseInt(document.getElementById('jcQty').value) || 0;
+  var p = selM.pcs || 0, price = selM.price || 0;
+  var C = calcPps();
+  var panels = (qty > 0 && p > 0) ? Math.ceil(qty / p) : 0;
+  var sheets = (panels > 0 && C.pps > 0) ? Math.ceil(panels / C.pps) : 0;
+  var pcsSheet = p * C.pps;
+  /* cut list wali line: 400(1200)×3 · 250(1000)×4 = 12 panels/sheet */
+  var cutsEl = document.getElementById('caCuts');
+  if (C.px > 0 && C.py > 0 && C.sl > 0 && C.sw > 0 && (C.xq > 0 || C.yq > 0)) {
+    var cncTxt = (selM.cnx > 0 || selM.cny > 0) ? (' · <span class="muted">CNC margin X/Y: ' + selM.cnx + '/' + selM.cny + 'mm</span>') : '';
+    cutsEl.innerHTML = '✂ CUT LIST — X: <b>L-' + C.px + '(' + C.sl + ')×' + C.xq + '</b> · Y: <b>W-' + C.py + '(' + C.sw + ')×' + C.yq + '</b> → 1 SHEET ME <b style="color:#166534">' + C.pps + ' PANELS</b>' + cncTxt;
+  } else if (C.pps > 0) {
+    cutsEl.innerHTML = '✂ 1 SHEET ME <b style="color:#166534">' + C.pps + ' PANELS</b>';
+  } else {
+    cutsEl.innerHTML = '✂ Pehle product select karo — phir cut list jaisi calculation yahan dikhegi.';
+  }
+  var capP = document.getElementById('caPanels'), capPps = document.getElementById('caPps'),
+      capS = document.getElementById('caSheets'),
+      capT = document.getElementById('caTotalPcs'), capV = document.getElementById('caValue');
+  if (qty > 0 && p > 0) {
+    capP.textContent = panels + ' PANELS';
+    capP.closest('div').querySelector('.small').innerHTML = 'Qty ' + qty + ' ÷ ' + p + ' PCS/panel';
+  } else {
+    capP.textContent = '—'; capP.closest('div').querySelector('.small').innerHTML = '';
+  }
+  if (C.pps > 0) {
+    capPps.textContent = C.pps + ' PANELS';
+    capPps.closest('div').querySelector('.small').innerHTML = C.xq + ' × ' + C.yq + ' (sheet ' + C.sl + '×' + C.sw + ')';
+  } else {
+    capPps.textContent = '—'; capPps.closest('div').querySelector('.small').innerHTML = '';
+  }
+  if (panels > 0 && C.pps > 0) {
+    capS.textContent = sheets + ' SHEETS';
+    capS.closest('div').querySelector('.small').innerHTML = panels + ' panels ÷ ' + C.pps + ' panels/sheet';
+  } else {
+    capS.textContent = '—'; capS.closest('div').querySelector('.small').innerHTML = '';
+  }
+  if (sheets > 0 && pcsSheet > 0) {
+    capT.textContent = (sheets * pcsSheet) + ' PCS';
+    capT.closest('div').querySelector('.small').innerHTML = sheets + ' sheets × ' + pcsSheet + ' PCS/sheet';
+  } else {
+    capT.textContent = '—'; capT.closest('div').querySelector('.small').innerHTML = '';
+  }
+  if (qty > 0 && price > 0) {
+    capV.textContent = '₹' + (qty * price).toLocaleString('en-IN', {maximumFractionDigits: 2});
+    capV.closest('div').querySelector('.small').innerHTML = qty + ' × ₹' + price + '/pc';
+  } else {
+    capV.textContent = '—'; capV.closest('div').querySelector('.small').innerHTML = '';
+  }
+  /* CALCULATION CHAIN + SHEET VISUAL */
+  var chainEl = document.getElementById('caChain');
+  if (chainEl) {
+    var lines = [];
+    if (qty > 0 && p > 0) lines.push('1️⃣ Qty <b>' + qty + '</b> ÷ <b>' + p + '</b> PCS/panel = <b>' + panels + ' panels</b>');
+    if (C.pps > 0) lines.push('2️⃣ Sheet ' + (C.sl || '?') + '×' + (C.sw || '?') + ' → <b>' + C.xq + '×' + C.yq + '</b> = <b>' + C.pps + ' panels/sheet</b>');
+    if (panels > 0 && C.pps > 0) lines.push('3️⃣ <b>' + panels + ' panels</b> ÷ <b>' + C.pps + '</b> = <b>' + sheets + ' sheet(s)</b>');
+    if (sheets > 0 && pcsSheet > 0) lines.push('4️⃣ <b>' + sheets + ' sheet(s)</b> × <b>' + C.pps + ' panels</b> × <b>' + p + ' pcs</b> = <b style="color:#1d4ed8">' + (sheets * pcsSheet) + ' TOTAL PCB</b>');
+    chainEl.innerHTML = lines.length ? lines.join('<br>') : 'Qty + product select karo — chain yahan dikhegi.';
+  }
+  drawSheetVis();
+  syncSummary();
+}
+document.getElementById('jcQty').addEventListener('input', recalc);
+document.getElementById('jcSL').addEventListener('input', recalc);
+document.getElementById('jcSW').addEventListener('input', recalc);
+
+/* ---- live summary ---- */
+function syncSummary(){
+  document.getElementById('smParty').textContent = document.getElementById('jcParty').value || '—';
+  document.getElementById('smBoard').textContent = document.getElementById('jcBoardType').value || '—';
+  document.getElementById('smPriority').textContent = document.getElementById('jcPriority').value === 'urgent' ? '🔴 URGENT' : 'Normal';
+  document.getElementById('smProduct').textContent = selM.name ? (selM.name + (selM.code ? ' (' + selM.code + ')' : '')) : '—';
+  document.getElementById('smQty').textContent = document.getElementById('jcQty').value || '—';
+  document.getElementById('smSheet').textContent = (document.getElementById('jcSL').value && document.getElementById('jcSW').value)
+    ? (document.getElementById('jcSL').value + ' × ' + document.getElementById('jcSW').value + ' mm') : '—';
+  var qty = parseInt(document.getElementById('jcQty').value) || 0, p = selM.pcs || 0;
+  var C = calcPps();
+  document.getElementById('smPanels').textContent = (qty > 0 && p > 0) ? Math.ceil(qty / p) + ' PANELS' : '—';
+  var pan = (qty > 0 && p > 0) ? Math.ceil(qty / p) : 0;
+  var sh = (pan > 0 && C.pps > 0) ? Math.ceil(pan / C.pps) : 0;
+  document.getElementById('smSheets').textContent = (pan > 0 && C.pps > 0) ? Math.ceil(pan / C.pps) + ' SHEETS' : '—';
+  document.getElementById('smTotalPcb').textContent = (sh > 0 && C.pps > 0 && p > 0)
+    ? (sh * C.pps * p) + ' PCS' : '—';
+  var m = document.getElementById('jcMat');
+  document.getElementById('smMat').textContent = m.value || '—';
+  document.getElementById('smThick').textContent = document.getElementById('jcThick').value || '—';
+}
+['jcParty','jcBoardType','jcPriority','jcDelivery'].forEach(function(id){
+  document.getElementById(id).addEventListener('input', syncSummary);
+  document.getElementById(id).addEventListener('change', syncSummary);
+});
+document.getElementById('jcThick').addEventListener('change', syncSummary);
+</script>
+{% endblock %}

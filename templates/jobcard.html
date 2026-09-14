@@ -111,6 +111,17 @@
         <span id="matStockInfo" class="muted small" style="margin-top:4px;display:block"></span>
         <a class="muted small" href="/inventory" style="margin-top:4px;display:inline-block">🗄️ Manage Stock →</a>
       </div>
+      <div class="field"><label>THICKNESS</label>
+        <select name="sheet_thickness" id="jc_sheet_thickness">
+          <option value="">— Select —</option>
+          {% for t in thicknesses %}
+          <option value="{{ t }}" {{'selected' if jc.sheet_thickness == t}}>{{ t }}</option>
+          {% endfor %}
+          {% if jc.sheet_thickness and jc.sheet_thickness not in thicknesses %}
+          <option value="{{ jc.sheet_thickness }}" selected>{{ jc.sheet_thickness }} (custom)</option>
+          {% endif %}
+        </select>
+      </div>
       <div class="field"><label>COPPER FINISH (µ)</label><input name="copper_finish" id="jc_copper_finish" value="{{ jc.copper_finish }}"></div>
       <div class="field"><label>MASKING</label><input name="masking" id="jc_masking" value="{{ jc.masking }}"></div>
       <div class="field"><label>FINISH</label><input name="finish" id="jc_finish" value="{{ jc.finish }}"></div>
@@ -180,11 +191,12 @@
         <div class="field" style="flex:1"><label>NO. OF SHEETS</label><input type="number" name="sheets" id="jc_sheets" value="{{ jc.sheets }}"></div>
       </div>
       <div style="display:flex;gap:8px">
-        <div class="field" style="flex:1"><label>QTY OF PANEL</label><input type="number" name="qty_panel" id="jc_qty_panel" value="{{ jc.qty_panel }}"></div>
+        <div class="field" style="flex:1"><label>QTY OF PANEL (auto)</label><input type="number" name="qty_panel" id="jc_qty_panel" value="{{ jc.qty_panel or qty_panel_disp }}"></div>
         <div class="field" style="flex:1"><label>PCS/PANEL</label><input type="number" name="pcs_panel" id="jc_pcs_panel" value="{{ jc.pcs_panel }}"></div>
       </div>
       <div class="field"><label>QTY OF PCS (auto)</label><input type="number" name="qty_pcs" id="jc_qty_pcs" value="{{ qty_pcs }}" style="font-weight:700;background:#fffdf3"></div>
-      <div class="field"><label>V-GROOVING</label><input name="v_grooving" id="jc_v_grooving" value="{{ jc.v_grooving }}"></div>
+      <div class="field"><label>V-GROOVING (auto: single PCB size)</label><input name="v_grooving" id="jc_v_grooving" value="{{ jc.v_grooving }}" placeholder="e.g. 40×50"></div>
+      <div id="jcCalcStrip" style="margin-top:8px;padding:8px 12px;border:1.5px dashed #16a34a;border-radius:8px;background:#f2fbf4;font-size:12.5px;font-weight:700;color:#166534;line-height:1.8"></div>
     </div>
   </div>
 
@@ -511,6 +523,8 @@ function delProcRow(ev, oid, pid, name){
   <div class="panel">
     <div class="panel-head"><h3>📝 CUSTOMER REQUIREMENT</h3></div>
     <div class="panel-body"><textarea name="customer_req" id="jc_customer_req" rows="4" style="width:100%;padding:9px 11px;border:1px solid var(--border);border-radius:8px;font-size:13px">{{ jc.customer_req }}</textarea></div>
+    <div class="panel-head"><h3>📋 EXTRA INSTRUCTIONS <span class="muted small" style="font-weight:400">— employee ko dene ke liye (print par bhi dikhti hai)</span></h3></div>
+    <div class="panel-body"><textarea name="instructions" id="jc_instructions" rows="3" style="width:100%;padding:9px 11px;border:1.5px solid var(--blue);border-radius:8px;font-size:13px" placeholder="e.g. Cutting ke baad edge burr clean karna · Packing me har box 50 pcs">{{ jc.instructions }}</textarea></div>
   </div>
   <div class="panel">
     <div class="panel-head">
@@ -678,7 +692,13 @@ function syncPreview(){
   set('pr_ycut', 'W-' + fmt(val('jc_panel_y')) + '(' + fmt(val('jc_sheet_w')) + ')×' + (val('jc_y_qty')||'0'));
   set('pr_pcb_sheet', (parseInt(val('jc_pcs_panel'))||0) * (parseInt(val('jc_panels_per_sheet'))||0));
   set('pr_sheets', (val('jc_sheets')||'0') + ' SHEET');
-  set('pr_sheet_material', val('jc_sheet_material') || '—');
+  set('pr_sheet_material', (val('jc_sheet_material') || '—') + (val('jc_sheet_thickness') ? ' (' + val('jc_sheet_thickness') + ')' : ''));
+  var instrEl = document.getElementById('pr_instructions');
+  if (instrEl) {
+    var iv = val('jc_instructions');
+    if (iv) { instrEl.style.display = 'block'; instrEl.textContent = '📋 EXTRA INSTRUCTIONS: ' + iv; }
+    else { instrEl.style.display = 'none'; }
+  }
   set('pr_copper', val('jc_copper_finish') || '—');
   set('pr_legend', val('jc_legend_printing') || '—');
   set('pr_finish', val('jc_finish') || '—');
@@ -688,8 +708,6 @@ function syncPreview(){
   set('pr_qty_pcs', (val('jc_qty_pcs')||'0') + ' PCS');
   set('pr_price', inr(val('jc_price')));
   set('pr_rs_pcb', fmt(val('jc_rs_pcb')));
-  var totP = (parseFloat(val('jc_price')) || 0) * (parseInt(val('jc_qty_pcs')) || 0);
-  set('pr_total_price', inr(totP));
   var pri = val('jc_priority');
   set('pr_priority', pri.toUpperCase());
   set('pr_checked_by', val('jc_checked_by') || '—');
@@ -802,8 +820,7 @@ document.getElementById('flowApplyNo').addEventListener('click', function(){
 });
 
 /* ---- party model dropdown: finished product autofill ---- */
-document.getElementById('jc_party_model').addEventListener('change', function(){
-  var opt = this.options[this.selectedIndex];
+function applyPartyModelFill(opt){
   if (!opt || !opt.getAttribute('data-pcbx')) return;
   var setField = function(id, v){
     var el = document.getElementById(id);
@@ -829,7 +846,12 @@ document.getElementById('jc_party_model').addEventListener('change', function(){
   setField('jc_sheets', opt.getAttribute('data-sheets'));
   setField('jc_sheet_len', opt.getAttribute('data-sl'));
   setField('jc_sheet_w', opt.getAttribute('data-sw'));
-  /* QTY OF PANEL + QTY OF PCS auto-fetch: pcs/panel se panel count, model se total pcs */
+  /* V-GROOVING: SINGLE PCB ka size auto aaye (model se) */
+  var vx = parseFloat(opt.getAttribute('data-pcbx')) || 0;
+  var vy = parseFloat(opt.getAttribute('data-pcby')) || 0;
+  if (vx > 0 && vy > 0)
+    setField('jc_v_grooving', (Math.round(vx * 100) / 100) + '×' + (Math.round(vy * 100) / 100));
+  /* QTY OF PANEL + QTY OF PCS auto: order qty ÷ pcs/panel → panels; pcs = panels × pcs/panel */
   var pcs = parseInt(opt.getAttribute('data-pcs')) || 0;
   var mqp = parseInt(opt.getAttribute('data-qp')) || 0;
   if (pcs > 0) {
@@ -837,7 +859,7 @@ document.getElementById('jc_party_model').addEventListener('change', function(){
     var qpan = parseInt(val('jc_qty_panel')) || 0;
     if (!qpan) qpan = qpcs > 0 ? Math.ceil(qpcs / pcs) : mqp;
     if (qpan) setField('jc_qty_panel', String(qpan));
-    if (!qpcs && mqp) setField('jc_qty_pcs', String(pcs * mqp));
+    if (!qpcs) setField('jc_qty_pcs', String(qpan * pcs));
   }
   var pp = parseFloat(opt.getAttribute('data-pp')) || 0;
   var pr = parseFloat(opt.getAttribute('data-rs')) || 0;
@@ -867,7 +889,109 @@ document.getElementById('jc_party_model').addEventListener('change', function(){
   autoQty();
   calcPcbPrice();
   if (document.getElementById('printArea').style.display === 'block') syncPreview();
+}
+
+/* PARTY MODEL select → autofill */
+document.getElementById('jc_party_model').addEventListener('change', function(){
+  var opt = this.options[this.selectedIndex];
+  if (opt) applyPartyModelFill(opt);
 });
+
+/* MODEL (code) select → matching finished product dhoond kar wahi autofill */
+(function(){
+  var msel = document.getElementById('jc_model');
+  if (!msel) return;
+  msel.addEventListener('change', function(){
+    var code = this.value;
+    var pm = document.getElementById('jc_party_model');
+    if (!code || !pm) return;
+    for (var i = 0; i < pm.options.length; i++) {
+      if ((pm.options[i].getAttribute('data-code') || '') === code) {
+        pm.selectedIndex = i;
+        applyPartyModelFill(pm.options[i]);
+        break;
+      }
+    }
+  });
+})();
+
+/* QTY OF PCS badlo → QTY OF PANEL khud update (ceil(qty ÷ pcs/panel)) */
+(function(){
+  var qel = document.getElementById('jc_qty_pcs');
+  if (!qel) return;
+  qel.addEventListener('input', function(){
+    var qp = parseInt(qel.value) || 0;
+    var pp = parseInt(val('jc_pcs_panel')) || 0;
+    if (qp > 0 && pp > 0) {
+      var pel = document.getElementById('jc_qty_panel');
+      if (pel) pel.value = String(Math.ceil(qp / pp));
+      jcAutoSheets();
+      if (document.getElementById('printArea').style.display === 'block') syncPreview();
+    }
+    jcCalcStrip();
+  });
+})();
+
+/* ---- CUT LIST jaisi live calculation strip (job card page par hi) ----
+   400(1200)×3 · 250(1000)×4 = 12 panels/sheet → panels → sheets → TOTAL PCB */
+function jcAutoSheets(){
+  var qpan = parseInt(val('jc_qty_panel')) || 0;
+  var pps = parseInt(val('jc_panels_per_sheet')) || 0;
+  if (qpan > 0 && pps > 0) {
+    var sel = document.getElementById('jc_sheets');
+    if (sel && String(Math.ceil(qpan / pps)) !== sel.value) sel.value = String(Math.ceil(qpan / pps));
+  }
+}
+function jcCalcStrip(){
+  var el = document.getElementById('jcCalcStrip');
+  if (!el) return;
+  var qp = parseInt(val('jc_qty_pcs')) || 0;
+  var pp = parseInt(val('jc_pcs_panel')) || 0;
+  var qpan = parseInt(val('jc_qty_panel')) || 0;
+  var pps = parseInt(val('jc_panels_per_sheet')) || 0;
+  var sh = parseInt(val('jc_sheets')) || 0;
+  var px = fmt(val('jc_panel_x')), py = fmt(val('jc_panel_y'));
+  var sl = fmt(val('jc_sheet_len')), sw = fmt(val('jc_sheet_w'));
+  var xq = parseInt(val('jc_x_qty')) || 0, yq = parseInt(val('jc_y_qty')) || 0;
+  var cncx = fmt(val('jc_cnc_margin_x')), cncy = fmt(val('jc_cnc_margin_y'));
+  var lines = [];
+  if (px !== '0' && py !== '0' && sl !== '0' && sw !== '0' && (xq > 0 || yq > 0)) {
+    var cl = '✂ CUT LIST — X: L-' + px + '(' + sl + ')×' + xq + ' · Y: W-' + py + '(' + sw + ')×' + yq + ' = ' + ((xq * yq) || pps) + ' panels/sheet';
+    if (cncx !== '0' || cncy !== '0') cl += ' · <b>CNC margin X/Y: ' + cncx + '/' + cncy + 'mm</b>';
+    lines.push(cl);
+  }
+  if (qp > 0 && pp > 0) lines.push('PANEL: Qty ' + qp + ' ÷ ' + pp + ' PCS/panel = ' + Math.ceil(qp / pp) + ' panels');
+  if (qpan > 0 && pps > 0) lines.push('SHEET: ' + qpan + ' panels ÷ ' + pps + ' panels/sheet = ' + Math.ceil(qpan / pps) + ' sheets');
+  if (sh > 0 && pps > 0 && pp > 0)
+    lines.push('TOTAL PCB: ' + sh + ' sheets × ' + pps + ' panels × ' + pp + ' pcs = <b style="color:#1d4ed8">' + (sh * pps * pp) + ' PCS</b>');
+  el.innerHTML = lines.join('<br>') || 'Qty + panel/sheet values bharo — calculation yahan dikhegi.';
+}
+(function(){
+  var ids = ['jc_qty_pcs','jc_pcs_panel','jc_qty_panel','jc_panels_per_sheet','jc_sheets',
+             'jc_x_qty','jc_y_qty','jc_panel_x','jc_panel_y','jc_sheet_len','jc_sheet_w',
+             'jc_cnc_margin_x','jc_cnc_margin_y'];
+  ids.forEach(function(id){
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener('input', function(){
+      var pp = parseInt(val('jc_pcs_panel')) || 0;
+      var xq = parseInt(val('jc_x_qty')) || 0, yq = parseInt(val('jc_y_qty')) || 0;
+      var ppsEl = document.getElementById('jc_panels_per_sheet');
+      /* X/Y qty badle → panels/sheet auto = xq × yq */
+      if ((id === 'jc_x_qty' || id === 'jc_y_qty') && xq > 0 && yq > 0 && ppsEl && String(xq * yq) !== ppsEl.value)
+        ppsEl.value = String(xq * yq);
+      /* PCS/PANEL badle → panels + sheets auto */
+      if (id === 'jc_pcs_panel' && pp > 0) {
+        var qp = parseInt(val('jc_qty_pcs')) || 0;
+        var pel = document.getElementById('jc_qty_panel');
+        if (qp > 0 && pel) pel.value = String(Math.ceil(qp / pp));
+        jcAutoSheets();
+      }
+      jcCalcStrip();
+    });
+  });
+  jcCalcStrip();
+})();
 
 /* ---- multi-employee: ek process par 2+ bande milkar (＋ button) ---- */
 function addOpPick(pid){
@@ -915,8 +1039,6 @@ function calcPcbPrice(){
   var tot = price * qty;
   var tel = document.getElementById('jc_total_price');
   if (tel) tel.textContent = '| TOTAL PCB PRICE: ₹' + tot.toLocaleString('en-IN', {maximumFractionDigits: 2});
-  var tsel = document.getElementById('pr_total_price');
-  if (tsel) tsel.textContent = '₹' + tot.toLocaleString('en-IN', {maximumFractionDigits: 2});
 }
 (function(){
   var re = document.getElementById('jc_rs_pcb');
@@ -955,11 +1077,11 @@ calcPcbPrice();
   upd();
 })();
 
-/* ---- auto compute qty of pcs ---- */
+/* ---- auto compute qty of pcs (panel × pcs/panel) — values na ho to kuch mat chhedo ---- */
 function autoQty(){
   var qp = parseInt(val('jc_qty_panel')) || 0, pp = parseInt(val('jc_pcs_panel')) || 0;
   var el = document.getElementById('jc_qty_pcs');
-  el.value = qp * pp;
+  if (qp > 0 && pp > 0) el.value = qp * pp;
   recomputeBom();
 }
 /* ---- BOM live: qty ke hisaab se required raw material ---- */

@@ -4,43 +4,11 @@
 {% block content %}
 
 {% if show_add and current_user_role == 'admin' %}
-<div class="panel no-print">
+<div class="panel no-print" style="border-left:4px solid var(--blue)">
   <div class="panel-head"><h3>➕ New Job Order</h3><a class="btn btn-outline btn-sm" href="/orders">✕ Close</a></div>
   <div class="panel-body">
-    <form method="post">
-      <div class="form-grid">
-        <div class="field full"><label>Party Name *</label>
-          <select name="party" required>
-            <option value="">— Select party —</option>
-            {% for p in all_parties %}<option value="{{ p.name }}">{{ p.name }} ({{ 'Supplier' if p.ptype=='supplier' else 'Customer' }})</option>{% endfor %}
-          </select>
-          <a class="muted small" href="/parties?add=1" style="margin-top:4px;display:inline-block">➕ New Party →</a>
-        </div>
-        <div class="field"><label>Board Type</label>
-          <select name="board"><option>Single Side</option><option>Double Side</option><option>Multilayer</option></select>
-        </div>
-        <div class="field"><label>Priority</label>
-          <select name="priority"><option value="normal">Normal</option><option value="urgent">Urgent</option></select>
-        </div>
-        <div class="field full"><label>Product Name (Finished Product)</label>
-          <select name="product" id="po_product" required>
-            <option value="">— Select finished product —</option>
-            {% for m in models %}
-            <option value="{{ m.name }} - {{ m.model_code }}" data-pid="{{ m.id }}"
-              data-qty="{{ m.pcs_panel * m.panels_sheet * m.sheets }}"
-              data-panel="{{ m.panel_len|gfmt }}×{{ m.panel_w|gfmt }}mm"
-              data-pcs="{{ m.pcs_panel }}">{{ m.name }} - {{ m.model_code }} ({{ m.panel_len|gfmt }}×{{ m.panel_w|gfmt }}mm · {{ m.pcs_panel }} PCS)</option>
-            {% endfor %}
-          </select>
-          <input type="hidden" name="product_id" id="po_product_id" value="">
-          <a class="muted small" href="/products" style="margin-top:4px;display:inline-block">➕ Manage Finished Products →</a>
-        </div>
-        <div class="field"><label>Quantity (pcs)</label><input type="number" name="qty" value="1000"></div>
-        <div class="field"><label>Order Value (₹)</label><input type="number" step="0.01" name="value" value="50000"></div>
-        <div class="field"><label>Delivery Date</label><input type="date" name="delivery_date"></div>
-        <div class="full"><button class="btn" type="submit">Create Job Order</button></div>
-      </div>
-    </form>
+    <a class="btn" href="/jobcard/new" style="font-size:15px;font-weight:800;padding:12px 20px;background:#16a34a;color:#fff;text-decoration:none;display:inline-flex;gap:8px;align-items:center">🆕 ADVANCED JOB CARD →</a>
+    <p class="muted small" style="margin-top:8px">Naya advanced format: <b>Party → Board Type → Priority</b> → Product select karte hi saare details (single PCB size, panel size, panels/sheet side-wise, PCB/panel + PCB/sheet) → <b>QTY dalte hi auto calculation</b> (panels, sheets, total value — cut list ki tarah) → Sheet material + thickness dropdown → Employee instructions → Create.</p>
   </div>
 </div>
 {% endif %}
@@ -58,7 +26,7 @@
       <button class="btn btn-outline btn-sm" type="submit">Search</button>
     </form>
     {% if current_user_role == 'admin' %}
-    <a class="btn" href="/orders?add=1">＋ New Job Order</a>
+    <a class="btn" href="/jobcard/new" style="background:#16a34a;color:#fff;font-weight:800">🆕 New Job Card</a>
     {% endif %}
   </div>
 </div>

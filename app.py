@@ -3623,7 +3623,118 @@ def prep_jobcard(order_id):
     cur_status = cur_row["status"] if cur_row else ("done" if cur_name == "completed" else "pending")
     order = dict(order)
     order["cur_status"] = cur_status
+    # QTY OF PANEL auto-fallback: DB me 0 ho par order qty + pcs/panel available ho to
+    # display/print ke liye ceil(qty ÷ pcs/panel) dikhao (save hote hi DB me bhi save hoga)
+    if not (jc.get("qty_panel") or 0) and (jc.get("pcs_panel") or 0) > 0 and (order.get("qty") or 0) > 0:
+        jc = dict(jc)
+        jc["qty_panel"] = math.ceil(order["qty"] / jc["pcs_panel"])
     return order, jc, procs
+
+
+@app.route("/jobcard/new", methods=["GET", "POST"])
+@login_required
+def jobcard_new():
+    """🆕 ADVANCED JOB CARD creation — party → board → priority → product select par
+    saare details (PCB size, panel size, panels/sheet side-wise, PCB/panel+sheet) →
+    QTY par cut-list jaisi live calculation → sheet material + thickness dropdown →
+    extra instructions → create."""
+    parties = [p["name"] for p in db.query("SELECT name FROM parties ORDER BY name")]
+    models = db.query("SELECT * FROM product_models ORDER BY name")
+    inv_items = db.query("SELECT * FROM inventory ORDER BY CASE WHEN stock<=min_stock THEN 0 ELSE 1 END, category, name")
+    thicknesses = [r["thickness"] for r in db.query(
+        "SELECT DISTINCT thickness FROM thickness_rates WHERE thickness!='' ORDER BY thickness")]
+    if request.method == "POST":
+        f = request.form
+        party = f.get("party", "").strip()
+        if not party:
+            flash("Party name daalo.", "error")
+            return redirect_with_token(url_for("jobcard_new"))
+        pmodel = None
+        if (f.get("product_id") or "").isdigit() and int(f.get("product_id") or 0) > 0:
+            pmodel = db.query("SELECT * FROM product_models WHERE id=?",
+                              (int(f.get("product_id")),), one=True)
+        qty_pcs = int(f.get("qty", 0) or 0)
+        party_model = pmodel["name"] if pmodel else ""
+        model_code = (pmodel["model_code"] or "") if pmodel else ""
+        prod_display = f"{party_model} - {model_code}".strip(" -") if pmodel else ""
+        product_str = f"{prod_display} · {qty_pcs} pcs" if prod_display else ""
+        # --- auto calculation (CUT LIST jaisi): sheet size + kerf se har side ke panels ---
+        # jaise 400(1200)×3 · 250(1000)×4 → 12 panels/sheet
+        pcs_panel = int(pmodel["pcs_panel"] or 0) if pmodel else 0
+        px0 = (pmodel["cutting_len"] or pmodel["panel_len"] or 0) if pmodel else 0
+        py0 = (pmodel["cutting_w"] or pmodel["panel_w"] or 0) if pmodel else 0
+        sheet_len = float(f.get("sheet_len", 0) or 0) or (
+            float(pmodel["sheet_len"] or 0) if pmodel else 0)
+        sheet_w = float(f.get("sheet_w", 0) or 0) or (
+            float(pmodel["sheet_w"] or 0) if pmodel else 0)
+        kfx = float(pmodel["kerf_x"] or 0) if pmodel else 0
+        kfy = float(pmodel["kerf_y"] or 0) if pmodel else 0
+        x_qty = (math.floor((sheet_len + kfx) / (px0 + kfx))
+                 if px0 > 0 and sheet_len > 0 else (int(pmodel["x_qty"] or 0) if pmodel else 0))
+        y_qty = (math.floor((sheet_w + kfy) / (py0 + kfy))
+                 if py0 > 0 and sheet_w > 0 else (int(pmodel["y_qty"] or 0) if pmodel else 0))
+        panels_per_sheet = (x_qty * y_qty) or (int(pmodel["panels_sheet"] or 0) if pmodel else 0)
+        qty_panel = math.ceil(qty_pcs / pcs_panel) if pcs_panel and qty_pcs else 0
+        sheets = math.ceil(qty_panel / panels_per_sheet) if panels_per_sheet and qty_panel else 0
+        price = float(f.get("value", 0) or 0) or (float(pmodel["pcb_price"] or 0) if pmodel else 0)
+        rs_pcb = float(pmodel["per_sq_inch"] or 0) if pmodel else 0
+        board_type = f.get("board_type", "Single Side").strip()
+        board_side = ("SINGLE SIDE" if "SINGLE" in board_type.upper() else
+                      ("DOUBLE SIDE" if "DOUBLE" in board_type.upper() else board_type.upper()))
+        sheet_material = f.get("sheet_material", "").strip()
+        thickness = f.get("sheet_thickness", "").strip()
+        instructions = f.get("instructions", "").strip()
+        delivery_date = f.get("delivery_date", "")
+        priority = f.get("priority", "normal")
+        # board_material auto-map (process flow ke liye): METAL naam me -> METAL CORE
+        board_material = ""
+        if sheet_material:
+            board_material = ("METAL CORE PCB (META)" if any(
+                w in sheet_material.upper() for w in ("METAL", "ALUMIN", "ALU"))
+                else "FR4/CEM-1/FR1/XPC/OTHER")
+        count = db.query("SELECT COUNT(*) c FROM orders", one=True)["c"]
+        new_id = db.execute(
+            "INSERT INTO orders (order_no, party, board, product, qty, value, current_process, "
+            "status, progress, priority, delivery_date, operator, started_qty, finished_qty, "
+            "created_on, qty_panel, pcs_panel) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            (f"#{count + 1}", party, board_type, product_str, qty_pcs, round(price * qty_pcs, 2),
+             PROCESS_STEPS[0], "pending", 0, priority, delivery_date, "", 0, 0,
+             datetime.date.today().isoformat(), qty_panel, pcs_panel))
+        today = datetime.date.today().isoformat()
+        if pmodel:
+            px = pmodel["cutting_len"] or pmodel["panel_len"] or 0
+            py = pmodel["cutting_w"] or pmodel["panel_w"] or 0
+            vgr = ""
+            if (pmodel["pcb_len"] or 0) > 0 and (pmodel["pcb_w"] or 0) > 0:
+                vgr = f"{float(pmodel['pcb_len']):g}×{float(pmodel['pcb_w']):g}"
+            db.execute(
+                "INSERT OR IGNORE INTO jobcard (order_id, party_model, model, odate, exp_delivery, "
+                "price, rs_pcb, total_qty, actual_pcb_x, actual_pcb_y, x_size, y_size, x_qty, y_qty, "
+                "cnc_margin_x, cnc_margin_y, panel_x, panel_y, panels_per_sheet, sheets, pcs_panel, "
+                "qty_panel, sheet_len, sheet_w, board_type, board_side, board_material, sheet_material, "
+                "sheet_thickness, instructions, v_grooving) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                (new_id, party_model, model_code, today, delivery_date, price, rs_pcb, qty_pcs,
+                 pmodel["pcb_len"] or 0, pmodel["pcb_w"] or 0, px, py,
+                 x_qty, y_qty,
+                 pmodel["cnc_margin_x"] or 0, pmodel["cnc_margin_y"] or 0,
+                 px, py, panels_per_sheet, sheets, pcs_panel, qty_panel,
+                 sheet_len, sheet_w,
+                 board_type, board_side, board_material, sheet_material,
+                 thickness if thickness else (pmodel["sheet_thickness"] or ""),
+                 instructions, vgr))
+        else:
+            db.execute(
+                "INSERT OR IGNORE INTO jobcard (order_id, party_model, odate, exp_delivery, price, "
+                "total_qty, qty_panel, pcs_panel, sheets, board_type, board_side, sheet_material, "
+                "sheet_thickness, instructions) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                (new_id, "", today, delivery_date, price, qty_pcs, qty_panel, pcs_panel, sheets,
+                 board_type, board_side, sheet_material, thickness, instructions))
+        flash(f"Job card #{count + 1} create ho gaya ✅ — ab details verify karo.", "success")
+        return redirect_with_token(url_for("jobcard", order_id=new_id))
+    return render_template("jobcard_new.html", active="orders", parties=parties, models=models,
+                           inv_items=inv_items, thicknesses=thicknesses,
+                           today=datetime.date.today().isoformat())
 
 
 @app.route("/jobcard/<int:order_id>")
@@ -3634,6 +3745,11 @@ def jobcard(order_id):
         flash("Order not found.", "error")
         return redirect_with_token(url_for("orders"))
     qty_pcs = order["qty"]
+    # QTY OF PANEL display default: saved nahi hai to selected model ke pcs/panel se nikaalo
+    qty_panel_disp = 0
+    bmodel_early = db.query("SELECT * FROM product_models WHERE name=?", (jc["party_model"],), one=True)
+    if not (jc["qty_panel"] or 0) and bmodel_early and (bmodel_early["pcs_panel"] or 0) > 0 and qty_pcs > 0:
+        qty_panel_disp = math.ceil(qty_pcs / bmodel_early["pcs_panel"])
     jc_logs = db.query("SELECT * FROM jobcard_log WHERE order_id=? ORDER BY id DESC LIMIT 15", (order_id,))
     dispatch_logs = db.query("SELECT * FROM dispatch_log WHERE order_id=? ORDER BY id DESC", (order_id,))
     dispatch = dispatch_logs[0] if dispatch_logs else None
@@ -3675,10 +3791,13 @@ def jobcard(order_id):
     worker_names = [r["name"] for r in db.query("SELECT name FROM employees ORDER BY name")]
     machines = db.query("SELECT * FROM machines ORDER BY code")
     all_employees = db.query("SELECT * FROM employees WHERE status='active' ORDER BY name")
+    thicknesses = [r["thickness"] for r in db.query(
+        "SELECT DISTINCT thickness FROM thickness_rates WHERE thickness!='' ORDER BY thickness")]
     return render_template("jobcard.html", active="orders", order=order, jc=jc, procs=procs,
                            machines=machines, all_employees=all_employees,
                            flat_next=db.all_process_options(),
-                           qty_pcs=qty_pcs, models=models, proc_label=proc_label, jc_logs=jc_logs,
+                           thicknesses=thicknesses,
+                           qty_pcs=qty_pcs, qty_panel_disp=qty_panel_disp, models=models, proc_label=proc_label, jc_logs=jc_logs,
                            procs_started=procs_started,
                            dispatch=dispatch, dispatch_logs=dispatch_logs,
                            inv_items=inv_items, inv_names=inv_names,
@@ -3726,10 +3845,20 @@ def jobcard_update(order_id):
             rm_val = chr(10).join(rm_lines) if rm_lines else ""
     for k in ["party_model", "model", "odate", "created_by", "checked_by", "order_via",
               "exp_delivery", "payment_status", "sheet_material", "copper_finish", "masking", "finish",
-              "legend_printing", "pcb_type", "v_grooving", "customer_req", "short_reason",
-              "handover_sign"]:
+              "legend_printing", "pcb_type", "customer_req", "short_reason",
+              "sheet_thickness", "instructions", "handover_sign"]:
         sets.append(f"{k}=?")
         vals.append(f.get(k, "").strip())
+    # V-GROOVING auto: khaali chhoda to selected finished product ke SINGLE PCB size se bhar do
+    vgr = f.get("v_grooving", "").strip()
+    if not vgr:
+        bm = db.query("SELECT * FROM product_models WHERE name=?", (party_model,), one=True)
+        if bm:
+            _pl, _pw = _jc_num(bm.get("pcb_len")), _jc_num(bm.get("pcb_w"))
+            if _pl > 0 and _pw > 0:
+                vgr = f"{_pl:g}×{_pw:g}"
+    sets.append("v_grooving=?")
+    vals.append(vgr)
     sets.append("raw_materials=?")
     vals.append(rm_val)
     for k in ["price", "rs_pcb"]:
@@ -3739,10 +3868,24 @@ def jobcard_update(order_id):
               "panel_x", "panel_y", "sheet_len", "sheet_w"]:
         sets.append(f"{k}=?")
         vals.append(_jc_num(f.get(k)))
-    for k in ["x_qty", "y_qty", "panels_per_sheet", "sheets", "qty_panel", "pcs_panel",
+    for k in ["x_qty", "y_qty", "panels_per_sheet", "sheets",
               "total_qty", "short_qty"]:
         sets.append(f"{k}=?")
         vals.append(int(f.get(k, 0) or 0))
+    # PCS/PANEL auto: form me khaali ho to selected finished product se le lo
+    pcs_panel = int(f.get("pcs_panel", 0) or 0)
+    if not pcs_panel:
+        _bm3 = db.query("SELECT * FROM product_models WHERE name=?", (party_model,), one=True)
+        if _bm3:
+            pcs_panel = int(_bm3.get("pcs_panel") or 0)
+    sets.append("pcs_panel=?")
+    vals.append(pcs_panel)
+    # QTY OF PANEL auto: user ne nahi bhara to order qty ÷ pcs/panel se khud nikaalo
+    qty_panel = int(f.get("qty_panel", 0) or 0)
+    if not qty_panel and pcs_panel > 0 and qty_pcs > 0:
+        qty_panel = math.ceil(qty_pcs / pcs_panel)
+    sets.append("qty_panel=?")
+    vals.append(qty_panel)
 
     # ---- stock maintenance: sheet material stock list se utha aur stock adjust karo ----
     def _inv_by_name(name):
