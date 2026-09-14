@@ -353,35 +353,41 @@ function recalc(){
   var capP = document.getElementById('caPanels'), capPps = document.getElementById('caPps'),
       capS = document.getElementById('caSheets'),
       capT = document.getElementById('caTotalPcs'), capV = document.getElementById('caValue');
+  var subP = document.getElementById('caPanelsSub'), subPps = document.getElementById('caPpsSub'),
+      subS = document.getElementById('caSheetsSub'), subT = document.getElementById('caTotalPcsSub'),
+      subV = document.getElementById('caValueSub');
   if (qty > 0 && p > 0) {
     capP.textContent = panels + ' PANELS';
-    capP.closest('div').querySelector('.small').innerHTML = 'Qty ' + qty + ' ÷ ' + p + ' PCS/panel';
+    if (subP) subP.innerHTML = 'Qty ' + qty + ' ÷ ' + p + ' PCS/panel';
   } else {
-    capP.textContent = '—'; capP.closest('div').querySelector('.small').innerHTML = '';
+    capP.textContent = '—'; if (subP) subP.innerHTML = '';
   }
   if (C.pps > 0) {
     capPps.textContent = C.pps + ' PANELS';
-    capPps.closest('div').querySelector('.small').innerHTML = C.xq + ' × ' + C.yq + ' (sheet ' + C.sl + '×' + C.sw + ')';
+    if (subPps) subPps.innerHTML = C.xq + ' × ' + C.yq + ' (sheet ' + C.sl + '×' + C.sw + ')';
   } else {
-    capPps.textContent = '—'; capPps.closest('div').querySelector('.small').innerHTML = '';
+    capPps.textContent = '—'; if (subPps) subPps.innerHTML = '';
   }
   if (panels > 0 && C.pps > 0) {
     capS.textContent = sheets + ' SHEETS';
-    capS.closest('div').querySelector('.small').innerHTML = panels + ' panels ÷ ' + C.pps + ' panels/sheet';
+    if (subS) subS.innerHTML = panels + ' panels ÷ ' + C.pps + ' panels/sheet';
   } else {
-    capS.textContent = '—'; capS.closest('div').querySelector('.small').innerHTML = '';
+    capS.textContent = '—'; if (subS) subS.innerHTML = '';
   }
   if (sheets > 0 && pcsSheet > 0) {
     capT.textContent = (sheets * pcsSheet) + ' PCS';
-    capT.closest('div').querySelector('.small').innerHTML = sheets + ' sheets × ' + pcsSheet + ' PCS/sheet';
+    if (subT) subT.innerHTML = sheets + ' sheets × ' + pcsSheet + ' PCS/sheet';
   } else {
-    capT.textContent = '—'; capT.closest('div').querySelector('.small').innerHTML = '';
+    capT.textContent = '—'; if (subT) subT.innerHTML = '';
   }
+  /* TOTAL VALUE: price na ho to per-sq-inch × PCB area se estimate */
+  if (!price && selM.rs > 0 && selM.pcbx > 0 && selM.pcby > 0)
+    price = Math.round(selM.rs * (selM.pcbx / 25.4) * (selM.pcby / 25.4) * 100) / 100;
   if (qty > 0 && price > 0) {
     capV.textContent = '₹' + (qty * price).toLocaleString('en-IN', {maximumFractionDigits: 2});
-    capV.closest('div').querySelector('.small').innerHTML = qty + ' × ₹' + price + '/pc';
+    if (subV) subV.innerHTML = qty + ' × ₹' + price + '/pc';
   } else {
-    capV.textContent = '—'; capV.closest('div').querySelector('.small').innerHTML = '';
+    capV.textContent = '—'; if (subV) subV.innerHTML = '';
   }
   /* CALCULATION CHAIN + SHEET VISUAL */
   var chainEl = document.getElementById('caChain');
