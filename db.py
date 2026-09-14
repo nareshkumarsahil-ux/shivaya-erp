@@ -15,7 +15,7 @@ import http.client
 import urllib.parse
 
 # Schema version — bump karo jab SCHEMA/migrate badle, taaki agla deploy tables update kare.
-SCHEMA_VERSION = "2026-09-12.3"
+SCHEMA_VERSION = "2026-09-12.4"
 
 DB_PATH = os.environ.get("DB_PATH") or (
     os.path.join(tempfile.gettempdir(), "circuit.db") if os.environ.get("VERCEL") else "circuit.db"
@@ -307,6 +307,7 @@ CREATE TABLE IF NOT EXISTS product_models (
     party TEXT DEFAULT '', note TEXT DEFAULT '',
     pcb_price REAL DEFAULT 0, per_sq_inch REAL DEFAULT 0,
     sheet_thickness TEXT DEFAULT '',
+    gaps_x TEXT DEFAULT '', gaps_y TEXT DEFAULT '',
     attachment_name TEXT DEFAULT '', attachment_mime TEXT DEFAULT '', attachment_data TEXT DEFAULT '',
     order_id INTEGER,
     created_on TEXT DEFAULT ''
@@ -780,6 +781,10 @@ def migrate(conn):
         conn.execute("ALTER TABLE product_models ADD COLUMN per_sq_inch REAL DEFAULT 0")
     if pcols and "sheet_thickness" not in pcols:
         conn.execute("ALTER TABLE product_models ADD COLUMN sheet_thickness TEXT DEFAULT ''")
+    if pcols and "gaps_x" not in pcols:
+        conn.execute("ALTER TABLE product_models ADD COLUMN gaps_x TEXT DEFAULT ''")
+    if pcols and "gaps_y" not in pcols:
+        conn.execute("ALTER TABLE product_models ADD COLUMN gaps_y TEXT DEFAULT ''")
     # PRICE HISTORY columns (sheet thickness price ke saath)
     phcols = [r[1] for r in conn.execute("PRAGMA table_info(price_history)")]
     if phcols and "sheet_thickness" not in phcols:

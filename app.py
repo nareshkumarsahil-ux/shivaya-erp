@@ -249,14 +249,14 @@ def dashboard():
         ("SELECT COUNT(*) c FROM machines", ()),
     ]
     if q:
-        sqls.append(("SELECT * FROM orders WHERE status IN ('pending','done') AND (order_no LIKE ? OR party LIKE ? OR product LIKE ?) "
-                     "ORDER BY CASE status WHEN 'pending' THEN 0 ELSE 1 END, id DESC LIMIT 4",
+        sqls.append(("SELECT * FROM orders WHERE status IN ('pending','hold','running','done') AND (order_no LIKE ? OR party LIKE ? OR product LIKE ?) "
+                     "ORDER BY CASE status WHEN 'pending' THEN 0 WHEN 'hold' THEN 1 WHEN 'running' THEN 2 ELSE 3 END, id DESC LIMIT 4",
                      (f"%{q}%", f"%{q}%", f"%{q}%")))
     else:
-        sqls.append(("SELECT * FROM orders WHERE status IN ('pending','done') "
-                     "ORDER BY CASE status WHEN 'pending' THEN 0 ELSE 1 END, id DESC LIMIT 4", ()))
-    sqls.append(("SELECT * FROM orders WHERE status IN ('pending','done') "
-                 "ORDER BY CASE status WHEN 'pending' THEN 0 ELSE 1 END, id DESC LIMIT 4", ()))
+        sqls.append(("SELECT * FROM orders WHERE status IN ('pending','hold','running','done') "
+                     "ORDER BY CASE status WHEN 'pending' THEN 0 WHEN 'hold' THEN 1 WHEN 'running' THEN 2 ELSE 3 END, id DESC LIMIT 4", ()))
+    sqls.append(("SELECT * FROM orders WHERE status IN ('pending','hold','running','done') "
+                 "ORDER BY CASE status WHEN 'pending' THEN 0 WHEN 'hold' THEN 1 WHEN 'running' THEN 2 ELSE 3 END, id DESC LIMIT 4", ()))
     sqls.append(("SELECT * FROM purchase_orders WHERE status!='received' ORDER BY id DESC LIMIT 3", ()))
 
     rows = db.multi(sqls)
@@ -319,8 +319,11 @@ def tracking_move(order_id):
     operator = request.form.get("operator", "").strip() or session.get("user_name", "")
     progress = int(request.form.get("progress", 0) or 0)
     if next_step:
+        _started = db.query("SELECT COUNT(*) c FROM jobcard_process WHERE order_id=? AND start_dt!='' AND end_dt=''",
+                            (order_id,), one=True)
+        _st = "done" if next_step == "Completed" else ("running" if (_started["c"] or 0) > 0 else "pending")
         db.execute("UPDATE orders SET current_process=?, operator=?, progress=?, status=? WHERE id=?",
-                   (next_step, operator, max(order["progress"], progress), "done" if next_step == "Completed" else "pending", order_id))
+                   (next_step, operator, max(order["progress"], progress), _st, order_id))
         db.execute("UPDATE process_log SET status='done' WHERE order_id=? AND process=?", (order_id, order["current_process"]))
         db.execute("INSERT INTO process_log (order_id, process, status, operator, updated_on) VALUES (?,?,?,?,?)",
                    (order_id, next_step, "done" if next_step == "Completed" else "active", operator,
@@ -490,11 +493,20 @@ def orders():
             qp = math.ceil((r["qty"] or 0) / pp)
         return qp, pp
 
+    def _is_held(oid, proc):
+        if not proc or proc.lower() == "completed":
+            return False
+        last = db.query("SELECT action FROM jobcard_log WHERE order_id=? AND process=? "
+                        "ORDER BY id DESC LIMIT 1", (oid, proc), one=True)
+        return bool(last and last["action"] == "pause")
+
     cols = [[] for _ in KANBAN_COLS]
     for r in rows:
         r = dict(r)
         r["disp"] = dmap.get(r["id"])
         r["cur_proc"], r["cur_status"] = _jc_status(r)
+        if r["cur_status"] != "done" and _is_held(r["id"], r["cur_proc"]):
+            r["cur_status"] = "hold"
         r["qty_panel"], r["pcs_panel"] = _panel_info(r)
         cols[kanban_col(r["current_process"])].append(r)
     done = [dict(r) for r in done_rows]
@@ -576,7 +588,7 @@ FIELD_KEYS = ["pcb_len", "pcb_w", "pcbs_x", "pcbs_y", "gap_x", "gap_y",
               "border_l", "border_r", "border_t", "border_b",
               "gang_x", "gang_y", "sheet_len", "sheet_w", "kerf_x", "kerf_y", "sheets", "use",
               "panel_len", "panel_w", "panel_base_len", "panel_base_w",
-              "per_sq_inch", "pcb_price"]
+              "per_sq_inch", "pcb_price", "gaps_x", "gaps_y"]
 DEFAULTS = {"pcb_len": "40", "pcb_w": "50", "pcbs_x": "10", "pcbs_y": "5",
             "gap_x": "0", "gap_y": "0",
             "border_l": "0", "border_r": "0", "border_t": "5", "border_b": "5",
@@ -599,6 +611,25 @@ def _i(d, k, default=0):
         return int(float(d.get(k) or 0))
     except (ValueError, TypeError):
         return default
+
+
+def _parse_gaps(val, n, default):
+    """PCB-to-PCB gaps — HAR boundary ka apna gap (comma separated: '0,2.4,0').
+    n = kitne boundaries chahiye (pcbs-1). Khali/kam values -> default gap se pad.
+    Isse har pcb ke beech alag gap rakh sakte ho (jaise 1-2 me 0, 2-3 me 2.4...)."""
+    n = max(0, n)
+    out = []
+    if val:
+        for part in str(val).split(","):
+            try:
+                out.append(max(0.0, float(part.strip())))
+            except ValueError:
+                out.append(default)
+            if len(out) >= n:
+                break
+    while len(out) < n:
+        out.append(default)
+    return out[:n]
 
 
 def compute_layout(p):
@@ -624,18 +655,22 @@ def compute_layout(p):
         return None
 
     # --- single panel size: locked (computed from PCB builder) or manual ---
-    # PC to PC gap: X=40, 3 jodne par beech me 2 gaps -> 40+2.4+40+2.4+40 = 124.8
+    # HAR PCB-to-PCB boundary ka apna gap (gaps_x/gaps_y) — kahin 0, kahin gap
+    gaps_x = _parse_gaps(p.get("gaps_x"), pcbs_x - 1, gap_x)
+    gaps_y = _parse_gaps(p.get("gaps_y"), pcbs_y - 1, gap_y)
     if use_locked or panel_len_in <= 0 or panel_w_in <= 0:
-        panel_len = pcb_len * pcbs_x + gap_x * (pcbs_x - 1) + border_l + border_r
-        panel_w = pcb_w * pcbs_y + gap_y * (pcbs_y - 1) + border_t + border_b
+        panel_len = pcb_len * pcbs_x + sum(gaps_x) + border_l + border_r
+        panel_w = pcb_w * pcbs_y + sum(gaps_y) + border_t + border_b
         locked = True
     else:
         panel_len, panel_w = panel_len_in, panel_w_in
         locked = False
 
     pcs_panel = pcbs_x * pcbs_y
-    formula = (f"({pcb_len:g}x{pcbs_x} +{gap_x:g}x{pcbs_x - 1} gap +{border_l:g}+{border_r:g} border={panel_len:g}mm, "
-               f"{pcb_w:g}x{pcbs_y} +{gap_y:g}x{pcbs_y - 1} gap +{border_t:g}+{border_b:g} border={panel_w:g}mm)")
+    gx_str = "+".join(f"{g:g}" for g in gaps_x) if len(set(gaps_x)) > 1 else f"{gaps_x[0]:g}x{len(gaps_x)}" if gaps_x else "0"
+    gy_str = "+".join(f"{g:g}" for g in gaps_y) if len(set(gaps_y)) > 1 else f"{gaps_y[0]:g}x{len(gaps_y)}" if gaps_y else "0"
+    formula = (f"({pcb_len:g}x{pcbs_x} + gap[{gx_str}] +{border_l:g}+{border_r:g} border={panel_len:g}mm, "
+               f"{pcb_w:g}x{pcbs_y} + gap[{gy_str}] +{border_t:g}+{border_b:g} border={panel_w:g}mm)")
 
     # --- gang / cutting size ---
     # Multiplier active ho to PANEL fields mein CUTTING SIZE dikhta hai (screenshot jaisa).
@@ -713,6 +748,7 @@ def compute_layout(p):
     return {
         "pcb_len": pcb_len, "pcb_w": pcb_w, "pcbs_x": pcbs_x, "pcbs_y": pcbs_y,
         "gap_x": gap_x, "gap_y": gap_y,
+        "gaps_x": gaps_x, "gaps_y": gaps_y,
         "border_l": border_l, "border_r": border_r, "border_t": border_t, "border_b": border_b,
         "gang_x": gang_x, "gang_y": gang_y,
         "sheet_len": sheet_len, "sheet_w": sheet_w, "kerf_x": kerf_x, "kerf_y": kerf_y, "sheets": sheets,
@@ -748,25 +784,33 @@ def svg_panel_preview(r):
     cw, ch = r["pcb_len"] * scale, r["pcb_w"] * scale
     gxs, gys = r["gap_x"] * scale, r["gap_y"] * scale
     bx, by = r["border_l"] * scale, r["border_t"] * scale
+    gaps_x_s = r.get("gaps_x") or [r["gap_x"]] * max(0, r["pcbs_x"] - 1)
+    gaps_y_s = r.get("gaps_y") or [r["gap_y"]] * max(0, r["pcbs_y"] - 1)
     s = [f'<svg viewBox="0 0 {W} {H}" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;display:block">']
     for a in range(gx):
         for b in range(gy):
             xp, yp = x0 + a * (P + Kx), y0 + b * (Q + Ky)
             s.append(f'<rect x="{xp:.1f}" y="{yp:.1f}" width="{P:.1f}" height="{Q:.1f}" fill="#fdf3df" stroke="#d97706" stroke-width="2" rx="3"/>')
             if cw > 2.4 and ch > 2.4:
+                # HAR boundary ka apna gap — positions accumulate karte hain
+                ox = bx
                 for i in range(r["pcbs_x"]):
+                    oy = by
                     for j in range(r["pcbs_y"]):
-                        s.append(f'<rect x="{xp + bx + i * (cw + gxs):.1f}" y="{yp + by + j * (ch + gys):.1f}" width="{cw:.1f}" height="{ch:.1f}" fill="#fbbf24" fill-opacity="0.5" stroke="#f59e0b" stroke-width="0.8"/>')
+                        s.append(f'<rect x="{xp + ox:.1f}" y="{yp + oy:.1f}" width="{cw:.1f}" height="{ch:.1f}" fill="#fbbf24" fill-opacity="0.5" stroke="#f59e0b" stroke-width="0.8"/>')
+                        oy += ch + (gaps_y_s[j] * scale if j < len(gaps_y_s) else gys)
+                    if i < r["pcbs_x"] - 1:
+                        ox += cw + (gaps_x_s[i] * scale if i < len(gaps_x_s) else gxs)
                 if r["border_l"] or r["border_r"] or r["border_t"] or r["border_b"]:
-                    cw2 = r["pcbs_x"] * cw + (r["pcbs_x"] - 1) * gxs
-                    ch2 = r["pcbs_y"] * ch + (r["pcbs_y"] - 1) * gys
+                    cw2 = r["pcbs_x"] * cw + sum(gaps_x_s) * scale
+                    ch2 = r["pcbs_y"] * ch + sum(gaps_y_s) * scale
                     s.append(f'<rect x="{xp + bx:.1f}" y="{yp + by:.1f}" width="{cw2:.1f}" height="{ch2:.1f}" fill="none" stroke="#9a8a5a" stroke-width="1" stroke-dasharray="4 3"/>')
     if gx > 1 or gy > 1:
         s.append(f'<rect x="{x0:.1f}" y="{y0:.1f}" width="{GL:.1f}" height="{GW:.1f}" fill="none" stroke="#16a34a" stroke-width="1.8" stroke-dasharray="6 4" rx="5"/>')
         pcs_gang = r["pcs_panel"] * gx * gy
         s.append(f'<text x="{x0 + GL/2:.0f}" y="{y0 - 6:.1f}" text-anchor="middle" font-size="11" fill="#16a34a" font-family="Segoe UI,Arial">TOTAL WITH MULTIPLIER: {gl:.2f}\u00d7{gw:.2f} mm \u00b7 {pcs_gang} PCS ({gx}\u00d7{gy} + kerf)</text>')
-    if (gxs > 0.1 or gys > 0.1) and Q > 24:
-        s.append(f'<text x="{x0 + P/2:.0f}" y="{y0 + Q - 10:.1f}" text-anchor="middle" font-size="10" fill="#b45309" font-family="Segoe UI,Arial">gap {r["gap_x"]:.2f}\u00d7{r["gap_y"]:.2f} mm</text>')
+    if (sum(gaps_x_s) > 0.1 or sum(gaps_y_s) > 0.1) and Q > 24:
+        s.append(f'<text x="{x0 + P/2:.0f}" y="{y0 + Q - 10:.1f}" text-anchor="middle" font-size="10" fill="#b45309" font-family="Segoe UI,Arial">gap X: {sum(gaps_x_s):.2f} / Y: {sum(gaps_y_s):.2f} mm</text>')
     lbl = f'Panel {pl:.2f}\u00d7{pw:.2f} mm \u00b7 {r["pcs_panel"]} PCBs ({r["pcbs_x"]}\u00d7{r["pcbs_y"]})'
     if gx > 1 or gy > 1:
         pcs_gang = r["pcs_panel"] * gx * gy
@@ -918,7 +962,7 @@ def cutlist():
                         "border_l=?, border_r=?, border_t=?, border_b=?, gang_x=?, gang_y=?, sheet_len=?, sheet_w=?, "
                         "panel_len=?, panel_w=?, cutting_len=?, cutting_w=?, kerf_x=?, kerf_y=?, orientation=?, "
                         "pcs_panel=?, panels_sheet=?, sheets=?, x_qty=?, y_qty=?, cnc_margin_x=?, cnc_margin_y=?, "
-                        "pcb_price=?, per_sq_inch=? WHERE id=?",
+                        "pcb_price=?, per_sq_inch=?, gaps_x=?, gaps_y=? WHERE id=?",
                         (name, result["pcb_len"], result["pcb_w"], result["pcbs_x"], result["pcbs_y"],
                          result["gap_x"], result["gap_y"],
                          result["border_l"], result["border_r"], result["border_t"], result["border_b"],
@@ -928,7 +972,9 @@ def cutlist():
                          result["best"], result["pcs_panel"], result["panels_per_sheet"], result["sheets"],
                          result["grid_x"], result["grid_y"],
                          result["border_l"], result["border_t"],
-                         up_price, up_rs, model["id"]))
+                         up_price, up_rs,
+                         ",".join(f"{g:g}" for g in result["gaps_x"]),
+                         ",".join(f"{g:g}" for g in result["gaps_y"]), model["id"]))
                     flash(f"Model '{name}' updated — saari cut list details + price save ho gayi.", "success")
                 else:
                     flash("Select a valid finished product.", "error")
@@ -939,8 +985,8 @@ def cutlist():
                     "INSERT INTO product_models (name, pcb_len, pcb_w, pcbs_x, pcbs_y, gap_x, gap_y, border_l, "
                     "border_r, border_t, border_b, gang_x, gang_y, sheet_len, sheet_w, panel_len, panel_w, "
                     "cutting_len, cutting_w, kerf_x, kerf_y, orientation, pcs_panel, panels_sheet, sheets, "
-                    "x_qty, y_qty, cnc_margin_x, cnc_margin_y, pcb_price, per_sq_inch, created_on) "
-                    "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    "x_qty, y_qty, cnc_margin_x, cnc_margin_y, pcb_price, per_sq_inch, gaps_x, gaps_y, created_on) "
+                    "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                     (name, result["pcb_len"], result["pcb_w"], result["pcbs_x"], result["pcbs_y"],
                      result["gap_x"], result["gap_y"],
                      result["border_l"], result["border_r"], result["border_t"], result["border_b"],
@@ -951,6 +997,8 @@ def cutlist():
                      result["grid_x"], result["grid_y"],
                      result["border_l"], result["border_t"],
                      pm_price or 0, pm_rs or 0,
+                     ",".join(f"{g:g}" for g in result["gaps_x"]),
+                     ",".join(f"{g:g}" for g in result["gaps_y"]),
                      datetime.date.today().isoformat()))
                 flash(f"Model '{name}' saved to Finished Products (price ke saath).", "success")
             else:
@@ -2804,6 +2852,17 @@ def advance_current(order_id):
         if ddrow and ddrow["process"] != current:
             db.execute("UPDATE jobcard_process SET process=? WHERE id=?", (current, ddrow["id"]))
     db.execute("UPDATE orders SET current_process=? WHERE id=?", (current, order_id))
+    # LIVE STATUS: sab done -> done; koi process chalu (started, not finished) -> running.
+    # Kuch started nahi hai to status waise hi rehne do (pending/scheduled) — downgrade nahi.
+    if current == "Completed":
+        db.execute("UPDATE orders SET status='done' WHERE id=?", (order_id,))
+    else:
+        running = db.query("SELECT COUNT(*) c FROM jobcard_process "
+                           "WHERE order_id=? AND start_dt!='' AND end_dt=''",
+                           (order_id,), one=True)
+        if (running["c"] or 0) > 0:
+            db.execute("UPDATE orders SET status='running' WHERE id=? AND status NOT IN ('done')",
+                       (order_id,))
     return current
 
 
@@ -2971,14 +3030,20 @@ def operator_action():
                    (now, op, row["id"]))
         db.execute("INSERT INTO jobcard_log (order_id, process, action, operator, ts) VALUES (?,?,?,?,?)",
                    (order_id, process, "start", op, now))
+        # STATUS -> RUNNING: dashboard + live process tracking me bhi dikhe
+        db.execute("UPDATE orders SET status='running' WHERE id=? AND status NOT IN ('done')", (order_id,))
         flash(f"Started: {process} — START {now} job card mein save ho gaya.", "success")
     elif action == "pause":
         db.execute("INSERT INTO jobcard_log (order_id, process, action, operator, reason, details, ts) VALUES (?,?,?,?,?,?,?)",
                    (order_id, process, "pause", op, reason, details, now))
-        flash(f"Paused: {process}" + (f" — reason: {reason}" if reason else ""), "success")
+        # STATUS -> HOLD: kaam ruka hua hai — dashboard/tracking me Hold dikhe
+        db.execute("UPDATE orders SET status='hold' WHERE id=? AND status NOT IN ('done')", (order_id,))
+        flash(f"Paused: {process} — HOLD" + (f" — reason: {reason}" if reason else ""), "success")
     elif action == "resume":
         db.execute("INSERT INTO jobcard_log (order_id, process, action, operator, ts) VALUES (?,?,?,?,?)",
                    (order_id, process, "resume", op, now))
+        # STATUS -> RUNNING wapas
+        db.execute("UPDATE orders SET status='running' WHERE id=? AND status NOT IN ('done')", (order_id,))
         flash(f"Resumed: {process}", "success")
     elif action == "finish":
         if not row["start_dt"]:
@@ -3908,10 +3973,12 @@ def reports():
         d["qty"] = sum(r["qty"] or 0 for r in d["rows"])
         snap = db.query("SELECT COUNT(*) total, "
                         "COALESCE(SUM(CASE WHEN status='running' THEN 1 ELSE 0 END),0) running, "
+                        "COALESCE(SUM(CASE WHEN status='hold' THEN 1 ELSE 0 END),0) hold, "
                         "COALESCE(SUM(CASE WHEN status='pending' THEN 1 ELSE 0 END),0) pending, "
                         "COALESCE(SUM(CASE WHEN status='done' THEN 1 ELSE 0 END),0) done "
                         "FROM orders", one=True)
         d["active_orders"] = {"total": snap["total"] or 0, "running": snap["running"] or 0,
+                              "hold": snap["hold"] or 0,
                               "pending": snap["pending"] or 0, "done": snap["done"] or 0}
         d["procs_done"] = db.query("SELECT COUNT(*) c FROM jobcard_process WHERE end_dt LIKE ?",
                                    (pattern,), one=True)["c"]

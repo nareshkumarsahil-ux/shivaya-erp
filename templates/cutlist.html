@@ -29,11 +29,21 @@
           <div class="field" style="flex:1"><label>PCBs Across X</label><input type="number" name="pcbs_x" id="pcbs_x" value="{{ fields.pcbs_x }}" required></div>
           <div class="field" style="flex:1"><label>PCBs Across Y</label><input type="number" name="pcbs_y" id="pcbs_y" value="{{ fields.pcbs_y }}" required></div>
         </div>
-        <div style="display:flex;gap:12px;margin-bottom:14px">
-          <div class="field" style="flex:1"><label>Gap X (PC to PC)</label><input type="number" step="0.01" name="gap_x" id="gap_x" value="{{ fields.gap_x }}"></div>
-          <div class="field" style="flex:1"><label>Gap Y (PC to PC)</label><input type="number" step="0.01" name="gap_y" id="gap_y" value="{{ fields.gap_y }}"></div>
+        <div style="display:flex;gap:12px;margin-bottom:8px">
+          <div class="field" style="flex:1"><label>Default Gap X (PC to PC)</label><input type="number" step="0.01" name="gap_x" id="gap_x" value="{{ fields.gap_x }}"></div>
+          <div class="field" style="flex:1"><label>Default Gap Y (PC to PC)</label><input type="number" step="0.01" name="gap_y" id="gap_y" value="{{ fields.gap_y }}"></div>
         </div>
-        <p class="muted small" style="margin:-6px 0 12px">💡 3 PCB X mein jodne par beech me 2 gaps: 40 + 2.4 + 40 + 2.4 + 40 = 124.8mm</p>
+        <div style="margin-bottom:6px">
+          <label class="muted small" style="display:block;margin-bottom:3px">✂️ GAPS X — har PCB ke beech apna gap (1–2, 2–3, 3–4 ...):</label>
+          <div id="gapx_cells" style="display:flex;gap:8px;flex-wrap:wrap"></div>
+        </div>
+        <div style="margin-bottom:12px">
+          <label class="muted small" style="display:block;margin-bottom:3px">✂️ GAPS Y — har PCB ke beech apna gap:</label>
+          <div id="gapy_cells" style="display:flex;gap:8px;flex-wrap:wrap"></div>
+        </div>
+        <input type="hidden" name="gaps_x" id="gaps_x" value="{{ fields.gaps_x or '' }}">
+        <input type="hidden" name="gaps_y" id="gaps_y" value="{{ fields.gaps_y or '' }}">
+        <p class="muted small" style="margin:-4px 0 12px">💡 Har box = us boundary ka gap (0 = gap nahi). Jaise: 1–2 me <b>0</b>, 2–3 me <b>2.4</b>, 3–4 me <b>0</b>. Default Gap badalne par saare boxes wahi value le lete hain — phir alag-alag bhi kar sakte ho.</p>
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px">
           <div class="field"><label>Border Left</label><input type="number" step="0.01" name="border_l" id="border_l" value="{{ fields.border_l }}"></div>
           <div class="field"><label>Border Right</label><input type="number" step="0.01" name="border_r" id="border_r" value="{{ fields.border_r }}"></div>
@@ -218,10 +228,55 @@ function fmtNum(v){
 function num(id){ var v = parseFloat(document.getElementById(id).value); return isNaN(v) ? 0 : v; }
 function intNum(id){ return Math.round(num(id)); }
 
+/* ---- per-boundary gaps: har PCB ke beech apna gap (0/2.4/0 ...) ---- */
+function gapCells(axis){
+  var el = document.getElementById('gaps_' + axis);
+  if (!el || !el.value) return [];
+  return String(el.value).split(',').map(function(x){ var v = parseFloat(x); return isNaN(v) ? 0 : v; });
+}
+function gapList(axis, n){
+  var vals = gapCells(axis), def = num('gap_' + axis), out = [];
+  for (var i = 0; i < Math.max(0, n - 1); i++) out.push(i < vals.length ? vals[i] : def);
+  return out;
+}
+function _sumArr(arr){ var s = 0; for (var i = 0; i < arr.length; i++) s += arr[i]; return s; }
+function syncGaps(axis){
+  var box = document.getElementById('gap' + axis + '_cells');
+  var vals = [];
+  box.querySelectorAll('input').forEach(function(inp){ vals.push(parseFloat(inp.value) || 0); });
+  document.getElementById('gaps_' + axis).value = vals.join(',');
+}
+function renderGapCells(){
+  ['x','y'].forEach(function(axis){
+    var box = document.getElementById('gap' + axis + '_cells');
+    var count = Math.max(1, intNum('pcbs_' + axis)) - 1;
+    var def = num('gap_' + axis);
+    var cur = gapCells(axis);
+    box.innerHTML = '';
+    for (var i = 0; i < count; i++) {
+      var v = (i < cur.length) ? cur[i] : def;
+      var w = document.createElement('span');
+      w.textContent = (i + 1) + '–' + (i + 2);
+      w.style.cssText = 'display:flex;align-items:center;font-size:11px;color:#8a8f98';
+      var inp = document.createElement('input');
+      inp.type = 'number'; inp.step = '0.01'; inp.min = '0'; inp.value = v;
+      inp.style.cssText = 'width:52px;padding:4px 6px;border:1px solid var(--border);border-radius:6px;font-size:12px';
+      inp.setAttribute('data-ax', axis);
+      inp.addEventListener('input', function(){ syncGaps(axis); computeLive(); });
+      var cell = document.createElement('span');
+      cell.style.cssText = 'display:inline-flex;align-items:center;gap:3px';
+      cell.appendChild(w); cell.appendChild(inp);
+      box.appendChild(cell);
+    }
+    syncGaps(axis);
+  });
+}
+
 function computeLive(){
   var pcbL = num('pcb_len'), pcbW = num('pcb_w');
   var px = intNum('pcbs_x'), py = intNum('pcbs_y');
   var gapX = num('gap_x'), gapY = num('gap_y');
+  var gapXs = gapList('x', px), gapYs = gapList('y', py);
   var bl = num('border_l'), br = num('border_r'), bt = num('border_t'), bb = num('border_b');
   var gx = Math.max(1, intNum('gang_x')), gy = Math.max(1, intNum('gang_y'));
   var sl = num('sheet_len'), sw = num('sheet_w');
@@ -240,8 +295,8 @@ function computeLive(){
   var pL, pW;               /* single panel size */
   var unitL, unitW;         /* cutting size = sheet fitting unit */
   if (useLocked || manualL <= 0 || manualW <= 0) {
-    pL = pcbL * px + gapX * (px - 1) + bl + br;
-    pW = pcbW * py + gapY * (py - 1) + bt + bb;
+    pL = pcbL * px + _sumArr(gapXs) + bl + br;
+    pW = pcbW * py + _sumArr(gapYs) + bt + bb;
   } else {
     pL = manualL; pW = manualW;
   }
@@ -274,10 +329,14 @@ function computeLive(){
 
   var pcsPanel = px * py;
   var pcsUnit = pcsPanel * gx * gy;
-  var formula = '(' + fmtNum(pcbL) + 'x' + px + ' +' + fmtNum(gapX) + 'x' + (px - 1) +
-                ' gap +' + fmtNum(bl) + '+' + fmtNum(br) + ' border=' + fmtNum(pL) + 'mm, ' +
-                fmtNum(pcbW) + 'x' + py + ' +' + fmtNum(gapY) + 'x' + (py - 1) +
-                ' gap +' + fmtNum(bt) + '+' + fmtNum(bb) + ' border=' + fmtNum(pW) + 'mm)';
+  var allSameX = gapXs.every(function(v){ return v === gapXs[0]; });
+  var allSameY = gapYs.every(function(v){ return v === gapYs[0]; });
+  var gxTxt = gapXs.length ? (allSameX ? fmtNum(gapXs[0]) + 'x' + gapXs.length : '[' + gapXs.map(fmtNum).join('+') + ']') : '0';
+  var gyTxt = gapYs.length ? (allSameY ? fmtNum(gapYs[0]) + 'x' + gapYs.length : '[' + gapYs.map(fmtNum).join('+') + ']') : '0';
+  var formula = '(' + fmtNum(pcbL) + 'x' + px + ' +gap' + gxTxt +
+                ' +' + fmtNum(bl) + '+' + fmtNum(br) + ' border=' + fmtNum(pL) + 'mm, ' +
+                fmtNum(pcbW) + 'x' + py + ' +gap' + gyTxt +
+                ' +' + fmtNum(bt) + '+' + fmtNum(bb) + ' border=' + fmtNum(pW) + 'mm)';
 
   /* --- cutting size (fitting unit) --- */
   var gl = unitL, gw = unitW;
@@ -417,13 +476,13 @@ function computeLive(){
   mark(om, bm, best === 'mixed');
 
   /* --- SVG previews --- */
-  document.getElementById('svgPanel').innerHTML = svgPanel(pcbL, pcbW, px, py, gapX, gapY, bl, br, bt, bb, pL, pW, pcsPanel, gx, gy, kx, ky);
+  document.getElementById('svgPanel').innerHTML = svgPanel(pcbL, pcbW, px, py, gapXs, gapYs, bl, br, bt, bb, pL, pW, pcsPanel, gx, gy, kx, ky);
   document.getElementById('svgSheet').innerHTML = svgSheet(sl, sw, cl, cw, gx2, gy2, gx, gy, kx, ky, pps, waste, best, mN, mM, perN, perR, gl, gw, pcsPanel);
   var sheetHead = document.getElementById('sheetPreviewHead');
   if (sheetHead) sheetHead.textContent = (best === 'mixed') ? '🔲 Normal rows · Rotated rows' : '🔲 Panel outline · Sheet';
 }
 
-function svgPanel(pcbL, pcbW, px, py, gapX, gapY, bl, br, bt, bb, pL, pW, pcsPanel, gx, gy, kx, ky){
+function svgPanel(pcbL, pcbW, px, py, gapXs, gapYs, bl, br, bt, bb, pL, pW, pcsPanel, gx, gy, kx, ky){
   var W = 430, H = 300, pad = 26;
   var gl = pL * gx + kx * (gx - 1), gw = pW * gy + ky * (gy - 1);  /* total panel with multiplier */
   var scale = Math.min((W - 2*pad) / gl, (H - 2*pad) / gw);
@@ -432,7 +491,6 @@ function svgPanel(pcbL, pcbW, px, py, gapX, gapY, bl, br, bt, bb, pL, pW, pcsPan
   var GL = gl * scale, GW = gw * scale;
   var x0 = pad + (W - 2*pad - GL) / 2, y0 = pad + (H - 2*pad - GW) / 2;
   var cw = pcbL * scale, ch = pcbW * scale;
-  var gxs = gapX * scale, gys = gapY * scale;
   var bx = bl * scale, by = bt * scale;
   var s = '<svg viewBox="0 0 ' + W + ' ' + H + '" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;display:block">';
   var a, b, i, j;
@@ -441,19 +499,25 @@ function svgPanel(pcbL, pcbW, px, py, gapX, gapY, bl, br, bt, bb, pL, pW, pcsPan
       var xp = x0 + a * (P + Kx), yp = y0 + b * (Q + Ky);
       s += '<rect x="' + xp.toFixed(1) + '" y="' + yp.toFixed(1) + '" width="' + P.toFixed(1) + '" height="' + Q.toFixed(1) + '" fill="#fdf3df" stroke="#d97706" stroke-width="2" rx="3"/>';
       if (cw > 2.4 && ch > 2.4) {
-        for (i = 0; i < px; i++)
-          for (j = 0; j < py; j++)
-            s += '<rect x="' + (xp + bx + i*(cw+gxs)).toFixed(1) + '" y="' + (yp + by + j*(ch+gys)).toFixed(1) + '" width="' + cw.toFixed(1) + '" height="' + ch.toFixed(1) + '" fill="#fbbf24" fill-opacity="0.5" stroke="#f59e0b" stroke-width="0.8"/>';
+        var ox = bx;
+        for (i = 0; i < px; i++) {
+          var oy = by;
+          for (j = 0; j < py; j++) {
+            s += '<rect x="' + (xp + ox).toFixed(1) + '" y="' + (yp + oy).toFixed(1) + '" width="' + cw.toFixed(1) + '" height="' + ch.toFixed(1) + '" fill="#fbbf24" fill-opacity="0.5" stroke="#f59e0b" stroke-width="0.8"/>';
+            oy += ch + ((j < gapYs.length ? gapYs[j] : 0) * scale);
+          }
+          if (i < px - 1) ox += cw + ((i < gapXs.length ? gapXs[i] : 0) * scale);
+        }
         if (bl || br || bt || bb)
-          s += '<rect x="' + (xp + bx).toFixed(1) + '" y="' + (yp + by).toFixed(1) + '" width="' + (px*cw + (px-1)*gxs).toFixed(1) + '" height="' + (py*ch + (py-1)*gys).toFixed(1) + '" fill="none" stroke="#9a8a5a" stroke-width="1" stroke-dasharray="4 3"/>';
+          s += '<rect x="' + (xp + bx).toFixed(1) + '" y="' + (yp + by).toFixed(1) + '" width="' + (px*cw + _sumArr(gapXs)*scale).toFixed(1) + '" height="' + (py*ch + _sumArr(gapYs)*scale).toFixed(1) + '" fill="none" stroke="#9a8a5a" stroke-width="1" stroke-dasharray="4 3"/>';
       }
     }
   if (gx > 1 || gy > 1) {
     s += '<rect x="' + x0.toFixed(1) + '" y="' + y0.toFixed(1) + '" width="' + GL.toFixed(1) + '" height="' + GW.toFixed(1) + '" fill="none" stroke="#16a34a" stroke-width="1.8" stroke-dasharray="6 4" rx="5"/>';
     s += '<text x="' + (x0 + GL/2) + '" y="' + (y0 - 6).toFixed(1) + '" text-anchor="middle" font-size="11" fill="#16a34a" font-family="Segoe UI,Arial">TOTAL WITH MULTIPLIER: ' + fmtNum(gl) + '×' + fmtNum(gw) + ' mm (' + gx + '×' + gy + ' + kerf)</text>';
   }
-  if ((gapX > 0 || gapY > 0) && Q > 24)
-    s += '<text x="' + (x0 + P/2) + '" y="' + (y0 + Q - 10).toFixed(1) + '" text-anchor="middle" font-size="10" fill="#b45309" font-family="Segoe UI,Arial">gap ' + fmtNum(gapX) + '×' + fmtNum(gapY) + ' mm</text>';
+  if ((_sumArr(gapXs) > 0 || _sumArr(gapYs) > 0) && Q > 24)
+    s += '<text x="' + (x0 + P/2) + '" y="' + (y0 + Q - 10).toFixed(1) + '" text-anchor="middle" font-size="10" fill="#b45309" font-family="Segoe UI,Arial">gap X:' + fmtNum(_sumArr(gapXs)) + ' / Y:' + fmtNum(_sumArr(gapYs)) + ' mm</text>';
   var lbl = 'Panel ' + fmtNum(pL) + '×' + fmtNum(pW) + ' mm · ' + pcsPanel + ' PCBs (' + px + '×' + py + ')';
   if (gx > 1 || gy > 1)
     lbl += ' · ' + gx + '×' + gy + ' gang → <tspan fill="#16a34a" font-weight="700">Total ' + fmtNum(gl) + '×' + fmtNum(gw) + ' mm · ' + (pcsPanel*gx*gy) + ' PCS</tspan>';
@@ -517,6 +581,21 @@ function svgSheet(sl, sw, cl, cw, gx2, gy2, gx, gy, kx, ky, pps, waste, best, mN
   document.getElementById(id).addEventListener('input', computeLive);
 });
 
+/* pcbs count badle to gap boxes dobara banao; default gap badle to saare boxes wahi value */
+['pcbs_x','pcbs_y'].forEach(function(id){
+  document.getElementById(id).addEventListener('input', function(){ renderGapCells(); computeLive(); });
+});
+['gap_x','gap_y'].forEach(function(id){
+  document.getElementById(id).addEventListener('input', function(){
+    var axis = (id === 'gap_x') ? 'x' : 'y';
+    var v = parseFloat(this.value) || 0;
+    var box = document.getElementById('gap' + axis + '_cells');
+    box.querySelectorAll('input').forEach(function(inp){ inp.value = v; });
+    syncGaps(axis);
+    computeLive();
+  });
+});
+
 /* Use checkbox: lock/unlock panel size */
 document.getElementById('useChk').addEventListener('change', function(){
   var locked = this.checked;
@@ -539,6 +618,7 @@ document.querySelectorAll('.preset-btn').forEach(function(b){
 
 /* initial lock state + first computation on load */
 (function(){
+  renderGapCells();
   var locked = document.getElementById('useChk').checked;
   document.getElementById('panel_len').readOnly = locked;
   document.getElementById('panel_w').readOnly = locked;

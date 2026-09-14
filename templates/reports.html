@@ -115,8 +115,9 @@ function goP(k, v){
     <div class="snap" style="margin:0">
       <div class="s"><div class="n">{{ d.active_orders.total }}</div><div class="l">TOTAL orders</div></div>
       <div class="s"><div class="n" style="color:#1d4ed8">{{ d.active_orders.running }}</div><div class="l">⏱ RUNNING</div></div>
+      <div class="s"><div class="n" style="color:#b91c1c">{{ d.active_orders.hold }}</div><div class="l">⏸ HOLD</div></div>
       <div class="s"><div class="n" style="color:#b45309">{{ d.active_orders.pending }}</div><div class="l">⏳ PENDING</div></div>
-      <div class="s"><div class="n" style="color:#15803d">{{ d.active_orders.done }}</div><div class="l">✅ DONE</div></div>
+      <div class="s"><div class="n" style="color:#15803d">{{ d.active_orders.done }}</div><div class="l">✅ COMPLETED</div></div>
     </div>
   </div>
 </div>
@@ -133,8 +134,9 @@ function goP(k, v){
           <td class="small">{{ r.product or '—' }}</td>
           <td class="t-right mono">{{ r.qty }}</td>
           <td class="t-right mono">₹{{ r.value|inr0 }}</td>
-          <td>{% if r.status=='done' %}<span class="badge b-done">✅ DONE</span>
+          <td>{% if r.status=='done' %}<span class="badge b-done">✅ COMPLETED</span>
               {% elif r.status=='running' %}<span class="badge b-blue">⏱ RUNNING</span>
+              {% elif r.status=='hold' %}<span class="badge b-urgent">⏸ HOLD</span>
               {% else %}<span class="badge b-amber">⏳ PENDING</span>{% endif %}</td>
           <td class="small">{{ r.current_process or '—' }}</td>
           <td class="mono small">{{ r.delivery_date or '—' }}</td>

@@ -26,7 +26,7 @@
           <td>{{ o.party }}</td>
           <td>{{ o.board }}</td>
           <td><span class="badge {{'b-amber' if o.current_process!='Completed' else 'b-done'}}">{{ o.current_process }}</span></td>
-          <td><span class="badge {{'b-pending' if o.status=='pending' else 'b-blue' if o.status=='scheduled' else 'b-done'}}">{{ {'pending':'Pending','scheduled':'Scheduled','done':'Done'}.get(o.status, o.status) }}</span></td>
+          <td><span class="badge {{'b-pending' if o.status=='pending' else 'b-blue' if o.status=='running' else 'b-amber' if o.status=='hold' else 'b-blue' if o.status=='scheduled' else 'b-done'}}">{{ {'pending':'Pending','running':'⏱ Running','hold':'⏸ Hold','scheduled':'Scheduled','done':'Completed'}.get(o.status, o.status) }}</span></td>
           <td>{{ o.operator or '—' }}</td>
           <td class="small">{{ o.product }}</td>
           <td class="t-right">
