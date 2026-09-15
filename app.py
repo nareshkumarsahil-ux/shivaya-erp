@@ -673,6 +673,82 @@ def purchase_orders():
                            show_add=request.args.get("add"), edit_po=edit_po)
 
 
+@app.route("/purchases", methods=["GET", "POST"])
+@login_required
+def purchases():
+    """🛒 PURCHASE (STOCK IN) — product/item kharido → inventory stock mein add."""
+    if request.method == "POST":
+        f = request.form
+        item_name = (f.get("item_name") or "").strip()
+        custom = (f.get("custom_item") or "").strip()
+        if custom:
+            item_name = custom
+        qty = _fl(f.get("qty"))
+        rate = _fl(f.get("rate"))
+        gst = _fl(f.get("gst_percent"))
+        unit = (f.get("unit") or "pcs").strip() or "pcs"
+        if not item_name or qty <= 0:
+            flash("Item + Qty bharna (qty 0 se zyada).", "error")
+            return redirect_with_token(url_for("purchases"))
+        amount = round(qty * rate, 2)
+        total = round(amount + amount * gst / 100.0, 2)
+        vendor = (f.get("vendor") or "").strip()
+        bill_no = (f.get("bill_no") or "").strip()
+        pdate = (f.get("pdate") or "").strip() or datetime.date.today().isoformat()
+        status = (f.get("status") or "pending").strip()
+        notes = (f.get("notes") or "").strip()
+        # item inventory se link — naya item ho to inventory mein banao (stock 0 se)
+        inv = db.query("SELECT * FROM inventory WHERE name=?", (item_name,), one=True)
+        if inv:
+            item_id = inv["id"]
+            if inv["unit"]:
+                unit = unit if (f.get("unit") or "").strip() else inv["unit"]
+        else:
+            import time as _t
+            code = "PUR-" + str(int(_t.time()))[-6:]
+            item_id = db.execute("INSERT INTO inventory (code, name, category, stock, min_stock, unit) "
+                                 "VALUES (?,?,?,?,?,?)", (code, item_name, "Purchased", 0, 0, unit))
+        db.execute("INSERT INTO purchases (item_id, item_name, qty, unit, rate, amount, gst_percent, "
+                   "total, vendor, bill_no, date, status, notes, created_on) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                   (item_id, item_name, qty, unit, rate, amount, gst, total, vendor, bill_no,
+                    pdate, status, notes, datetime.datetime.now().strftime("%Y-%m-%d %H:%M")))
+        # STOCK IN: inventory stock + qty
+        if item_id:
+            db.execute("UPDATE inventory SET stock = COALESCE(stock,0) + ? WHERE id=?", (qty, item_id))
+        flash(f"🛒 Purchase save: {item_name} +{qty:g} {unit} — stock mein add ho gaya ✅", "success")
+        return redirect_with_token(url_for("purchases"))
+    rows = db.query("SELECT * FROM purchases ORDER BY id DESC")
+    tot = db.query("SELECT COALESCE(SUM(total),0) t, "
+                   "COALESCE(SUM(CASE WHEN status='paid' THEN total END),0) paid, "
+                   "COALESCE(SUM(CASE WHEN status!='paid' THEN total END),0) pend FROM purchases", one=True)
+    this_month = db.query("SELECT COALESCE(SUM(total),0) t FROM purchases WHERE date LIKE ?",
+                          (datetime.date.today().strftime("%Y-%m") + "%",), one=True)["t"]
+    inv_items = db.query("SELECT * FROM inventory ORDER BY name")
+    parties = db.query("SELECT name FROM parties ORDER BY name")
+    months = ["", "January", "February", "March", "April", "May", "June", "July",
+              "August", "September", "October", "November", "December"]
+    _today = datetime.date.today()
+    return render_template("purchases.html", active="purchases", rows=rows, tot=tot,
+                           this_month=this_month, inv_items=inv_items, parties=parties,
+                           today=_today.isoformat(),
+                           now_month=months[_today.month] + " " + str(_today.year),
+                           show_add=request.args.get("add"))
+
+
+@app.route("/purchases/<int:pid>/delete", methods=["POST"])
+@login_required
+def purchase_delete(pid):
+    """Galti se entry? Delete = stock wapas minus."""
+    p = db.query("SELECT * FROM purchases WHERE id=?", (pid,), one=True)
+    if p:
+        if p["item_id"]:
+            db.execute("UPDATE inventory SET stock = COALESCE(stock,0) - ? WHERE id=?",
+                       (p["qty"], p["item_id"]))
+        db.execute("DELETE FROM purchases WHERE id=?", (pid,))
+        flash(f"Purchase delete — {p['item_name']} {p['qty']:g} {p['unit']} stock se minus ho gaya.", "success")
+    return redirect_with_token(url_for("purchases"))
+
+
 @app.route("/purchase-orders/<int:po_id>/edit", methods=["POST"])
 @login_required
 def po_edit(po_id):

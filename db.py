@@ -804,6 +804,14 @@ def migrate(conn):
     conn.execute("CREATE TABLE IF NOT EXISTS purchase_order_items ("
                  "id INTEGER PRIMARY KEY AUTOINCREMENT, po_id INTEGER, item TEXT DEFAULT '', "
                  "qty TEXT DEFAULT '', rate REAL DEFAULT 0, amount REAL DEFAULT 0)")
+    # PURCHASE (STOCK IN) register — product/item kharidne ki tab
+    conn.execute("CREATE TABLE IF NOT EXISTS purchases ("
+                 "id INTEGER PRIMARY KEY AUTOINCREMENT, item_id INTEGER DEFAULT 0, "
+                 "item_name TEXT DEFAULT '', qty REAL DEFAULT 0, unit TEXT DEFAULT 'pcs', "
+                 "rate REAL DEFAULT 0, amount REAL DEFAULT 0, gst_percent REAL DEFAULT 0, "
+                 "total REAL DEFAULT 0, vendor TEXT DEFAULT '', bill_no TEXT DEFAULT '', "
+                 "date TEXT DEFAULT '', status TEXT DEFAULT 'pending', notes TEXT DEFAULT '', "
+                 "created_on TEXT DEFAULT '')")
     pocols = [r[1] for r in conn.execute("PRAGMA table_info(purchase_orders)")]
     for _col, _dfl in (("vendor_address", "TEXT DEFAULT ''"), ("vendor_phone", "TEXT DEFAULT ''"),
                        ("delivery_date", "TEXT DEFAULT ''"), ("tax_percent", "REAL DEFAULT 0"),

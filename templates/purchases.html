@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+{% block title %}Purchases{% endblock %}
+{% block page_title %}🛒 Purchases (Stock In){% endblock %}
+{% block content %}
+<div class="cards" style="grid-template-columns:1fr 1fr 1fr 1fr">
+  <div class="stat"><div class="top"><span class="lbl">TOTAL PURCHASE</span><span class="ic ic-peach">🛒</span></div><div class="num" style="font-size:18px;color:#b3401c">{{ tot.t|inr }}</div><div class="sub">Saari purchases</div></div>
+  <div class="stat"><div class="top"><span class="lbl">IS MONTH</span><span class="ic ic-mint">📅</span></div><div class="num" style="font-size:18px;color:#15803d">{{ this_month|inr }}</div><div class="sub">{{ now_month }}</div></div>
+  <div class="stat"><div class="top"><span class="lbl">PENDING PAYMENT</span><span class="ic ic-peach">⏳</span></div><div class="num" style="font-size:18px;color:#b45309">{{ tot.pend|inr }}</div><div class="sub">Unpaid</div></div>
+  <div class="stat"><div class="top"><span class="lbl">PAID</span><span class="ic ic-mint">✅</span></div><div class="num" style="font-size:18px;color:#15803d">{{ tot.paid|inr }}</div><div class="sub">Cleared</div></div>
+</div>
+
+{% if show_add %}
+<div class="panel">
+  <div class="panel-head"><h3>➕ New Purchase — product/item kharido (stock in)</h3><a class="btn btn-outline btn-sm" href="/purchases">✕ Close</a></div>
+  <div class="panel-body">
+    <form method="post" id="purForm">
+      <div class="form-grid">
+        <div class="field full"><label>PRODUCT / ITEM *</label>
+          <select name="item_name" id="purItem" required>
+            <option value="">— Item chuno (stock ke saath) —</option>
+            {% for it in inv_items %}
+            <option value="{{ it.name }}" data-unit="{{ it.unit }}">{{ it.name }}{% if it.code %} ({{ it.code }}){% endif %} · Stock {{ it.stock }} {{ it.unit }}</option>
+            {% endfor %}
+            <option value="__custom">➕ NAYA ITEM (khud naam likho)</option>
+          </select>
+          <input name="custom_item" id="purCustom" placeholder="Naya item ka naam — e.g. Copper Clad Sheet 1.5MM" style="display:none;margin-top:6px">
+          <div id="purStockNote" class="muted small" style="margin-top:4px;min-height:14px"></div>
+        </div>
+        <div class="field"><label>UNIT</label>
+          <input name="unit" id="purUnit" placeholder="pcs / kg / sheet / litre"></div>
+        <div class="field"><label>QTY *</label>
+          <input type="number" step="0.01" name="qty" id="purQty" placeholder="Qty" required></div>
+        <div class="field"><label>RATE (₹)</label>
+          <input type="number" step="0.01" name="rate" id="purRate" placeholder="Rate/unit"></div>
+        <div class="field"><label>GST %</label>
+          <input type="number" step="0.1" name="gst_percent" id="purGst" value="18"></div>
+        <div class="field full" style="background:#fffdf3;border:1.5px dashed #f59e0b;border-radius:8px;padding:9px 12px">
+          <span id="purTotals" style="font-weight:800;color:#92400e">AMOUNT ₹0 + GST = TOTAL ₹0</span>
+        </div>
+        <div class="field"><label>VENDOR</label>
+          <input name="vendor" list="purVendors" placeholder="Vendor/supplier ka naam">
+          <datalist id="purVendors">{% for p in parties %}<option value="{{ p.name }}">{% endfor %}</datalist></div>
+        <div class="field"><label>BILL / INVOICE NO</label>
+          <input name="bill_no" placeholder="e.g. INV-2201"></div>
+        <div class="field"><label>DATE</label>
+          <input type="date" name="pdate" value="{{ today }}"></div>
+        <div class="field"><label>STATUS</label>
+          <select name="status"><option value="pending">Pending (payment baaki)</option><option value="paid">Paid</option></select></div>
+        <div class="field full"><label>NOTE</label>
+          <input name="notes" placeholder="e.g. 10 sheets copper clad 1.5MM"></div>
+        <div class="full"><button class="btn" type="submit">🛒 Purchase Karo (Stock In)</button></div>
+      </div>
+    </form>
+  </div>
+</div>
+{% endif %}
+
+<div class="panel">
+  <div class="panel-head">
+    <h3>🛒 PURCHASE REGISTER — {{ rows|length }} entries</h3>
+    <a class="btn btn-sm" href="/purchases?add=1">➕ New Purchase</a>
+  </div>
+  <div class="panel-body" style="overflow-x:auto">
+    <table>
+      <thead><tr><th>DATE</th><th>BILL NO</th><th>ITEM</th><th>QTY</th><th>RATE (₹)</th><th>GST</th><th>TOTAL (₹)</th><th>VENDOR</th><th>STATUS</th><th></th></tr></thead>
+      <tbody>
+        {% for p in rows %}
+        <tr>
+          <td>{{ p.date }}</td>
+          <td>{{ p.bill_no or '—' }}</td>
+          <td style="font-weight:700">{{ p.item_name }}</td>
+          <td>{{ p.qty }} {{ p.unit }}</td>
+          <td>{{ p.rate }}</td>
+          <td>{{ p.gst_percent }}%</td>
+          <td style="font-weight:800;color:#b3401c">{{ p.total|inr }}</td>
+          <td>{{ p.vendor or '—' }}</td>
+          <td><span style="font-weight:800;font-size:11px;padding:2px 8px;border-radius:999px;{{'background:#dcfce7;color:#166534' if p.status=='paid' else 'background:#fef3c7;color:#92400e'}}">{{ p.status|upper }}</span></td>
+          <td><form method="post" action="/purchases/{{ p.id }}/delete" onsubmit="return confirm('Delete? Stock se bhi {{ p.qty }} {{ p.unit }} minus ho jayega.')"><button class="btn btn-danger btn-xs" type="submit">✖</button></form></td>
+        </tr>
+        {% else %}
+        <tr><td colspan="10" class="muted" style="text-align:center;padding:18px">Abhi koi purchase nahi — ➕ New Purchase se pehla item kharido (stock mein add ho jayega).</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+(function(){
+  var sel = document.getElementById('purItem');
+  if (!sel) return;
+  var custom = document.getElementById('purCustom');
+  var unit = document.getElementById('purUnit');
+  var note = document.getElementById('purStockNote');
+  var q = document.getElementById('purQty'), r = document.getElementById('purRate'),
+      g = document.getElementById('purGst'), tot = document.getElementById('purTotals');
+  function recalc(){
+    var a = (parseFloat(q.value) || 0) * (parseFloat(r.value) || 0);
+    var gs = parseFloat(g.value) || 0;
+    var t = a + a * gs / 100;
+    tot.textContent = 'AMOUNT ₹' + a.toFixed(2) + (gs ? ' + GST ' + gs + '% = ' : ' = ') + 'TOTAL ₹' + t.toFixed(2);
+  }
+  sel.addEventListener('change', function(){
+    var o = sel.options[sel.selectedIndex];
+    if (sel.value === '__custom') {
+      custom.style.display = 'block';
+      custom.required = true;
+      note.textContent = 'Naya item banega — purchase hote hi inventory mein add + stock in.';
+      note.style.color = '#b45309';
+    } else {
+      custom.style.display = 'none';
+      custom.required = false;
+      var u = o ? (o.getAttribute('data-unit') || '') : '';
+      if (u) unit.value = u;
+      note.textContent = o ? (o.textContent.split('· Stock')[0].trim() + ' → abhi stock: ' + (o.textContent.split('· Stock')[1] || '').trim()) : '';
+      note.style.color = '#475569';
+    }
+    recalc();
+  });
+  [q, r, g].forEach(function(el){ el.addEventListener('input', recalc); });
+  recalc();
+})();
+</script>
+{% endblock %}
