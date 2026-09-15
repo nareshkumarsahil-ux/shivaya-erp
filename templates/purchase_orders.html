@@ -145,7 +145,7 @@
           <td class="t-right">{{ r.amount|inr }}</td>
           <td class="t-right mono small">{{ r.tax_percent|gfmt }}%</td>
           <td><span class="badge {{'b-green' if r.status=='received' else 'b-blue' if r.status=='ordered' else 'b-amber' if r.status=='in_transit' else 'b-urgent' if r.status=='cancelled' else 'b-gray'}}">{{ r.status|replace('_',' ')|upper }}</span></td>
-          <td class="small">{{ r.date }}</td>
+          <td class="small">{{ r.date }}{% if r.created_on and r.created_on|length > 10 %}<br><span class="muted">{{ r.created_on[11:16] }}</span>{% endif %}</td>
           <td class="t-right" style="white-space:nowrap">
             <a class="btn btn-outline btn-xs" target="_blank" href="/purchase-orders/{{ r.id }}/print{% if request.args.get('token') %}?token={{ request.args.get('token') }}{% endif %}" title="Party ko bhejne wala print/PDF">🖨 Print</a>
             <form method="post" action="/purchase-orders/{{ r.id }}/status" style="display:inline">

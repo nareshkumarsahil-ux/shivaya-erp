@@ -15,7 +15,14 @@ import http.client
 import urllib.parse
 
 # Schema version — bump karo jab SCHEMA/migrate badle, taaki agla deploy tables update kare.
-SCHEMA_VERSION = "2026-09-12.10"
+SCHEMA_VERSION = "2026-09-12.11"
+
+# Entry timestamps IST (Asia/Kolkata) me — server UTC par ho sakta hai (Vercel)
+IST = datetime.timezone(datetime.timedelta(hours=5, minutes=30), "IST")
+
+
+def _today_ist():
+    return datetime.datetime.now(IST).date()
 
 DB_PATH = os.environ.get("DB_PATH") or (
     os.path.join(tempfile.gettempdir(), "circuit.db") if os.environ.get("VERCEL") else "circuit.db"
@@ -891,6 +898,14 @@ def migrate(conn):
         fix_legacy_cutting_sizes(conn)
     except Exception:
         pass
+    # v2.32: har entry me current DATE + TIME — created_on columns (billing/payments/purchase_orders)
+    for _tbl in ("billing", "payments", "purchase_orders"):
+        try:
+            _cols = [r[1] for r in conn.execute(f"PRAGMA table_info({_tbl})").fetchall()]
+            if _cols and "created_on" not in _cols:
+                conn.execute(f"ALTER TABLE {_tbl} ADD COLUMN created_on TEXT DEFAULT ''")
+        except Exception:
+            pass
     # employees: salary column (attendance se salary banane ke liye)
     ecols = [r[1] for r in conn.execute("PRAGMA table_info(employees)")]
     if ecols and "salary" not in ecols:
@@ -1429,7 +1444,7 @@ def get_jc_processes(order_id):
 def seed_models(conn):
     if not _claim_seed(conn, "seed_models"):
         return
-    today = datetime.date.today().isoformat()
+    today = _today_ist().isoformat()
     baseline = [
         # name, code, pcb_x, pcb_y, pcbs_x, pcbs_y, bl, br, bt, bb, gang_x, gang_y, sl, sw, pl, pw, kx, ky, orient, pcs, pps, sheets
         ("RM 603 8W RD (L-936E)", "SCPL-424", 54, 54, 7, 7, 3, 3, 1, 1, 1, 1, 1200, 1000, 384, 380, 2, 2, "normal", 49, 6, 52),
@@ -1462,7 +1477,7 @@ def seed_if_empty(conn):
     if not _claim_seed(conn, "core_seed"):
         return
 
-    today = datetime.date.today()
+    today = _today_ist()
     iso = lambda d: d.isoformat()
 
     # --- users (1 batch) ---

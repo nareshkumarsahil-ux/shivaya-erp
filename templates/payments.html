@@ -82,7 +82,7 @@
           <td><span class="badge {{'b-green' if r.ptype=='receipt' else 'b-peach'}}">{{ '📥 RECEIPT' if r.ptype=='receipt' else '📤 PAYMENT' }}</span></td>
           <td class="t-right"><b>{{ r.amount|inr }}</b></td>
           <td>{{ r.mode }}</td>
-          <td class="small mono">{{ r.date }}</td>
+          <td class="small mono">{{ r.date }}{% if r.created_on and r.created_on|length > 10 %}<br><span class="muted">{{ r.created_on[11:16] }}</span>{% endif %}</td>
           {% if current_user_role == 'admin' %}
           <td class="t-right" style="white-space:nowrap">
             <a class="btn btn-outline btn-xs" href="/payments?edit={{ r.id }}" title="Entry edit karo">✏️</a>

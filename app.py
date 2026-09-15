@@ -131,7 +131,7 @@ def admin_required(f):
 
 @app.context_processor
 def inject_globals():
-    today = datetime.date.today()
+    today = _today_ist()
     try:
         parties = db.query("SELECT id, name, ptype, credit_days FROM parties ORDER BY name")
     except Exception:
@@ -237,7 +237,7 @@ def logout():
 @app.route("/")
 @login_required
 def dashboard():
-    today = datetime.date.today().isoformat()
+    today = _today_ist().isoformat()
     q = request.args.get("q", "").strip()
 
     # 13 queries -> 1 hi round trip (turso batch) — page 10x fast
@@ -332,7 +332,7 @@ def tracking_move(order_id):
         db.execute("UPDATE process_log SET status='done' WHERE order_id=? AND process=?", (order_id, order["current_process"]))
         db.execute("INSERT INTO process_log (order_id, process, status, operator, updated_on) VALUES (?,?,?,?,?)",
                    (order_id, next_step, "done" if next_step == "Completed" else "active", operator,
-                    datetime.date.today().isoformat()))
+                    _today_ist().isoformat()))
         flash(f"{order['order_no']} moved to {next_step}.", "success")
     return redirect_with_token(url_for("tracking"))
 
@@ -415,7 +415,7 @@ def orders():
                 (f"#{count + 1}", f.get("party").strip(), f.get("board", "Single Side"),
                  product_str, qty_pcs, float(f.get("value", 0) or 0),
                  PROCESS_STEPS[0], "pending", 0, f.get("priority", "normal"),
-                 f.get("delivery_date", ""), "", 0, 0, datetime.date.today().isoformat(),
+                 f.get("delivery_date", ""), "", 0, 0, _now_dt(),
                  qty_panel, pcs_panel))
             if pmodel:
                 # job card ko finished product ki poori sizing se pre-fill karo
@@ -423,7 +423,7 @@ def orders():
                     "INSERT OR IGNORE INTO jobcard (order_id, party_model, model, odate, exp_delivery, price, total_qty, "
                     "actual_pcb_x, actual_pcb_y, panel_x, panel_y, panels_per_sheet, sheets, pcs_panel, sheet_len, sheet_w) "
                     "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                    (new_id, party_model, model_code, datetime.date.today().isoformat(),
+                    (new_id, party_model, model_code, _now_dt(),
                      f.get("delivery_date", ""), float(f.get("value", 0) or 0), qty_pcs,
                      pmodel["pcb_len"], pmodel["pcb_w"], pmodel["panel_len"], pmodel["panel_w"],
                      pmodel["panels_sheet"], pmodel["sheets"], pmodel["pcs_panel"],
@@ -431,13 +431,13 @@ def orders():
             else:
                 db.execute("INSERT OR IGNORE INTO jobcard (order_id, party_model, odate, exp_delivery, price, total_qty) "
                            "VALUES (?,?,?,?,?,?)",
-                           (new_id, party_model, datetime.date.today().isoformat(),
+                           (new_id, party_model, _now_dt(),
                             f.get("delivery_date", ""), float(f.get("value", 0) or 0), qty_pcs))
             flash("Job order created.", "success")
         return redirect_with_token(url_for("orders"))
     q = request.args.get("q", "").strip()
     filt = request.args.get("filter", "active")
-    today = datetime.date.today().isoformat()
+    today = _today_ist().isoformat()
     where = ""
     params = ()
     if q:
@@ -524,6 +524,24 @@ def orders():
 
 
 # ---------------------------------------------------------------- purchase orders
+# Business IST (Asia/Kolkata) me chalta hai — Vercel server UTC par hota hai,
+# isliye har entry ka DATE/TIME explicit IST me record karte hain.
+IST = datetime.timezone(datetime.timedelta(hours=5, minutes=30), "IST")
+
+
+def _now_ist():
+    return datetime.datetime.now(IST)
+
+
+def _today_ist():
+    return datetime.datetime.now(IST).date()
+
+
+def _now_dt():
+    """Entry ke waqt ka current DATE + TIME (IST) — har entry me save hota hai."""
+    return _now_ist().strftime("%Y-%m-%d %H:%M")
+
+
 def _fl(v):
     try:
         return float(v or 0)
@@ -642,12 +660,13 @@ def purchase_orders():
             po_no = f"PO-{304 + count}"
             po_id = db.execute(
                 "INSERT INTO purchase_orders (po_no, vendor, item, qty, amount, status, date, "
-                "vendor_address, vendor_phone, delivery_date, tax_percent, note) "
-                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+                "vendor_address, vendor_phone, delivery_date, tax_percent, note, created_on) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (po_no, vendor, rows[0][0] + (f" +{len(rows) - 1} aur" if len(rows) > 1 else ""),
-                 rows[0][1], grand, f.get("status", "pending"), datetime.date.today().isoformat(),
+                 rows[0][1], grand, f.get("status", "pending"), _today_ist().isoformat(),
                  (f.get("vendor_address") or "").strip(), (f.get("vendor_phone") or "").strip(),
-                 (f.get("delivery_date") or "").strip(), _fl(f.get("tax_percent")), (f.get("note") or "").strip()))
+                 (f.get("delivery_date") or "").strip(), _fl(f.get("tax_percent")), (f.get("note") or "").strip(),
+                 _now_dt()))
             for r in rows:
                 db.execute("INSERT INTO purchase_order_items (po_id, item, qty, rate, amount) "
                            "VALUES (?,?,?,?,?)", (po_id, r[0], r[1], r[2], r[3]))
@@ -694,7 +713,7 @@ def purchases():
         total = round(amount + amount * gst / 100.0, 2)
         vendor = (f.get("vendor") or "").strip()
         bill_no = (f.get("bill_no") or "").strip()
-        pdate = (f.get("pdate") or "").strip() or datetime.date.today().isoformat()
+        pdate = (f.get("pdate") or "").strip() or _today_ist().isoformat()
         status = (f.get("status") or "pending").strip()
         notes = (f.get("notes") or "").strip()
         # item inventory se link — naya item ho to inventory mein banao (stock 0 se)
@@ -711,7 +730,7 @@ def purchases():
         db.execute("INSERT INTO purchases (item_id, item_name, qty, unit, rate, amount, gst_percent, "
                    "total, vendor, bill_no, date, status, notes, created_on) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                    (item_id, item_name, qty, unit, rate, amount, gst, total, vendor, bill_no,
-                    pdate, status, notes, datetime.datetime.now().strftime("%Y-%m-%d %H:%M")))
+                    pdate, status, notes, _now_ist().strftime("%Y-%m-%d %H:%M")))
         # STOCK IN: inventory stock + qty
         if item_id:
             db.execute("UPDATE inventory SET stock = COALESCE(stock,0) + ? WHERE id=?", (qty, item_id))
@@ -722,12 +741,12 @@ def purchases():
                    "COALESCE(SUM(CASE WHEN status='paid' THEN total END),0) paid, "
                    "COALESCE(SUM(CASE WHEN status!='paid' THEN total END),0) pend FROM purchases", one=True)
     this_month = db.query("SELECT COALESCE(SUM(total),0) t FROM purchases WHERE date LIKE ?",
-                          (datetime.date.today().strftime("%Y-%m") + "%",), one=True)["t"]
+                          (_today_ist().strftime("%Y-%m") + "%",), one=True)["t"]
     inv_items = db.query("SELECT * FROM inventory ORDER BY name")
     parties = db.query("SELECT name FROM parties ORDER BY name")
     months = ["", "January", "February", "March", "April", "May", "June", "July",
               "August", "September", "October", "November", "December"]
-    _today = datetime.date.today()
+    _today = _today_ist()
     return render_template("purchases.html", active="purchases", rows=rows, tot=tot,
                            this_month=this_month, inv_items=inv_items, parties=parties,
                            today=_today.isoformat(),
@@ -766,7 +785,7 @@ def po_edit(po_id):
             "vendor_address=?, vendor_phone=?, delivery_date=?, tax_percent=?, note=? WHERE id=?",
             (po_no, vendor, rows[0][0] + (f" +{len(rows) - 1} aur" if len(rows) > 1 else "") if rows else "",
              rows[0][1] if rows else "", grand, f.get("status", "pending"),
-             f.get("date") or datetime.date.today().isoformat(),
+             f.get("date") or _today_ist().isoformat(),
              (f.get("vendor_address") or "").strip(), (f.get("vendor_phone") or "").strip(),
              (f.get("delivery_date") or "").strip(), _fl(f.get("tax_percent")), (f.get("note") or "").strip(),
              po_id))
@@ -1280,7 +1299,7 @@ def cutlist():
                      pm_price or 0, pm_rs or 0,
                      ",".join(f"{g:g}" for g in result["gaps_x"]),
                      ",".join(f"{g:g}" for g in result["gaps_y"]),
-                     datetime.date.today().isoformat()))
+                     _today_ist().isoformat()))
                 flash(f"Model '{name}' saved to Finished Products (price ke saath).", "success")
             else:
                 flash("Enter a name to save as finished product.", "error")
@@ -1345,7 +1364,7 @@ def cutlist():
                         base = (order["product"] or "").split(" · ")[0].strip()
                         _record_price(base, "", price, rs_pcb, order_id,
                                       order["order_no"], order["party"],
-                                      datetime.date.today().isoformat(), _model_thickness(base))
+                                      _today_ist().isoformat(), _model_thickness(base))
                     flash(f"Layout applied to {order['order_no']} ({order['party']}). "
                           f"Qty set to {result['total_pcs']} pcs — Job Card bhi update ho gaya "
                           f"(sheet, panels/sheet, qty panel, pcs/panel, price).", "success")
@@ -1539,7 +1558,7 @@ def products():
                     "x_qty, y_qty, cnc_margin_x, cnc_margin_y, pcb_price, per_sq_inch, sheet_thickness, "
                     "order_id, created_on) "
                     "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                    vals + (None, datetime.date.today().isoformat()))
+                    vals + (None, _today_ist().isoformat()))
                 flash(f"Finished product '{name}' manually add ho gaya ✅ — BOM set karne ke liye 🧪 BOM button dabao.", "success")
         except Exception as e:
             flash(f"Save failed: {e}", "error")
@@ -1970,7 +1989,7 @@ def products_import():
               "error")
         return redirect_with_token(url_for("products") + "?import=1")
     import json as _json
-    batch = datetime.datetime.now().strftime("%Y%m%d%H%M%S") + "-" + os.urandom(3).hex()
+    batch = _now_ist().strftime("%Y%m%d%H%M%S") + "-" + os.urandom(3).hex()
     db.execute("DELETE FROM import_staging WHERE batch=?", (batch,))
     db.execute("INSERT INTO import_staging (batch, row_no, data) VALUES (?,?,?)",
                (batch, 0, _json.dumps([str(h) for h in headers])))
@@ -2053,7 +2072,7 @@ def products_import_confirm():
                 "panel_len, panel_w, cutting_len, cutting_w, kerf_x, kerf_y, cnc_margin_x, cnc_margin_y, "
                 "orientation, pcs_panel, panels_sheet, sheets, x_qty, y_qty, created_on) "
                 "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                (name,) + vals + (datetime.date.today().isoformat(),))
+                (name,) + vals + (_today_ist().isoformat(),))
             added += 1
     db.execute("DELETE FROM import_staging WHERE batch=?", (batch,))
     msg = f"✅ Import complete: {added} naye products add hue"
@@ -2154,7 +2173,7 @@ def product_produce(pid):
 
     bom_rows = db.bom_rows_for(pid)
     made_by = session.get("user_name") or "admin"
-    ts = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+    ts = _now_ist().strftime("%Y-%m-%d %H:%M")
 
     consumed, shorts = [], []
     for br in bom_rows:
@@ -2234,7 +2253,7 @@ def material_issue_add():
                                    url_for("orders"))
     worker = f.get("worker", "").strip() or (session.get("user_name") or session.get("op_name") or "admin")
     notes = f.get("notes", "").strip()
-    taken_on = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+    taken_on = _now_ist().strftime("%Y-%m-%d %H:%M")
     new_stock = round((item["stock"] or 0) - qty, 4)
     db.execute("UPDATE inventory SET stock=? WHERE id=?", (new_stock, item_id))
     db.execute("INSERT INTO material_issues (order_id, item_id, item_name, qty, unit, worker, taken_on, notes) "
@@ -2357,10 +2376,11 @@ def billing():
             subtotal, tax_amt, grand = _totals(rows, f.get("tax_percent"))
             count = db.query("SELECT COUNT(*) c FROM billing", one=True)["c"]
             inv_id = db.execute(
-                "INSERT INTO billing (invoice_no, party, amount, status, date, tax_percent, note) "
-                "VALUES (?,?,?,?,?,?,?)",
+                "INSERT INTO billing (invoice_no, party, amount, status, date, tax_percent, note, created_on) "
+                "VALUES (?,?,?,?,?,?,?,?)",
                 (f"INV-{105 + count}", party, grand, f.get("status", "pending"),
-                 datetime.date.today().isoformat(), _fl(f.get("tax_percent")), (f.get("note") or "").strip()))
+                 _today_ist().isoformat(), _fl(f.get("tax_percent")), (f.get("note") or "").strip(),
+                 _now_dt()))
             for r in rows:
                 db.execute("INSERT INTO billing_items (bill_id, item, qty, rate, amount) "
                            "VALUES (?,?,?,?,?)", (inv_id, r[0], r[1], r[2], r[3]))
@@ -2413,7 +2433,7 @@ def billing_edit(inv_id):
         db.execute("UPDATE billing SET invoice_no=?, party=?, amount=?, status=?, date=?, "
                    "tax_percent=?, note=? WHERE id=?",
                    (invoice_no, party, grand, f.get("status", "pending"),
-                    f.get("date") or datetime.date.today().isoformat(),
+                    f.get("date") or _today_ist().isoformat(),
                     _fl(f.get("tax_percent")), (f.get("note") or "").strip(), inv_id))
         db.execute("DELETE FROM billing_items WHERE bill_id=?", (inv_id,))
         for r in rows:
@@ -2464,9 +2484,10 @@ def payments():
         f = request.form
         if f.get("party", "").strip():
             count = db.query("SELECT COUNT(*) c FROM payments", one=True)["c"]
-            db.execute("INSERT INTO payments (ref_no, party, ptype, amount, mode, date) VALUES (?,?,?,?,?,?)",
+            db.execute("INSERT INTO payments (ref_no, party, ptype, amount, mode, date, created_on) VALUES (?,?,?,?,?,?,?)",
                        (f"PMT-{204 + count}", f.get("party").strip(), f.get("ptype", "receipt"),
-                        float(f.get("amount", 0) or 0), f.get("mode", "Bank"), datetime.date.today().isoformat()))
+                        float(f.get("amount", 0) or 0), f.get("mode", "Bank"),
+                        _today_ist().isoformat(), _now_dt()))
             flash("Entry saved.", "success")
         return redirect_with_token(url_for("payments"))
     rows = db.query("SELECT * FROM payments ORDER BY id DESC")
@@ -2492,7 +2513,7 @@ def payment_edit(pmt_id):
     try:
         db.execute("UPDATE payments SET ref_no=?, party=?, ptype=?, amount=?, mode=?, date=? WHERE id=?",
                    (ref_no, party, f.get("ptype", "receipt"), float(f.get("amount", 0) or 0),
-                    f.get("mode", "Bank"), f.get("date") or datetime.date.today().isoformat(), pmt_id))
+                    f.get("mode", "Bank"), f.get("date") or _today_ist().isoformat(), pmt_id))
         flash(f"Entry {ref_no} update ho gaya ✅", "success")
     except Exception as e:
         flash(f"Update failed: {e}", "error")
@@ -2626,7 +2647,7 @@ def employees():
                 "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
                 (f.get("emp_code", "").strip(), f.get("name", "").strip(), f.get("email", "").strip(),
                  f.get("phone", "").strip(), f.get("department", "").strip(), f.get("designation", "").strip(),
-                 f.get("joining_date", "") or datetime.date.today().isoformat(), "active",
+                 f.get("joining_date", "") or _today_ist().isoformat(), "active",
                  float(f.get("salary", 0) or 0), f.get("shift", "Day").strip() or "Day",
                  int(f.get("leave_balance", 12) or 0), f.get("address", "").strip()))
             db.provision_employee_logins()
@@ -2634,7 +2655,7 @@ def employees():
         except Exception as e:
             flash(f"Could not add employee: {e}", "error")
         return redirect_with_token(url_for("employees"))
-    cur_month = datetime.date.today().strftime("%Y-%m") + "%"
+    cur_month = _today_ist().strftime("%Y-%m") + "%"
     rows = [dict(r) for r in db.query(
         "SELECT e.*, "
         "(SELECT COUNT(*) FROM attendance a WHERE a.emp_id=e.id AND a.status='present' AND a.date LIKE ?) AS present_days, "
@@ -2660,7 +2681,7 @@ def employees():
     users = {u["employee_id"]: dict(u) for u in db.query("SELECT * FROM users WHERE employee_id>0")}
     for r in rows:
         r["login"] = users.get(r["id"])
-    today = datetime.date.today().isoformat()
+    today = _today_ist().isoformat()
     att = {r["emp_id"]: r["status"] for r in db.query("SELECT emp_id, status FROM attendance WHERE date=?", (today,))}
     stats = {
         "total": sum(1 for r in rows if r["status"] == "active"),
@@ -2705,7 +2726,7 @@ def employee_edit(emp_id):
 @login_required
 @admin_required
 def employees_download():
-    cur_month = datetime.date.today().strftime("%Y-%m") + "%"
+    cur_month = _today_ist().strftime("%Y-%m") + "%"
     rows = db.query(
         "SELECT e.*, "
         "(SELECT COUNT(*) FROM attendance a WHERE a.emp_id=e.id AND a.status='present' AND a.date LIKE ?) AS present_days, "
@@ -2728,7 +2749,7 @@ def employees_download():
         w.writerow([r["emp_code"], r["name"], r["designation"] or "", r["shift"] or "Day",
                     sal, r["leave_balance"], r["present_days"], r["absent_days"],
                     r["half_days"], r["leave_days"], earned])
-    fname = "employees_" + datetime.date.today().isoformat() + ".csv"
+    fname = "employees_" + _today_ist().isoformat() + ".csv"
     return Response(buf.getvalue(), mimetype="text/csv",
                     headers={"Content-Disposition": f"attachment; filename={fname}"})
 
@@ -2741,7 +2762,7 @@ def employee_att_mark(emp_id):
     if st not in ATT_STATUSES:
         st = "present"
     db.execute("INSERT OR REPLACE INTO attendance (emp_id, date, status) VALUES (?,?,?)",
-               (emp_id, datetime.date.today().isoformat(), st))
+               (emp_id, _today_ist().isoformat(), st))
     flash("Aaj ki attendance update ho gayi ✅", "success")
     return redirect_with_token(url_for("employees"))
 
@@ -2757,10 +2778,10 @@ def employee_profile(emp_id):
         if session.get("user_role") != "admin":
             flash("Sirf admin attendance mark kar sakta hai.", "error")
             return redirect_with_token(url_for("employee_profile", emp_id=emp_id))
-        date_str = request.form.get("date") or datetime.date.today().isoformat()
+        date_str = request.form.get("date") or _today_ist().isoformat()
         try:
             d = datetime.date.fromisoformat(date_str)
-            if d > datetime.date.today():
+            if d > _today_ist():
                 flash("Future date ki attendance nahi ho sakti.", "error")
             else:
                 st = request.form.get("status", "present")
@@ -2772,7 +2793,7 @@ def employee_profile(emp_id):
         except ValueError:
             flash("Invalid date.", "error")
         return redirect_with_token(url_for("employee_profile", emp_id=emp_id))
-    cur_month = datetime.date.today().strftime("%Y-%m")
+    cur_month = _today_ist().strftime("%Y-%m")
     m = _emp_month(emp_id, cur_month)
     is_admin = session.get("user_role") == "admin"
     return render_template("employee_profile.html", active="employees", emp=emp, m=m,
@@ -2787,9 +2808,9 @@ def employee_report(emp_id):
     if not emp:
         flash("Employee nahi mila.", "error")
         return redirect_with_token(url_for("employees"))
-    month = request.args.get("month") or datetime.date.today().strftime("%Y-%m")
+    month = request.args.get("month") or _today_ist().strftime("%Y-%m")
     if not _valid_month(month):
-        month = datetime.date.today().strftime("%Y-%m")
+        month = _today_ist().strftime("%Y-%m")
     m = _emp_month(emp_id, month)
     y, mo = int(month[:4]), int(month[5:7])
     prev_d = datetime.date(y, mo, 1) - datetime.timedelta(days=1)
@@ -2872,7 +2893,7 @@ def _emp_month(emp_id, month):
     advance = float((es["advance"] if es else 0) or 0)
     paid = int((es["paid"] if es else 0) or 0)
     net = round(earned - advance, 2)
-    today = datetime.date.today().isoformat()
+    today = _today_ist().isoformat()
     no_records = len(recs) == 0
     first_wd = calendar.monthrange(y, mo)[0]  # 0=Mon
     cal = []
@@ -2928,11 +2949,11 @@ def _valid_month(m):
 def attendance():
     date_str = request.form.get("date") if request.method == "POST" else request.args.get("date")
     if not date_str:
-        date_str = datetime.date.today().isoformat()
+        date_str = _today_ist().isoformat()
     if request.method == "POST":
         try:
             d = datetime.date.fromisoformat(date_str)
-            if d > datetime.date.today():
+            if d > _today_ist():
                 flash("Cannot mark attendance for a future date.", "error")
             else:
                 employees = db.query("SELECT id FROM employees WHERE status='active'")
@@ -2946,14 +2967,14 @@ def attendance():
         except ValueError:
             flash("Invalid date.", "error")
         return redirect_with_token(url_for("attendance", date=date_str))
-    month = request.args.get("month") or datetime.date.today().strftime("%Y-%m")
+    month = request.args.get("month") or _today_ist().strftime("%Y-%m")
     if not _valid_month(month):
-        month = datetime.date.today().strftime("%Y-%m")
+        month = _today_ist().strftime("%Y-%m")
     try:
         d = datetime.date.fromisoformat(date_str)
     except ValueError:
-        date_str = datetime.date.today().isoformat()
-        d = datetime.date.today()
+        date_str = _today_ist().isoformat()
+        d = _today_ist()
     rows = db.query(
         "SELECT e.id, e.name, e.department, a.status FROM employees e "
         "LEFT JOIN attendance a ON a.emp_id=e.id AND a.date=? WHERE e.status='active' ORDER BY e.id", (date_str,))
@@ -2967,7 +2988,7 @@ def attendance():
            "advance": round(sum(r["advance"] or 0 for r in sal_rows), 2),
            "net": round(sum(r["net"] for r in sal_rows), 2)}
     return render_template("attendance.html", active="employees", employees=rows, date=date_str,
-                           future=d > datetime.date.today(), summary=summary, month=month,
+                           future=d > _today_ist(), summary=summary, month=month,
                            sal_rows=sal_rows, days_in_month=dim, tot=tot)
 
 
@@ -2975,9 +2996,9 @@ def attendance():
 @login_required
 def attendance_advance():
     emp_id = int(request.form.get("emp_id") or 0)
-    month = request.form.get("month") or datetime.date.today().strftime("%Y-%m")
+    month = request.form.get("month") or _today_ist().strftime("%Y-%m")
     if not _valid_month(month):
-        month = datetime.date.today().strftime("%Y-%m")
+        month = _today_ist().strftime("%Y-%m")
     try:
         adv = float(request.form.get("advance") or 0)
     except ValueError:
@@ -2994,9 +3015,9 @@ def attendance_advance():
 @login_required
 def attendance_paid():
     emp_id = int(request.form.get("emp_id") or 0)
-    month = request.form.get("month") or datetime.date.today().strftime("%Y-%m")
+    month = request.form.get("month") or _today_ist().strftime("%Y-%m")
     if not _valid_month(month):
-        month = datetime.date.today().strftime("%Y-%m")
+        month = _today_ist().strftime("%Y-%m")
     cur = db.query("SELECT advance, paid FROM emp_salary WHERE emp_id=? AND month=?", (emp_id, month), one=True)
     advance = cur["advance"] if cur else 0.0
     new_paid = 0 if (cur and cur["paid"]) else 1
@@ -3076,7 +3097,7 @@ def quality():
         count = db.query("SELECT COUNT(*) c FROM quality", one=True)["c"]
         db.execute("INSERT INTO quality (qc_no, order_id, remarks, result, date) VALUES (?,?,?,?,?)",
                    (f"QC-{404 + count}", int(f.get("order_id") or 0) or None, f.get("remarks", "").strip(),
-                    f.get("result", "pending"), datetime.date.today().isoformat()))
+                    f.get("result", "pending"), _today_ist().isoformat()))
         flash("QC entry saved.", "success")
         return redirect_with_token(url_for("quality"))
     rows = db.query("SELECT q.*, o.order_no, o.party FROM quality q LEFT JOIN orders o ON o.id=q.order_id ORDER BY q.id DESC")
@@ -3109,7 +3130,7 @@ def quality_edit(qc_id):
         oid = None
     db.execute("UPDATE quality SET qc_no=?, order_id=?, remarks=?, result=?, date=? WHERE id=?",
                (qc_no, oid, (f.get("remarks") or "").strip(), f.get("result", "pending"),
-                f.get("date") or datetime.date.today().isoformat(), qc_id))
+                f.get("date") or _today_ist().isoformat(), qc_id))
     flash(f"QC {qc_no} update ho gaya ✅", "success")
     return redirect_with_token(url_for("quality"))
 
@@ -3128,7 +3149,7 @@ def quality_delete(qc_id):
 
 # ---------------------------------------------------------------- operator view
 def op_now():
-    return datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+    return _now_ist().strftime("%Y-%m-%d %H:%M")
 
 
 def current_proc_row(order_id):
@@ -3415,7 +3436,7 @@ def operator_issue():
             flash("Aap sirf apne assigned job order mein item issue kar sakte hain.", "error")
             return redirect_with_token(url_for("operator_view"))
     notes = f.get("notes", "").strip()
-    taken_on = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+    taken_on = _now_ist().strftime("%Y-%m-%d %H:%M")
     new_stock = round((item["stock"] or 0) - qty, 4)
     db.execute("UPDATE inventory SET stock=? WHERE id=?", (new_stock, item_id))
     db.execute("INSERT INTO material_issues (order_id, item_id, item_name, qty, unit, worker, taken_on, notes) "
@@ -3499,8 +3520,8 @@ def operator_action():
                     flash("📷 Photo nahi lagi (sirf image, max 3MB) — dispatch bina photo ke ho gaya.", "error")
             db.execute("INSERT INTO dispatch_log (order_id, ddate, dtime, mode, details, dispatched_by, ts, "
                        "photo_name, photo_mime, photo_data) VALUES (?,?,?,?,?,?,?,?,?,?)",
-                       (order_id, datetime.date.today().isoformat(),
-                        datetime.datetime.now().strftime("%H:%M"), mode,
+                       (order_id, _today_ist().isoformat(),
+                        _now_ist().strftime("%H:%M"), mode,
                         f.get("details", "").strip(), op, now, ph_name, ph_mime, ph_data))
             # PRICE HISTORY: dispatch ke waqt item kis price pe gaya
             _jcd = db.query("SELECT * FROM jobcard WHERE order_id=?", (order_id,), one=True)
@@ -3508,10 +3529,10 @@ def operator_action():
             if _jcd and (_jcd["price"] or 0) > 0 and _ord2:
                 _record_price(_jcd["party_model"], _jcd["model"], _jcd["price"], _jcd["rs_pcb"],
                               order_id, _ord2["order_no"], _ord2["party"],
-                              datetime.date.today().isoformat(), _model_thickness(_jcd["party_model"]))
+                              _today_ist().isoformat(), _model_thickness(_jcd["party_model"]))
             # JOB CARD + PREVIEW: Dispatch row me date/time/name auto bharo (row done)
-            _mark_dispatch_process(order_id, op, datetime.date.today().isoformat(),
-                                   datetime.datetime.now().strftime("%H:%M"))
+            _mark_dispatch_process(order_id, op, _today_ist().isoformat(),
+                                   _now_ist().strftime("%H:%M"))
             flash(f"PCB dispatched: {mode} — date/time auto save ho gaya." + (" 📷 Photo bhi save hui." if ph_data else ""), "success")
         else:
             flash("Dispatch mode select karein.", "error")
@@ -3555,7 +3576,7 @@ def production_planning():
             flash("Plan created.", "success")
         return redirect_with_token(url_for("production_planning"))
 
-    today = datetime.date.today()
+    today = _today_ist()
     pending = db.query("SELECT * FROM orders WHERE status='pending' ORDER BY id")
     active_orders = len(pending)
     # bottleneck detection
@@ -3776,8 +3797,8 @@ def jobcard_new():
             "created_on, qty_panel, pcs_panel) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (f"#{count + 1}", party, board_type, product_str, qty_pcs, round(price * qty_pcs, 2),
              PROCESS_STEPS[0], "pending", 0, priority, delivery_date, "", 0, 0,
-             datetime.date.today().isoformat(), qty_panel, pcs_panel))
-        today = datetime.date.today().isoformat()
+             _now_dt(), qty_panel, pcs_panel))
+        today = _today_ist().isoformat()
         if pmodel:
             px = pmodel["cutting_len"] or pmodel["panel_len"] or 0
             py = pmodel["cutting_w"] or pmodel["panel_w"] or 0
@@ -3791,7 +3812,7 @@ def jobcard_new():
                 "qty_panel, sheet_len, sheet_w, board_type, board_side, board_material, sheet_material, "
                 "sheet_thickness, instructions, v_grooving) "
                 "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                (new_id, party_model, model_code, today, delivery_date, price, rs_pcb, qty_pcs,
+                (new_id, party_model, model_code, _now_dt(), delivery_date, price, rs_pcb, qty_pcs,
                  pmodel["pcb_len"] or 0, pmodel["pcb_w"] or 0, px, py,
                  x_qty, y_qty,
                  pmodel["cnc_margin_x"] or 0, pmodel["cnc_margin_y"] or 0,
@@ -3811,7 +3832,7 @@ def jobcard_new():
         return redirect_with_token(url_for("jobcard", order_id=new_id))
     return render_template("jobcard_new.html", active="orders", parties=parties, models=models,
                            inv_items=inv_items, thicknesses=thicknesses,
-                           today=datetime.date.today().isoformat())
+                           today=_today_ist().isoformat())
 
 
 @app.route("/jobcard/<int:order_id>")
@@ -4019,7 +4040,7 @@ def jobcard_update(order_id):
                           or float(jc["rs_pcb"] or 0) != _jc_num(f.get("rs_pcb"))):
         _record_price(party_model, model, new_price, _jc_num(f.get("rs_pcb")), order_id,
                       order["order_no"], f.get("party", "").strip(),
-                      datetime.date.today().isoformat(), _model_thickness(party_model))
+                      _today_ist().isoformat(), _model_thickness(party_model))
     flash("Job card saved. All changes saved.", "success")
     return redirect_with_token(url_for("jobcard", order_id=order_id))
 
@@ -4225,8 +4246,8 @@ def jobcard_dispatch(order_id):
     if not mode:
         flash("Dispatch mode select karein.", "error")
         return redirect_with_token(url_for("jobcard", order_id=order_id))
-    ddate = f.get("ddate", "") or datetime.date.today().isoformat()
-    dtime = f.get("dtime", "") or datetime.datetime.now().strftime("%H:%M")
+    ddate = f.get("ddate", "") or _today_ist().isoformat()
+    dtime = f.get("dtime", "") or _now_ist().strftime("%H:%M")
     by = f.get("dispatched_by", "").strip() or session.get("user_name", "")
     ph_name, ph_mime, ph_data = "", "", None
     photo = request.files.get("photo")
@@ -4240,7 +4261,7 @@ def jobcard_dispatch(order_id):
     db.execute("INSERT INTO dispatch_log (order_id, ddate, dtime, mode, details, dispatched_by, ts, "
                "photo_name, photo_mime, photo_data) VALUES (?,?,?,?,?,?,?,?,?,?)",
                (order_id, ddate, dtime, mode, f.get("details", "").strip(), by,
-                datetime.datetime.now().strftime("%Y-%m-%d %H:%M"), ph_name, ph_mime, ph_data))
+                _now_ist().strftime("%Y-%m-%d %H:%M"), ph_name, ph_mime, ph_data))
     # PRICE HISTORY: dispatch ke waqt item kis price pe gaya — record karo
     jcd = db.query("SELECT * FROM jobcard WHERE order_id=?", (order_id,), one=True)
     ord2 = db.query("SELECT * FROM orders WHERE id=?", (order_id,), one=True)
@@ -4287,7 +4308,7 @@ def jobcard_duplicate(order_id):
         "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
         (new_no, order["party"], order["board"], order["product"], order["qty"], order["value"],
          PROCESS_STEPS[0], "pending", 0, order["priority"], order["delivery_date"], "", 0, 0,
-         datetime.date.today().isoformat()))
+         _today_ist().isoformat()))
     db.execute(
         "INSERT INTO jobcard (order_id, party_model, model, odate, board_type, created_by, checked_by, order_via, "
         "exp_delivery, price, rs_pcb, payment_status, sheet_material, copper_finish, masking, finish, legend_printing, "
@@ -4388,7 +4409,7 @@ def party_overdue(name, credit_days, due):
     if due <= 0:
         return "Settled", None
     oldest = db.query("SELECT MIN(date) d FROM billing WHERE party=? AND status!='paid'", (name,), one=True)["d"]
-    today = datetime.date.today()
+    today = _today_ist()
     if not oldest:
         return "On time", None
     try:
@@ -4407,7 +4428,7 @@ def party_overdue(name, credit_days, due):
 def ledger_entries(party):
     name, ptype = party["name"], party["ptype"]
     credit = int(party["credit_days"] or 0)
-    today = datetime.date.today()
+    today = _today_ist()
     entries = []
     if ptype == "supplier":
         for r in db.query("SELECT * FROM purchase_orders WHERE vendor=? ORDER BY date, id", (name,)):
@@ -4544,7 +4565,7 @@ def reports():
         rtype = "dispatch"
     if period not in ("daily", "monthly", "yearly"):
         period = "monthly"
-    today = datetime.date.today()
+    today = _today_ist()
     sel_date = request.args.get("date") or today.isoformat()
     sel_month = request.args.get("month") or today.strftime("%Y-%m")
     sel_year = request.args.get("year") or str(today.year)
@@ -4707,7 +4728,7 @@ def _record_price(model_name, model_code, price, rs_pcb, order_id, order_no, par
                "order_no, party, ddate, created_on) VALUES (?,?,?,?,?,?,?,?,?,?)",
                (model_name, model_code or "", price, rs, (thickness or "").strip(), order_id or 0,
                 order_no or "", party or "", ddate or "",
-                datetime.datetime.now().strftime("%Y-%m-%d %H:%M")))
+                _now_ist().strftime("%Y-%m-%d %H:%M")))
 
 
 def _model_thickness(name):
@@ -4765,7 +4786,7 @@ def reports_csv():
     # wahi data dobara compute (reports route se) — re-render se heavy hai, seedha query
     rtype = args.get("type") or "dispatch"
     period = args.get("period") or "monthly"
-    today = datetime.date.today()
+    today = _today_ist()
     sel_date = args.get("date") or today.isoformat()
     sel_month = args.get("month") or today.strftime("%Y-%m")
     sel_year = args.get("year") or str(today.year)

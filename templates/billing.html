@@ -113,7 +113,7 @@
           <td class="small">{% if bits %}{{ bits[0].item or '—' }}{% if bits|length > 1 %} <span class="badge b-gray">+{{ bits|length - 1 }} aur</span>{% endif %}{% else %}—{% endif %}</td>
           <td class="t-right"><b>{{ r.amount|inr }}</b></td>
           <td><span class="badge {{'b-green' if r.status=='paid' else 'b-red' if r.status=='overdue' else 'b-amber'}}">{{ r.status|upper }}</span></td>
-          <td class="small mono">{{ r.date }}</td>
+          <td class="small mono">{{ r.date }}{% if r.created_on and r.created_on|length > 10 %}<br><span class="muted">{{ r.created_on[11:16] }}</span>{% endif %}</td>
           <td class="t-right" style="white-space:nowrap">
             <a class="btn btn-outline btn-xs" target="_blank" href="/billing/{{ r.id }}/print{% if request.args.get('token') %}?token={{ request.args.get('token') }}{% endif %}" title="Invoice print/PDF">🖨 Print</a>
             <form method="post" action="/billing/{{ r.id }}/status" style="display:inline">

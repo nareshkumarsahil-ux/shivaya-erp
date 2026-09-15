@@ -66,7 +66,7 @@
       <tbody>
         {% for p in rows %}
         <tr>
-          <td>{{ p.date }}</td>
+          <td>{{ p.date }}{% if p.created_on and p.created_on|length > 10 %}<br><span class="muted small">{{ p.created_on[11:16] }}</span>{% endif %}</td>
           <td>{{ p.bill_no or '—' }}</td>
           <td style="font-weight:700">{{ p.item_name }}</td>
           <td>{{ p.qty }} {{ p.unit }}</td>

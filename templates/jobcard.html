@@ -82,7 +82,7 @@
           {% if md_extra %}<option value="{{ jc.model }}" selected>{{ jc.model }} (custom)</option>{% endif %}
         </select>
       </div>
-      <div class="field"><label>DATE</label><input type="date" name="odate" id="jc_odate" value="{{ jc.odate }}"></div>
+      <div class="field"><label>DATE</label><input type="date" name="odate" id="jc_odate" value="{{ jc.odate[:10] }}"></div>
       <div class="field"><label>PRIORITY</label>
         <select name="priority" id="jc_priority">
           <option value="normal" {{'selected' if order.priority=='normal'}}>Normal</option>
