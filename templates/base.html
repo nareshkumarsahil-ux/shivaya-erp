@@ -49,7 +49,7 @@
   <div class="side-footer">
     <div class="saved-note"><span class="dot"></span> All changes saved</div>
     <div class="user-chip">👤 {{ current_user_name }}<span class="role">{{ current_user_role|upper }}</span></div>
-    <div class="ver-chip" title="App version — agar ye purana dikhe to naya ZIP deploy nahi hua">🛰 App v2.37 · panel gap kahin bhi</div>
+    <div class="ver-chip" title="App version — agar ye purana dikhe to naya ZIP deploy nahi hua">🛰 App v2.38 · live digital watch</div>
     <a class="logout" href="/logout">Logout ↩</a>
   </div>
 </aside>
@@ -58,7 +58,13 @@
   <header class="topbar">
     <button type="button" class="hamburger" id="hamburger" aria-label="Menu">☰</button>
     <h1>{% block page_title %}{% endblock %}</h1>
-    <span class="top-date">📅 {{ today }}</span>
+    <div class="watch" id="liveWatch" title="Live IST clock (Asia/Kolkata)">
+      <span class="watch-ic">⏰</span>
+      <span class="watch-mid">
+        <span class="watch-time" id="watchTime">--:--:--</span>
+        <span class="watch-date" id="watchDate">{{ today }}</span>
+      </span>
+    </div>
     <form class="search-box" method="get" action="/tracking" id="searchForm">
       <span class="mag">🔍</span>
       <input type="text" name="q" id="globalSearch" placeholder="Search..." value="{{ request.args.get('q','') }}">
@@ -207,5 +213,41 @@ document.addEventListener('click', function(e){
 {% else %}
 {% block fullpage %}{% endblock %}
 {% endif %}
+<style>
+/* ---- ⏰ LIVE DIGITAL WATCH (har screen, topbar) ---- */
+.watch{display:inline-flex;align-items:center;gap:9px;background:linear-gradient(135deg,#1e293b,#0f172a);
+  border:1px solid #334155;border-radius:12px;padding:8px 18px;color:#f8fafc;white-space:nowrap;
+  box-shadow:0 1px 4px rgba(15,23,42,.25)}
+.watch-ic{font-size:19px;animation:watchPulse 2s ease-in-out infinite}
+@keyframes watchPulse{0%,100%{opacity:1}50%{opacity:.55}}
+.watch-mid{display:inline-flex;flex-direction:column;line-height:1.2;align-items:flex-start}
+.watch-time{font-family:'Segoe UI',Consolas,monospace;font-size:22px;font-weight:800;letter-spacing:1.5px;
+  color:#4ade80;font-variant-numeric:tabular-nums}
+.watch-time .ampm{font-size:12px;font-weight:800;color:#fbbf24;margin-left:4px;letter-spacing:.5px}
+.watch-date{font-size:12.5px;color:#94a3b8;font-weight:600}
+@media(max-width:900px){.watch .watch-date{display:none}.watch{padding:5px 11px}.watch-time{font-size:16px}.watch-ic{font-size:15px}}
+</style>
+<script>
+/* ⏰ LIVE WATCH — IST (Asia/Kolkata) me seconds ke saath ticking */
+(function(){
+  var dEl = document.getElementById('watchDate'), tEl = document.getElementById('watchTime');
+  if (!tEl) return;
+  var DAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  var MONS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  function tick(){
+    var now = new Date();
+    /* IST = UTC+5:30 — server/local kahin bhi ho, ghadi India ki dikhegi */
+    var ist = new Date(now.getTime() + (now.getTimezoneOffset() * 60000) + (5.5 * 3600000));
+    var h = ist.getHours(), m = ist.getMinutes(), s = ist.getSeconds();
+    var ampm = h >= 12 ? 'PM' : 'AM';
+    var h12 = h % 12; if (h12 === 0) h12 = 12;
+    var p2 = function(n){ return (n < 10 ? '0' : '') + n; };
+    tEl.innerHTML = p2(h12) + ':' + p2(m) + ':' + p2(s) + '<span class="ampm">' + ampm + '</span>';
+    if (dEl) dEl.textContent = DAYS[ist.getDay()] + ', ' + ist.getDate() + ' ' + MONS[ist.getMonth()] + ' ' + ist.getFullYear();
+  }
+  tick();
+  setInterval(tick, 1000);
+})();
+</script>
 </body>
 </html>
