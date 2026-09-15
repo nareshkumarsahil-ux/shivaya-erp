@@ -189,6 +189,7 @@
       <div style="display:flex;gap:8px">
         <div class="field" style="flex:1"><label>CNC MARGIN X (MM)</label><input type="number" step="0.1" name="cnc_margin_x" id="jc_cnc_margin_x" value="{{ jc.cnc_margin_x }}"></div>
         <div class="field" style="flex:1"><label>CNC MARGIN Y (MM)</label><input type="number" step="0.1" name="cnc_margin_y" id="jc_cnc_margin_y" value="{{ jc.cnc_margin_y }}"></div>
+        <div class="field" style="flex:1"><label>PCB GAP (MM)</label><input type="number" step="0.1" name="pcb_gap" id="jc_pcb_gap" value="{{ jc.pcb_gap }}" placeholder="0 = no gap"></div>
       </div>
       <div style="display:flex;gap:8px">
         <div class="field" style="flex:1"><label>CUTTING PANEL X (MM)</label><input type="number" step="0.1" name="panel_x" id="jc_panel_x" value="{{ jc.panel_x }}"></div>
@@ -697,7 +698,8 @@ function syncPreview(){
   set('pr_created_by', val('jc_created_by') || '—');
   set('pr_actual', fmt(val('jc_actual_pcb_x')) + '×' + fmt(val('jc_actual_pcb_y')) + 'mm');
   set('pr_panel', fmt(val('jc_x_size') || val('jc_panel_x')) + 'x' + fmt(val('jc_y_size') || val('jc_panel_y')) + 'mm');
-  set('pr_cnc', fmt(val('jc_cnc_margin_x')) + 'x' + fmt(val('jc_cnc_margin_y')) + 'mm');
+  var _pgap = parseFloat(val('jc_pcb_gap')) || 0;
+  set('pr_cnc', fmt(val('jc_cnc_margin_x')) + 'x' + fmt(val('jc_cnc_margin_y')) + 'mm' + (_pgap > 0 ? ' \u00b7 GAP ' + fmt(String(_pgap)) + 'mm' : ''));
   set('pr_pcs_panel', val('jc_pcs_panel') || '0');
   var xin = Math.round(parseFloat(val('jc_sheet_len'))/25.4), yin = Math.round(parseFloat(val('jc_sheet_w'))/25.4);
   /* CUTTING SIZE = gang panel + 2×CNC margin (CNC margin add karke jo bana) */
@@ -1026,8 +1028,11 @@ function jcGangMultiplier(){
     cx = parseFloat(vg[0]) || 0; cy = parseFloat(vg[1]) || 0;
   }
   if (!(cx > 0 && cy > 0) || !(px > 0 && py > 0)) return null;
-  var xc = Math.floor((px + 0.01) / cx), yc = Math.floor((py + 0.01) / cy);
-  if (xc > 0 && yc > 0) return {xc: xc, yc: yc, mult: xc * yc, cx: cx, cy: cy};
+  /* GAP: 0 = sab PCB chipke (no gap); g>0 = har PCB ke beech gap.
+     Formula: n = floor((L + g) / (w + g)) — pehle PCB se pehle gap nahi lagta */
+  var g = parseFloat(val('jc_pcb_gap')) || 0;
+  var xc = Math.floor((px + g + 0.01) / (cx + g)), yc = Math.floor((py + g + 0.01) / (cy + g));
+  if (xc > 0 && yc > 0) return {xc: xc, yc: yc, mult: xc * yc, cx: cx, cy: cy, g: g};
   return null;
 }
 function jcApplyGangMultiplier(){
@@ -1064,7 +1069,7 @@ function jcCalcStrip(){
   }
   var gm = jcGangMultiplier();
   if (gm)
-    lines.push('🧩 GANG PANEL — ' + px + '×' + py + ' ÷ single PCB ' + gm.cx + '×' + gm.cy +
+    lines.push('🧩 GANG PANEL — ' + px + '×' + py + ' ÷ ' + (gm.g > 0 ? '(<b>' + gm.cx + '+' + gm.g + '</b>)×(<b>' + gm.cy + '+' + gm.g + '</b>) gap ' + gm.g + 'mm' : 'single PCB ' + gm.cx + '×' + gm.cy) +
                ' → multiplier <b>' + gm.xc + '×' + gm.yc + ' = ' + gm.mult + ' PCS/panel</b>' +
                (_jcPcsManual ? ' <span class="muted">(manual override)</span>' : ''));
   var ct = jcCutAuto();
@@ -1082,8 +1087,8 @@ function jcCalcStrip(){
              'jc_x_qty','jc_y_qty','jc_panel_x','jc_panel_y','jc_sheet_len','jc_sheet_w',
              'jc_cnc_margin_x','jc_cnc_margin_y',
              'jc_actual_pcb_x','jc_actual_pcb_y','jc_v_grooving',
-             'jc_x_size','jc_y_size'];
-  var SIZE_IDS = {'jc_panel_x':1,'jc_panel_y':1,'jc_actual_pcb_x':1,'jc_actual_pcb_y':1,'jc_v_grooving':1};
+             'jc_x_size','jc_y_size','jc_pcb_gap'];
+  var SIZE_IDS = {'jc_panel_x':1,'jc_panel_y':1,'jc_actual_pcb_x':1,'jc_actual_pcb_y':1,'jc_v_grooving':1,'jc_pcb_gap':1};
   ids.forEach(function(id){
     var el = document.getElementById(id);
     if (!el) return;

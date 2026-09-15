@@ -24,7 +24,7 @@
 
     <div class="ps-cell"><span class="ps-lbl">ACTUAL PCB SIZE</span><span class="ps-val" id="pr_actual">{{ jc.actual_pcb_x|gfmt }}×{{ jc.actual_pcb_y|gfmt }}mm</span></div>
     <div class="ps-cell"><span class="ps-lbl">ACTUAL PANEL SIZE</span><span class="ps-val" id="pr_panel">{% set pgx = jc.x_size if jc.x_size else jc.panel_x %}{% set pgy = jc.y_size if jc.y_size else jc.panel_y %}{{ pgx|gfmt }}x{{ pgy|gfmt }}mm</span></div>
-    <div class="ps-cell"><span class="ps-lbl">CNC MARGIN</span><span class="ps-val" id="pr_cnc">{{ jc.cnc_margin_x|gfmt }}x{{ jc.cnc_margin_y|gfmt }}mm</span></div>
+    <div class="ps-cell"><span class="ps-lbl">CNC MARGIN</span><span class="ps-val" id="pr_cnc">{{ jc.cnc_margin_x|gfmt }}x{{ jc.cnc_margin_y|gfmt }}mm{% if jc.pcb_gap %} · GAP {{ jc.pcb_gap|gfmt }}mm{% endif %}</span></div>
     <div class="ps-cell"><span class="ps-lbl">PCB IN ONE PANEL</span><span class="ps-val" id="pr_pcs_panel">{{ jc.pcs_panel }}</span></div>
 
     <div class="ps-cell"><span class="ps-lbl">X CUTTING SIZE</span><span class="ps-val" id="pr_xcut">{% set cgx = (jc.x_size + 2 * (jc.cnc_margin_x or 0)) if jc.x_size else jc.panel_x %}L-{{ cgx|gfmt }}({{ jc.sheet_len|gfmt }})×{{ jc.x_qty }}</span></div>

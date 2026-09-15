@@ -3648,6 +3648,7 @@ JC_FIELDS = ["party", "party_model", "model", "odate", "board_type", "created_by
              "copper_finish", "masking", "finish", "legend_printing", "pcb_type", "actual_pcb_x",
              "actual_pcb_y", "x_size", "x_qty", "y_size", "y_qty", "cnc_margin_x", "cnc_margin_y",
              "panel_x", "panel_y", "panels_per_sheet", "sheets", "qty_panel", "pcs_panel",
+             "pcb_gap",
              "v_grooving", "customer_req", "raw_materials", "total_qty", "short_qty", "short_reason",
              "handover_sign", "priority", "board_side", "board_material"]
 
@@ -3808,14 +3809,14 @@ def jobcard_new():
             db.execute(
                 "INSERT OR IGNORE INTO jobcard (order_id, party_model, model, odate, exp_delivery, "
                 "price, rs_pcb, total_qty, actual_pcb_x, actual_pcb_y, x_size, y_size, x_qty, y_qty, "
-                "cnc_margin_x, cnc_margin_y, panel_x, panel_y, panels_per_sheet, sheets, pcs_panel, "
+                "cnc_margin_x, cnc_margin_y, pcb_gap, panel_x, panel_y, panels_per_sheet, sheets, pcs_panel, "
                 "qty_panel, sheet_len, sheet_w, board_type, board_side, board_material, sheet_material, "
                 "sheet_thickness, instructions, v_grooving) "
-                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (new_id, party_model, model_code, _now_dt(), delivery_date, price, rs_pcb, qty_pcs,
                  pmodel["pcb_len"] or 0, pmodel["pcb_w"] or 0, px, py,
                  x_qty, y_qty,
-                 pmodel["cnc_margin_x"] or 0, pmodel["cnc_margin_y"] or 0,
+                 pmodel["cnc_margin_x"] or 0, pmodel["cnc_margin_y"] or 0, _fl(f.get("pcb_gap")),
                  px, py, panels_per_sheet, sheets, pcs_panel, qty_panel,
                  sheet_len, sheet_w,
                  board_type, board_side, board_material, sheet_material,
@@ -3963,7 +3964,7 @@ def jobcard_update(order_id):
         sets.append(f"{k}=?")
         vals.append(_jc_num(f.get(k)))
     for k in ["actual_pcb_x", "actual_pcb_y", "x_size", "y_size", "cnc_margin_x", "cnc_margin_y",
-              "panel_x", "panel_y", "sheet_len", "sheet_w"]:
+              "panel_x", "panel_y", "sheet_len", "sheet_w", "pcb_gap"]:
         sets.append(f"{k}=?")
         vals.append(_jc_num(f.get(k)))
     for k in ["x_qty", "y_qty", "panels_per_sheet", "sheets",

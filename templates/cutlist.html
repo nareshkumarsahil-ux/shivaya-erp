@@ -74,6 +74,11 @@
           <div class="field" style="flex:1"><label>Y Multiplier</label><input type="number" name="gang_y" id="gang_y" value="{{ fields.gang_y }}" min="1"></div>
         </div>
         <p class="muted small" style="margin-top:8px">💡 How many panels are gang-cut together, with the panel-to-panel gap below added between them.</p>
+        <p class="muted small" style="margin-top:4px;background:#f0f9ff;border:1px dashed #3b82f6;border-radius:8px;padding:7px 10px">
+          🔧 <b>Gap sirf beech me chahiye?</b> (jaise 4 panel, gap sirf 2nd-3rd ke beech) — jin panels ke beech gap <b>nahi</b> chahiye unko jodkar ek unit banao:
+          "Use" <b>untick</b> karo → PANEL LENGTH = <b>400×2 = 800</b> → X Multiplier = <b>2</b> → Panel Gap X = <b>2</b>.
+          Cutting size = 800×2 + 2×1 = <b>1602mm</b> = bilkul 4×400 + sirf 1 gap ✅
+        </p>
         <div class="result-line" id="liveCutLine" style="{{ 'display:block;' if gang_info else 'display:none;' }}">{{ gang_info.cut_html|safe if gang_info else '' }}</div>
       </div>
     </div>

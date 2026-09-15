@@ -300,6 +300,7 @@ CREATE TABLE IF NOT EXISTS jobcard (
     actual_pcb_x REAL DEFAULT 0, actual_pcb_y REAL DEFAULT 0,
     x_size REAL DEFAULT 0, x_qty INTEGER DEFAULT 0, y_size REAL DEFAULT 0, y_qty INTEGER DEFAULT 0,
     cnc_margin_x REAL DEFAULT 0, cnc_margin_y REAL DEFAULT 0,
+    pcb_gap REAL DEFAULT 0,
     panel_x REAL DEFAULT 0, panel_y REAL DEFAULT 0,
     panels_per_sheet INTEGER DEFAULT 0, sheets INTEGER DEFAULT 0,
     qty_panel INTEGER DEFAULT 0, pcs_panel INTEGER DEFAULT 0, v_grooving TEXT DEFAULT '',
@@ -893,6 +894,8 @@ def migrate(conn):
         conn.execute("ALTER TABLE jobcard ADD COLUMN instructions TEXT DEFAULT ''")
     if jcols and "fg_deducted" not in jcols:
         conn.execute("ALTER TABLE jobcard ADD COLUMN fg_deducted INTEGER DEFAULT 0")
+    if jcols and "pcb_gap" not in jcols:
+        conn.execute("ALTER TABLE jobcard ADD COLUMN pcb_gap REAL DEFAULT 0")
     # v2.30: purane jobcards jahan CUTTING PANEL me gang panel save tha (CNC margin add nahi tha)
     try:
         fix_legacy_cutting_sizes(conn)
