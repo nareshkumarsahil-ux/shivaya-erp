@@ -23,12 +23,12 @@
     <div class="ps-cell"><span class="ps-lbl">CREATED BY</span><span class="ps-val" id="pr_created_by">{{ jc.created_by|dash }}</span></div>
 
     <div class="ps-cell"><span class="ps-lbl">ACTUAL PCB SIZE</span><span class="ps-val" id="pr_actual">{{ jc.actual_pcb_x|gfmt }}×{{ jc.actual_pcb_y|gfmt }}mm</span></div>
-    <div class="ps-cell"><span class="ps-lbl">ACTUAL PANEL SIZE</span><span class="ps-val" id="pr_panel">{{ jc.panel_x|gfmt }}x{{ jc.panel_y|gfmt }}mm</span></div>
+    <div class="ps-cell"><span class="ps-lbl">ACTUAL PANEL SIZE</span><span class="ps-val" id="pr_panel">{% set pgx = jc.x_size if jc.x_size else jc.panel_x %}{% set pgy = jc.y_size if jc.y_size else jc.panel_y %}{{ pgx|gfmt }}x{{ pgy|gfmt }}mm</span></div>
     <div class="ps-cell"><span class="ps-lbl">CNC MARGIN</span><span class="ps-val" id="pr_cnc">{{ jc.cnc_margin_x|gfmt }}x{{ jc.cnc_margin_y|gfmt }}mm</span></div>
     <div class="ps-cell"><span class="ps-lbl">PCB IN ONE PANEL</span><span class="ps-val" id="pr_pcs_panel">{{ jc.pcs_panel }}</span></div>
 
-    <div class="ps-cell"><span class="ps-lbl">X CUTTING SIZE</span><span class="ps-val" id="pr_xcut">L-{{ jc.panel_x|gfmt }}({{ jc.sheet_len|gfmt }})×{{ jc.x_qty }}</span></div>
-    <div class="ps-cell"><span class="ps-lbl">Y CUTTING SIZE</span><span class="ps-val" id="pr_ycut">W-{{ jc.panel_y|gfmt }}({{ jc.sheet_w|gfmt }})×{{ jc.y_qty }}</span></div>
+    <div class="ps-cell"><span class="ps-lbl">X CUTTING SIZE</span><span class="ps-val" id="pr_xcut">{% set cgx = (jc.x_size + 2 * (jc.cnc_margin_x or 0)) if jc.x_size else jc.panel_x %}L-{{ cgx|gfmt }}({{ jc.sheet_len|gfmt }})×{{ jc.x_qty }}</span></div>
+    <div class="ps-cell"><span class="ps-lbl">Y CUTTING SIZE</span><span class="ps-val" id="pr_ycut">{% set cgy = (jc.y_size + 2 * (jc.cnc_margin_y or 0)) if jc.y_size else jc.panel_y %}W-{{ cgy|gfmt }}({{ jc.sheet_w|gfmt }})×{{ jc.y_qty }}</span></div>
     <div class="ps-cell"><span class="ps-lbl">PCB IN ONE SHEET</span><span class="ps-val" id="pr_pcb_sheet">{{ jc.pcs_panel * jc.panels_per_sheet }}</span></div>
     <div class="ps-cell"><span class="ps-lbl">NO. OF SHEET</span><span class="ps-val" id="pr_sheets">{{ jc.sheets }} SHEET</span></div>
 

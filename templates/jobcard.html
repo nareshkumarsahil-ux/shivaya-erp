@@ -230,7 +230,7 @@
         </select>
       </div>
       <div class="field" style="margin-top:16px"><button class="btn" type="submit">💾 Save Job Card</button></div>
-      <p class="muted small" style="margin-top:8px">💡 <b>PER SQUARE INCH</b> bharein → <b>PCB PRICE</b> auto aayega; ya <b>PCB PRICE</b> bharein → <b>PER SQ.INCH</b> auto aayega (dono taraf calculate). Area = CUTTING PANEL (X×Y) ÷ PCS/PANEL — ye khali ho to PCB ACTUAL SIZE (X×Y) se area leta hai. <b id="jc_total_price" style="color:#b45309"></b></p>
+      <p class="muted small" style="margin-top:8px">💡 <b>RATE CALCULATION SINGLE PCB SIZE PAR</b> — PCB ACTUAL SIZE (X×Y) se area = rate/sq.inch ↔ PCB PRICE. <b>Gang panel aur CNC margin rate me count NAHI hota</b> (wo sirf cutting/sheet calc ke liye hai). <b id="jc_total_price" style="color:#b45309"></b></p>
       <p class="small" style="margin-top:4px;background:#fffbeb;border:1px solid #fde68a;border-radius:6px;padding:6px 8px"><span id="jc_last_price">{% if last_price %}📜 <b>LAST PRICE:</b> ₹{{ last_price.price|inr0 }}{% if last_price.rs_pcb %} · {{ last_price.rs_pcb|gfmt }}/sq.inch{% endif %} · {{ last_price.ddate }} · {{ last_price.party }} · <span class="mono">{{ last_price.order_no }}</span>{% endif %}</span></p>
       <p class="muted small">💡 Save karne par order list (kanban) bhi update hota hai.</p>
     </div>
@@ -696,12 +696,15 @@ function syncPreview(){
   set('pr_exp_delivery', val('jc_exp_delivery') || '—');
   set('pr_created_by', val('jc_created_by') || '—');
   set('pr_actual', fmt(val('jc_actual_pcb_x')) + '×' + fmt(val('jc_actual_pcb_y')) + 'mm');
-  set('pr_panel', fmt(val('jc_panel_x')) + 'x' + fmt(val('jc_panel_y')) + 'mm');
+  set('pr_panel', fmt(val('jc_x_size') || val('jc_panel_x')) + 'x' + fmt(val('jc_y_size') || val('jc_panel_y')) + 'mm');
   set('pr_cnc', fmt(val('jc_cnc_margin_x')) + 'x' + fmt(val('jc_cnc_margin_y')) + 'mm');
   set('pr_pcs_panel', val('jc_pcs_panel') || '0');
   var xin = Math.round(parseFloat(val('jc_sheet_len'))/25.4), yin = Math.round(parseFloat(val('jc_sheet_w'))/25.4);
-  set('pr_xcut', 'L-' + fmt(val('jc_panel_x')) + '(' + fmt(val('jc_sheet_len')) + ')×' + (val('jc_x_qty')||'0'));
-  set('pr_ycut', 'W-' + fmt(val('jc_panel_y')) + '(' + fmt(val('jc_sheet_w')) + ')×' + (val('jc_y_qty')||'0'));
+  /* CUTTING SIZE = gang panel + 2×CNC margin (CNC margin add karke jo bana) */
+  var _cgx = (parseFloat(val('jc_x_size')) || 0) > 0 ? (parseFloat(val('jc_x_size')) + 2 * (parseFloat(val('jc_cnc_margin_x')) || 0)) : (parseFloat(val('jc_panel_x')) || 0);
+  var _cgy = (parseFloat(val('jc_y_size')) || 0) > 0 ? (parseFloat(val('jc_y_size')) + 2 * (parseFloat(val('jc_cnc_margin_y')) || 0)) : (parseFloat(val('jc_panel_y')) || 0);
+  set('pr_xcut', 'L-' + fmt(String(_cgx)) + '(' + fmt(val('jc_sheet_len')) + ')×' + (val('jc_x_qty')||'0'));
+  set('pr_ycut', 'W-' + fmt(String(_cgy)) + '(' + fmt(val('jc_sheet_w')) + ')×' + (val('jc_y_qty')||'0'));
   set('pr_pcb_sheet', (parseInt(val('jc_pcs_panel'))||0) * (parseInt(val('jc_panels_per_sheet'))||0));
   set('pr_sheets', (val('jc_sheets')||'0') + ' SHEET');
   set('pr_sheet_material', (val('jc_sheet_material') || '—') + (val('jc_sheet_thickness') ? ' (' + val('jc_sheet_thickness') + ')' : ''));
@@ -883,16 +886,17 @@ function applyPartyModelFill(opt){
   if (opt.getAttribute('data-party')) setField('jc_party', opt.getAttribute('data-party'));
   /* GANG PANEL (cutting) size -> X SIZE / Y SIZE / CUTTING PANEL (cut list se aayi detail);
      cutting size na ho to panel size fallback */
-  var cutx = parseFloat(opt.getAttribute('data-cutx')) || 0;
-  var cuty = parseFloat(opt.getAttribute('data-cuty')) || 0;
-  var px = cutx > 0 ? cutx : (parseFloat(opt.getAttribute('data-panelx')) || 0);
-  var py = cuty > 0 ? cuty : (parseFloat(opt.getAttribute('data-panely')) || 0);
-  if (px > 0) { setField('jc_panel_x', px); setField('jc_x_size', px); }
-  if (py > 0) { setField('jc_panel_y', py); setField('jc_y_size', py); }
+  /* GANG PANEL SIZE -> X SIZE/Y SIZE (gang panel); CUTTING PANEL = gang + 2×CNC margin (auto) */
+  var gpx = parseFloat(opt.getAttribute('data-panelx')) || 0;
+  var gpy = parseFloat(opt.getAttribute('data-panely')) || 0;
+  if (gpx > 0) setField('jc_x_size', gpx);
+  if (gpy > 0) setField('jc_y_size', gpy);
   setField('jc_x_qty', opt.getAttribute('data-xq'));
   setField('jc_y_qty', opt.getAttribute('data-yq'));
   setField('jc_cnc_margin_x', opt.getAttribute('data-cnx'));
   setField('jc_cnc_margin_y', opt.getAttribute('data-cny'));
+  _jcCutManual = false;
+  jcCutAuto();   /* CUTTING PANEL = gang panel + 2×CNC margin */
   setField('jc_pcs_panel', opt.getAttribute('data-pcs'));
   setField('jc_panels_per_sheet', opt.getAttribute('data-pps'));
   setField('jc_sheets', opt.getAttribute('data-sheets'));
@@ -918,6 +922,10 @@ function applyPartyModelFill(opt){
   if (pp > 0) setField('jc_price', pp);
   if (pr > 0) setField('jc_rs_pcb', pr);
   if (typeof calcPcbPrice === 'function') calcPcbPrice();
+  /* GANG MULTIPLIER: model bharte hi panel ÷ single PCB → PCS/PANEL sync */
+  _jcPcsManual = false;
+  if (typeof jcApplyGangMultiplier === 'function') jcApplyGangMultiplier();
+  if (typeof jcCalcStrip === 'function') jcCalcStrip();
   /* LAST PRICE line — is model ka pichhla price/date/party/order */
   var lel = document.getElementById('jc_last_price');
   if (lel) {
@@ -994,9 +1002,51 @@ function jcAutoSheets(){
     if (sel && String(Math.ceil(qpan / pps)) !== sel.value) sel.value = String(Math.ceil(qpan / pps));
   }
 }
+/* ---- CNC MARGIN → CUTTING PANEL auto:
+   CUTTING PANEL = GANG PANEL (X SIZE/Y SIZE) + 2 × CNC MARGIN (har side) ---- */
+var _jcCutManual = false;
+function jcCutAuto(){
+  var gx = parseFloat(val('jc_x_size')) || 0, gy = parseFloat(val('jc_y_size')) || 0;
+  var mx = parseFloat(val('jc_cnc_margin_x')) || 0, my = parseFloat(val('jc_cnc_margin_y')) || 0;
+  if (_jcCutManual || !(gx > 0 && gy > 0)) return null;
+  var nx = Math.round((gx + 2 * mx) * 100) / 100, ny = Math.round((gy + 2 * my) * 100) / 100;
+  var pxEl = document.getElementById('jc_panel_x'), pyEl = document.getElementById('jc_panel_y');
+  if (pxEl && String(nx) !== pxEl.value) pxEl.value = String(nx);
+  if (pyEl && String(ny) !== pyEl.value) pyEl.value = String(ny);
+  return {gx: gx, gy: gy, nx: nx, ny: ny, mx: mx, my: my};
+}
+/* ---- GANG PANEL MULTIPLIER: panel me kitne single PCB — multiplier ke baad total PCB
+   hi PCS/PANEL column me aayega (panel 309×259 ÷ PCB 42.5×32 → 7×8 = 56 PCS/panel) ---- */
+var _jcPcsManual = false;
+function jcGangMultiplier(){
+  var px = parseFloat(val('jc_panel_x')) || 0, py = parseFloat(val('jc_panel_y')) || 0;
+  var cx = parseFloat(val('jc_actual_pcb_x')) || 0, cy = parseFloat(val('jc_actual_pcb_y')) || 0;
+  if (!(cx > 0 && cy > 0)) {
+    var vg = (val('jc_v_grooving') || '').replace(/[xX*]/g, '×').split('×');
+    cx = parseFloat(vg[0]) || 0; cy = parseFloat(vg[1]) || 0;
+  }
+  if (!(cx > 0 && cy > 0) || !(px > 0 && py > 0)) return null;
+  var xc = Math.floor((px + 0.01) / cx), yc = Math.floor((py + 0.01) / cy);
+  if (xc > 0 && yc > 0) return {xc: xc, yc: yc, mult: xc * yc, cx: cx, cy: cy};
+  return null;
+}
+function jcApplyGangMultiplier(){
+  var g = jcGangMultiplier();
+  var el = document.getElementById('jc_pcs_panel');
+  if (g && el && !_jcPcsManual && String(g.mult) !== el.value) {
+    el.value = String(g.mult);
+    /* PCS/PANEL multiplier se badla → PANEL + SHEETS bhi sync */
+    var qp = parseInt(val('jc_qty_pcs')) || 0;
+    var pel = document.getElementById('jc_qty_panel');
+    if (qp > 0 && pel) pel.value = String(Math.ceil(qp / g.mult));
+    jcAutoSheets();
+  }
+  return g;
+}
 function jcCalcStrip(){
   var el = document.getElementById('jcCalcStrip');
   if (!el) return;
+  jcApplyGangMultiplier();   /* gang multiplier → PCS/PANEL column auto */
   var qp = parseInt(val('jc_qty_pcs')) || 0;
   var pp = parseInt(val('jc_pcs_panel')) || 0;
   var qpan = parseInt(val('jc_qty_panel')) || 0;
@@ -1012,6 +1062,15 @@ function jcCalcStrip(){
     if (cncx !== '0' || cncy !== '0') cl += ' · <b>CNC margin X/Y: ' + cncx + '/' + cncy + 'mm</b>';
     lines.push(cl);
   }
+  var gm = jcGangMultiplier();
+  if (gm)
+    lines.push('🧩 GANG PANEL — ' + px + '×' + py + ' ÷ single PCB ' + gm.cx + '×' + gm.cy +
+               ' → multiplier <b>' + gm.xc + '×' + gm.yc + ' = ' + gm.mult + ' PCS/panel</b>' +
+               (_jcPcsManual ? ' <span class="muted">(manual override)</span>' : ''));
+  var ct = jcCutAuto();
+  if (ct && (ct.mx > 0 || ct.my > 0))
+    lines.push('✂ CUTTING PANEL = GANG + 2×CNC margin — X: <b>' + ct.nx + '</b> (' + ct.gx + ' + 2×' + ct.mx + ') · Y: <b>' + ct.ny + '</b> (' + ct.gy + ' + 2×' + ct.my + ')' +
+               (_jcCutManual ? ' <span class="muted">(manual)</span>' : ''));
   if (qp > 0 && pp > 0) lines.push('PANEL: Qty ' + qp + ' ÷ ' + pp + ' PCS/panel = ' + Math.ceil(qp / pp) + ' panels');
   if (qpan > 0 && pps > 0) lines.push('SHEET: ' + qpan + ' panels ÷ ' + pps + ' panels/sheet = ' + Math.ceil(qpan / pps) + ' sheets');
   if (sh > 0 && pps > 0 && pp > 0)
@@ -1021,11 +1080,24 @@ function jcCalcStrip(){
 (function(){
   var ids = ['jc_qty_pcs','jc_pcs_panel','jc_qty_panel','jc_panels_per_sheet','jc_sheets',
              'jc_x_qty','jc_y_qty','jc_panel_x','jc_panel_y','jc_sheet_len','jc_sheet_w',
-             'jc_cnc_margin_x','jc_cnc_margin_y'];
+             'jc_cnc_margin_x','jc_cnc_margin_y',
+             'jc_actual_pcb_x','jc_actual_pcb_y','jc_v_grooving',
+             'jc_x_size','jc_y_size'];
+  var SIZE_IDS = {'jc_panel_x':1,'jc_panel_y':1,'jc_actual_pcb_x':1,'jc_actual_pcb_y':1,'jc_v_grooving':1};
   ids.forEach(function(id){
     var el = document.getElementById(id);
     if (!el) return;
     el.addEventListener('input', function(){
+      /* panel/PCB size badla → multiplier phir se auto (manual override khatam) */
+      if (SIZE_IDS[id]) _jcPcsManual = false;
+      /* user ne PCS/PANEL khud likha → multiplier isko override nahi karega */
+      if (id === 'jc_pcs_panel') _jcPcsManual = true;
+      /* CUTTING PANEL khud likha → CNC auto-add band; gang size/margin badla → auto wapas */
+      if (id === 'jc_panel_x' || id === 'jc_panel_y') _jcCutManual = true;
+      if (id === 'jc_x_size' || id === 'jc_y_size' || id === 'jc_cnc_margin_x' || id === 'jc_cnc_margin_y') {
+        _jcCutManual = false;
+        jcCutAuto();
+      }
       var pp = parseInt(val('jc_pcs_panel')) || 0;
       var xq = parseInt(val('jc_x_qty')) || 0, yq = parseInt(val('jc_y_qty')) || 0;
       var ppsEl = document.getElementById('jc_panels_per_sheet');
@@ -1045,7 +1117,92 @@ function jcCalcStrip(){
   jcCalcStrip();
 })();
 
+/* ---- EDIT PAGE CLEAN: sections accordion — header click par kholo/band, chip me current values ---- */
+function jcSecChipTxt(n){
+  if (n === 0) {
+    var p = document.getElementById('jc_party'), q = val('jc_qty_pcs');
+    return ((p && p.value) ? p.value : '—') + ' · Qty ' + (q || '—');
+  }
+  if (n === 1) {
+    var bm = document.getElementById('jc_board_material'), th = document.getElementById('jc_sheet_thickness');
+    return ((bm && bm.value) ? bm.value.split(' ')[0] : '—') + ' · ' + ((th && th.value) ? th.value : '—');
+  }
+  if (n === 2) {
+    return 'Panel ' + (fmt(val('jc_panel_x')) || '—') + '×' + (fmt(val('jc_panel_y')) || '—') +
+           ' · Sheet ' + (fmt(val('jc_sheet_len')) || '—') + '×' + (fmt(val('jc_sheet_w')) || '—') +
+           ' · ' + (val('jc_sheets') || '—') + ' sheets';
+  }
+  var pr = val('jc_price');
+  return (pr ? '₹' + pr + '/pc' : 'rate —') + ' · ' + (val('jc_rs_pcb') ? '₹' + val('jc_rs_pcb') + '/sq.inch' : 'sq.inch —');
+}
+function jcSecToggle(head, forceOpen){
+  var body = head.nextElementSibling;
+  if (!body) return;
+  var open = body.style.display !== 'none';
+  if (forceOpen === true) open = false;
+  if (forceOpen === false) open = true;
+  body.style.display = open ? 'none' : '';
+  var ar = head.querySelector('.jc-sec-ar');
+  if (ar) ar.textContent = open ? '▾' : '▸';
+}
+function jcSecChips(){
+  document.querySelectorAll('#jcForm .panel-head[data-jcsec]').forEach(function(h){
+    var c = h.querySelector('.jc-sec-chip');
+    if (c) c.innerHTML = jcSecChipTxt(parseInt(h.getAttribute('data-jcsec')));
+  });
+}
+(function(){
+  var form = document.getElementById('jcForm');
+  if (!form) return;
+  var icons = ['📋', '🧪', '📐', '💰'];
+  var defOpen = [true, false, true, false];   /* details + sizing khule, baaki chips me */
+  var heads = form.querySelectorAll('.panel-head');
+  var idx = 0;
+  heads.forEach(function(h){
+    if (idx > 3) return;
+    var n = idx++;
+    h.setAttribute('data-jcsec', String(n));
+    h.style.cursor = 'pointer';
+    h.style.display = 'flex';
+    h.style.alignItems = 'center';
+    h.style.gap = '8px';
+    var h3 = h.querySelector('h3');
+    if (h3) h3.innerHTML = '<span class="jc-sec-ar" style="display:inline-block;width:14px;color:#64748b">' + (defOpen[n] ? '▾' : '▸') + '</span>' + icons[n] + h3.innerHTML.replace(/^[^A-Za-zअ-ह]*/, '');
+    var chip = document.createElement('span');
+    chip.className = 'jc-sec-chip';
+    chip.style.cssText = 'margin-left:auto;font-size:11px;font-weight:700;color:#475569;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:999px;padding:3px 10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:52%';
+    h.appendChild(chip);
+    h.addEventListener('click', function(e){
+      var t = e.target && e.target.tagName;
+      if (t === 'INPUT' || t === 'SELECT' || t === 'BUTTON' || t === 'A' || (e.target.closest && e.target.closest('button,a,select,input'))) return;
+      jcSecToggle(h);
+      jcSecChips();
+    });
+    if (!defOpen[n]) {
+      var body = h.nextElementSibling;
+      if (body) body.style.display = 'none';
+    }
+  });
+  var bar = document.createElement('div');
+  bar.style.cssText = 'display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap';
+  bar.innerHTML = '<span class="muted small" style="font-weight:700">EDIT — section header par click karo (kholo/band):</span>' +
+    '<button type="button" class="btn btn-outline btn-xs" id="jcSecAllOpen">▾ Sab kholo</button>' +
+    '<button type="button" class="btn btn-outline btn-xs" id="jcSecAllClose">▸ Sirf zaroori rakho</button>';
+  form.insertBefore(bar, form.firstChild);
+  document.getElementById('jcSecAllOpen').addEventListener('click', function(){
+    form.querySelectorAll('.panel-head[data-jcsec]').forEach(function(h){ jcSecToggle(h, true); });
+    jcSecChips();
+  });
+  document.getElementById('jcSecAllClose').addEventListener('click', function(){
+    form.querySelectorAll('.panel-head[data-jcsec]').forEach(function(h, i){ jcSecToggle(h, i === 2 ? true : false); });
+    jcSecChips();
+  });
+  jcSecChips();
+  form.addEventListener('input', jcSecChips);
+})();
+
 /* ---- multi-employee: ek process par 2+ bande milkar (＋ button) ---- */
+
 function addOpPick(pid){
   var box = document.getElementById('oppicks_' + pid);
   if (!box) return;
@@ -1063,13 +1220,14 @@ function addOpPick(pid){
    PCB PRICE bharein        -> PER SQ.INCH = PRICE ÷ AREA            */
 var _lastPriceEdit = 'rate';
 function _pcbAreaSqIn(){
+  /* RATE ka area = SINGLE PCB size — GANG PANEL aur CNC margin rate me count NAHI hota */
+  var ax = parseFloat(val('jc_actual_pcb_x')) || 0;
+  var ay = parseFloat(val('jc_actual_pcb_y')) || 0;
+  if (ax > 0 && ay > 0) return (ax / 25.4) * (ay / 25.4);
   var px = parseFloat(val('jc_panel_x')) || 0;
   var py = parseFloat(val('jc_panel_y')) || 0;
   var pcs = parseInt(val('jc_pcs_panel')) || 0;
   if (px > 0 && py > 0 && pcs > 0) return ((px / 25.4) * (py / 25.4)) / pcs;
-  var ax = parseFloat(val('jc_actual_pcb_x')) || 0;
-  var ay = parseFloat(val('jc_actual_pcb_y')) || 0;
-  if (ax > 0 && ay > 0) return (ax / 25.4) * (ay / 25.4);
   return 0;
 }
 function calcPcbPrice(){

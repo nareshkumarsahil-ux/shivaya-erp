@@ -15,7 +15,7 @@ import http.client
 import urllib.parse
 
 # Schema version — bump karo jab SCHEMA/migrate badle, taaki agla deploy tables update kare.
-SCHEMA_VERSION = "2026-09-12.9"
+SCHEMA_VERSION = "2026-09-12.10"
 
 DB_PATH = os.environ.get("DB_PATH") or (
     os.path.join(tempfile.gettempdir(), "circuit.db") if os.environ.get("VERCEL") else "circuit.db"
@@ -776,6 +776,15 @@ def get_db():
     return _Conn()
 
 
+def fix_legacy_cutting_sizes(conn):
+    """v2.30: purane jobcards — CUTTING PANEL me gang panel save tha (CNC margin add nahi tha).
+    Sirf un rows ko fix: jahan panel_x exactly x_size hai aur CNC margin > 0 → gang + 2×margin."""
+    conn.execute("UPDATE jobcard SET panel_x = x_size + 2*COALESCE(cnc_margin_x,0), "
+                 "panel_y = y_size + 2*COALESCE(cnc_margin_y,0) "
+                 "WHERE x_size > 0 AND y_size > 0 AND panel_x = x_size "
+                 "AND (COALESCE(cnc_margin_x,0) > 0 OR COALESCE(cnc_margin_y,0) > 0)")
+
+
 def migrate(conn):
     cols = [r[1] for r in conn.execute("PRAGMA table_info(orders)")]
     if "cutlist_info" not in cols:
@@ -869,6 +878,11 @@ def migrate(conn):
         conn.execute("ALTER TABLE jobcard ADD COLUMN instructions TEXT DEFAULT ''")
     if jcols and "fg_deducted" not in jcols:
         conn.execute("ALTER TABLE jobcard ADD COLUMN fg_deducted INTEGER DEFAULT 0")
+    # v2.30: purane jobcards jahan CUTTING PANEL me gang panel save tha (CNC margin add nahi tha)
+    try:
+        fix_legacy_cutting_sizes(conn)
+    except Exception:
+        pass
     # employees: salary column (attendance se salary banane ke liye)
     ecols = [r[1] for r in conn.execute("PRAGMA table_info(employees)")]
     if ecols and "salary" not in ecols:
