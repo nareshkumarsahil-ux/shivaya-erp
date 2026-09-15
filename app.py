@@ -843,14 +843,14 @@ FIELD_KEYS = ["pcb_len", "pcb_w", "pcbs_x", "pcbs_y", "gap_x", "gap_y",
               "border_l", "border_r", "border_t", "border_b",
               "gang_x", "gang_y", "sheet_len", "sheet_w", "kerf_x", "kerf_y", "sheets", "use",
               "panel_len", "panel_w", "panel_base_len", "panel_base_w",
-              "per_sq_inch", "pcb_price", "gaps_x", "gaps_y"]
+              "per_sq_inch", "pcb_price", "gaps_x", "gaps_y", "pgaps_x", "pgaps_y"]
 DEFAULTS = {"pcb_len": "40", "pcb_w": "50", "pcbs_x": "10", "pcbs_y": "5",
             "gap_x": "0", "gap_y": "0",
             "border_l": "0", "border_r": "0", "border_t": "5", "border_b": "5",
             "gang_x": "1", "gang_y": "1", "sheet_len": "1200", "sheet_w": "1000",
             "kerf_x": "2", "kerf_y": "2", "sheets": "1", "use": "1",
             "panel_len": "400", "panel_w": "260",
-            "per_sq_inch": "", "pcb_price": ""}
+            "per_sq_inch": "", "pcb_price": "", "pgaps_x": "", "pgaps_y": ""}
 SHEET_PRESETS = ["1244x1044", "1240x1040", "1230x1030", "1200x1100", "1200x1000", "1100x1100", "1050x1050"]
 
 
@@ -931,10 +931,13 @@ def compute_layout(p):
     # Multiplier active ho to PANEL fields mein CUTTING SIZE dikhta hai (screenshot jaisa).
     # Hidden base fields mein single panel rehta hai — roundtrip ke liye.
     gang_active = gang_x > 1 or gang_y > 1
+    # PANEL-TO-PANEL GAPS (per joint): '0,2,0' — sirf jahan gap chahiye
+    pgaps_x = _gap_list(p.get("pgaps_x"), gang_x - 1, kerf_x) if gang_x > 1 else []
+    pgaps_y = _gap_list(p.get("pgaps_y"), gang_y - 1, kerf_y) if gang_y > 1 else []
     if gang_active:
         if locked:
-            gang_len = panel_len * gang_x + kerf_x * (gang_x - 1)
-            gang_w = panel_w * gang_y + kerf_y * (gang_y - 1)
+            gang_len = panel_len * gang_x + (sum(pgaps_x) if pgaps_x else 0)
+            gang_w = panel_w * gang_y + (sum(pgaps_y) if pgaps_y else 0)
         else:
             base_l, base_w = _f(p, "panel_base_len"), _f(p, "panel_base_w")
             gang_len, gang_w = panel_len_in, panel_w_in  # visible fields = cutting size
@@ -1006,6 +1009,7 @@ def compute_layout(p):
         "gaps_x": gaps_x, "gaps_y": gaps_y,
         "border_l": border_l, "border_r": border_r, "border_t": border_t, "border_b": border_b,
         "gang_x": gang_x, "gang_y": gang_y,
+        "pgaps_x": pgaps_x, "pgaps_y": pgaps_y,
         "sheet_len": sheet_len, "sheet_w": sheet_w, "kerf_x": kerf_x, "kerf_y": kerf_y, "sheets": sheets,
         "panel_len": panel_len, "panel_w": panel_w, "locked": locked,
         "gang_active": gang_active, "cutting_len": gang_len, "cutting_w": gang_w,
@@ -1029,11 +1033,15 @@ def svg_panel_preview(r):
     pl, pw = r["panel_len"], r["panel_w"]
     gx, gy = r["gang_x"], r["gang_y"]
     kx, ky = r["kerf_x"], r["kerf_y"]
-    gl = pl * gx + kx * (gx - 1)   # total panel size with multiplier
-    gw = pw * gy + ky * (gy - 1)
+    pgx = r.get("pgaps_x") or []
+    pgy = r.get("pgaps_y") or []
+    gl = pl * gx + (sum(pgx) if pgx else kx * (gx - 1))   # total panel size with multiplier
+    gw = pw * gy + (sum(pgy) if pgy else ky * (gy - 1))
     scale = min((W - 2 * pad) / gl, (H - 2 * pad) / gw)
     P, Q = pl * scale, pw * scale
-    Kx, Ky = kx * scale, ky * scale
+    off_xs = pgx if pgx else [kx]
+    off_ys = pgy if pgy else [ky]
+    Kx, Ky = off_xs[0] * scale, off_ys[0] * scale
     GL, GW = gl * scale, gw * scale
     x0, y0 = pad + (W - 2 * pad - GL) / 2, pad + (H - 2 * pad - GW) / 2
     cw, ch = r["pcb_len"] * scale, r["pcb_w"] * scale
@@ -1044,7 +1052,9 @@ def svg_panel_preview(r):
     s = [f'<svg viewBox="0 0 {W} {H}" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;display:block">']
     for a in range(gx):
         for b in range(gy):
-            xp, yp = x0 + a * (P + Kx), y0 + b * (Q + Ky)
+            _oxa = sum(P + off_xs[i] * scale for i in range(a))
+            _oyb = sum(Q + off_ys[i] * scale for i in range(b))
+            xp, yp = x0 + _oxa, y0 + _oyb
             s.append(f'<rect x="{xp:.1f}" y="{yp:.1f}" width="{P:.1f}" height="{Q:.1f}" fill="#dbeafe" stroke="#2563eb" stroke-width="2" rx="3"/>')
             if cw > 2.4 and ch > 2.4:
                 # HAR boundary ka apna gap — positions accumulate karte hain
@@ -1175,6 +1185,23 @@ def svg_gang_preview(r):
     return "".join(s)
 
 
+def _gap_list(raw, n, default):
+    """'0,2,0' jaisa comma string -> n floats (kam pade to default se pad, -1/blank = default)."""
+    vals = []
+    for x in str(raw or "").split(","):
+        x = x.strip()
+        if not x:
+            continue
+        try:
+            v = float(x)
+        except ValueError:
+            continue
+        vals.append(v if v >= 0 else default)
+    while len(vals) < max(0, n):
+        vals.append(default)
+    return vals[:max(0, n)] if n > 0 else []
+
+
 def gang_info_for(r):
     """GANG PANEL PREVIEW data (multiplier > 1 ho to) — cutting size,
     PCS per unit, sheet layout gang terms mein, PCS per sheet."""
@@ -1193,10 +1220,16 @@ def gang_info_for(r):
         gang_count = r["grid_x"] * r["grid_y"]
         lay = f'{r["grid_x"]} × {r["grid_y"]}'
     pcs_sheet = r["pcs_per_sheet"]
+    def _gstr(arr, dfl):
+        if not arr:
+            return f"{dfl:.2f} × uniform"
+        if all(abs(v - arr[0]) < 1e-9 for v in arr):
+            return f"{arr[0]:.2f} x {len(arr)}"
+        return "[" + "+".join(f"{v:g}" for v in arr) + "]"
     cut_html = (f'✂ <b>Cutting Size: {gl:.2f} × {gw:.2f}mm - PCS/Unit: {pcs_gang}</b>'
                 f'<div class="muted small" style="margin-top:3px">'
-                f'({r["panel_len"]:.2f} x {gx} + {r["kerf_x"]:.2f} × {gx - 1} = {gl:.2f}mm, '
-                f'{r["panel_w"]:.2f} x {gy} + {r["kerf_y"]:.2f} × {gy - 1} = {gw:.2f}mm)</div>')
+                f'({r["panel_len"]:.2f} x {gx} + gaps {_gstr(r.get("pgaps_x"), r["kerf_x"])} = {gl:.2f}mm, '
+                f'{r["panel_w"]:.2f} x {gy} + gaps {_gstr(r.get("pgaps_y"), r["kerf_y"])} = {gw:.2f}mm)</div>')
     layout_html = (f'<b>{lay}</b>'
                    f'<div class="gsize">{gl:.2f} × {gw:.2f} mm</div>')
     note = (f'💡 Panel {r["panel_len"]:.2f}×{r["panel_w"]:.2f} mm ({r["pcs_panel"]} PCS) × {gx}×{gy} '

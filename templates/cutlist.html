@@ -74,11 +74,19 @@
           <div class="field" style="flex:1"><label>Y Multiplier</label><input type="number" name="gang_y" id="gang_y" value="{{ fields.gang_y }}" min="1"></div>
         </div>
         <p class="muted small" style="margin-top:8px">💡 How many panels are gang-cut together, with the panel-to-panel gap below added between them.</p>
-        <p class="muted small" style="margin-top:4px;background:#f0f9ff;border:1px dashed #3b82f6;border-radius:8px;padding:7px 10px">
-          🔧 <b>Gap sirf beech me chahiye?</b> (jaise 4 panel, gap sirf 2nd-3rd ke beech) — jin panels ke beech gap <b>nahi</b> chahiye unko jodkar ek unit banao:
-          "Use" <b>untick</b> karo → PANEL LENGTH = <b>400×2 = 800</b> → X Multiplier = <b>2</b> → Panel Gap X = <b>2</b>.
-          Cutting size = 800×2 + 2×1 = <b>1602mm</b> = bilkul 4×400 + sirf 1 gap ✅
-        </p>
+        <div style="margin-top:10px;background:#f8fafc;border:1px solid var(--border);border-radius:9px;padding:9px 12px">
+          <div class="small" style="font-weight:800;color:#334155">🔹 PANEL-TO-PANEL GAP — KAHIN BHI: koi bhi joint me gap rakho ya hatao</div>
+          <div id="pgap_x_cells" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px"></div>
+          <div id="pgap_y_cells" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px"></div>
+          <div class="muted small" style="margin-top:5px">Har joint <b>independent</b> hai: jahan gap chahiye wahan number (2, 5, kuch bhi), jahan nahi wahan <b>0</b>. Koi bhi pattern — beech me, kinare par, do jagah, kahin nahi.</div>
+          <div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">
+            <button type="button" class="btn btn-outline btn-xs" id="pgapAll0">0 — sab gap HATAO</button>
+            <button type="button" class="btn btn-outline btn-xs" id="pgapAllKerf">↻ sab me PANEL GAP/KERF wali value</button>
+          </div>
+          <input type="hidden" name="pgaps_x" id="pgaps_x" value="{{ fields.pgaps_x or '' }}">
+          <input type="hidden" name="pgaps_y" id="pgaps_y" value="{{ fields.pgaps_y or '' }}">
+        </div>
+
         <div class="result-line" id="liveCutLine" style="{{ 'display:block;' if gang_info else 'display:none;' }}">{{ gang_info.cut_html|safe if gang_info else '' }}</div>
       </div>
     </div>
@@ -189,13 +197,6 @@
       </div>
     </div>
 
-    <div class="panel">
-      <div class="panel-head"><h3 id="bestPanelsLabel">🏆 BEST LAYOUT (0 PANELS)</h3><span class="muted small" id="sheetPreviewHead"></span></div>
-      <div class="panel-body" style="padding:10px">
-        <div id="svgSheet">{{ svg_sheet|safe }}</div>
-      </div>
-    </div>
-
     <div class="panel" id="orientPanel" style="display:none">
       <div class="panel-head"><h3>🔄 Orientation Options</h3></div>
       <div class="panel-body" style="padding:12px 16px">
@@ -289,6 +290,81 @@ function renderGapCells(){
   });
 }
 
+/* ---- PANEL-TO-PANEL GAPS: har joint ka apna gap (gang multiplier) ---- */
+function pGapVals(axis){
+  var el = document.getElementById('pgaps_' + axis);
+  if (!el || !el.value) return [];
+  return String(el.value).split(',').map(function(x){ var v = parseFloat(x); return isNaN(v) ? -1 : v; });
+}
+function pGapList(axis, n, def){
+  var vals = pGapVals(axis), out = [];
+  for (var i = 0; i < Math.max(0, n - 1); i++) {
+    var v = (i < vals.length) ? vals[i] : -1;
+    out.push(v < 0 ? def : v);
+  }
+  return out;
+}
+function syncPGaps(axis){
+  var box = document.getElementById('pgap' + axis + '_cells');
+  if (!box) return;
+  var vals = [];
+  box.querySelectorAll('input').forEach(function(inp){ vals.push(parseFloat(inp.value) || 0); });
+  document.getElementById('pgaps_' + axis).value = vals.join(',');
+}
+function renderPGapCells(){
+  ['x','y'].forEach(function(axis){
+    var box = document.getElementById('pgap' + axis + '_cells');
+    if (!box) return;
+    var gcount = Math.max(1, intNum('gang_' + axis));
+    var count = gcount - 1;
+    var def = (axis === 'x') ? num('kerf_x') : num('kerf_y');
+    var cur = pGapVals(axis);
+    box.innerHTML = '';
+    if (count <= 0) {
+      box.innerHTML = '<span class="muted small" style="color:#b45309;font-weight:700">← Pehle ' + axis.toUpperCase() +
+        ' Multiplier me 2 ya zyada daalo — phir yahan joint inputs aayenge (1–2, 2–3...)</span>';
+      syncPGaps(axis);
+      return;
+    }
+    for (var i = 0; i < count; i++) {
+      var v = (i < cur.length && cur[i] >= 0) ? cur[i] : def;
+      var lbl = document.createElement('span');
+      lbl.textContent = (i + 1) + '–' + (i + 2) + ':';
+      lbl.style.cssText = 'display:flex;align-items:center;font-size:11px;font-weight:700;color:#64748b';
+      var inp = document.createElement('input');
+      inp.type = 'number'; inp.step = '0.01'; inp.min = '0'; inp.value = v;
+      inp.style.cssText = 'width:64px;padding:4px 6px;border:1px solid var(--border);border-radius:6px;font-size:12px';
+      inp.addEventListener('input', function(){ syncPGaps(axis); computeLive(); });
+      var cell = document.createElement('span');
+      cell.style.cssText = 'display:inline-flex;align-items:center;gap:3px;background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:3px 7px';
+      cell.appendChild(lbl); cell.appendChild(inp);
+      box.appendChild(cell);
+    }
+    syncPGaps(axis);
+  });
+}
+function pgapFillAll(kind){
+  ['x','y'].forEach(function(axis){
+    var box = document.getElementById('pgap' + axis + '_cells');
+    if (!box) return;
+    var v = (kind === 'kerf') ? num('kerf_' + axis) : 0;
+    box.querySelectorAll('input').forEach(function(inp){ inp.value = v; });
+    syncPGaps(axis);
+  });
+  computeLive();
+}
+(function(){
+  var b0 = document.getElementById('pgapAll0'), bk = document.getElementById('pgapAllKerf');
+  if (b0) b0.addEventListener('click', function(){ pgapFillAll(0); });
+  if (bk) bk.addEventListener('click', function(){ pgapFillAll('kerf'); });
+})();
+
+function pgStr(arr){
+  if (!arr.length) return '0';
+  var allSame = arr.every(function(v){ return v === arr[0]; });
+  return allSame ? (fmtNum(arr[0]) + 'x' + arr.length) : '[' + arr.map(fmtNum).join('+') + ']';
+}
+
 function computeLive(){
   var pcbL = num('pcb_len'), pcbW = num('pcb_w');
   var px = intNum('pcbs_x'), py = intNum('pcbs_y');
@@ -301,6 +377,7 @@ function computeLive(){
   var sheets = Math.max(1, intNum('sheets'));
   var useLocked = document.getElementById('useChk').checked;
   var manualL = num('panel_len'), manualW = num('panel_w');
+  renderPGapCells();
 
   if (sl <= 0 || sw <= 0) return;
   /* locked mode: PCB builder data zaroori; manual mode: sirf panel size zaroori */
@@ -318,10 +395,11 @@ function computeLive(){
     pL = manualL; pW = manualW;
   }
 
+  var pgXs = pGapList('x', gx, kx), pgYs = pGapList('y', gy, ky);
   if (gangActive) {
     if (useLocked) {
-      unitL = pL * gx + kx * (gx - 1);
-      unitW = pW * gy + ky * (gy - 1);
+      unitL = pL * gx + _sumArr(pgXs);
+      unitW = pW * gy + _sumArr(pgYs);
     } else {
       /* visible PANEL fields = CUTTING SIZE (multiplier ke baad ka size) */
       unitL = manualL; unitW = manualW;
@@ -417,8 +495,8 @@ function computeLive(){
   if (gangActive) {
     cutLine.style.display = 'block';
     cutLine.innerHTML = '✂ <b>Cutting Size: ' + fmtNum(gl) + ' × ' + fmtNum(gw) + 'mm - PCS/Unit: ' + pcsUnit + '</b>' +
-      '<div class="muted small" style="margin-top:3px">(' + fmtNum(pL) + ' x ' + gx + ' + ' + fmtNum(kx) + ' × ' + (gx - 1) +
-      ' = ' + fmtNum(gl) + 'mm, ' + fmtNum(pW) + ' x ' + gy + ' + ' + fmtNum(ky) + ' × ' + (gy - 1) + ' = ' + fmtNum(gw) + 'mm)</div>';
+      '<div class="muted small" style="margin-top:3px">(' + fmtNum(pL) + ' x ' + gx + ' + gaps ' + pgStr(pgXs) +
+      ' = ' + fmtNum(gl) + 'mm, ' + fmtNum(pW) + ' x ' + gy + ' + gaps ' + pgStr(pgYs) + ' = ' + fmtNum(gw) + 'mm)</div>';
   } else {
     cutLine.style.display = 'none';
   }
@@ -442,7 +520,8 @@ function computeLive(){
   document.getElementById('statWaste').style.color = (waste <= 35) ? '#16a34a' : '#d97706';
   document.getElementById('statLayout').textContent =
     (best === 'mixed') ? 'Mixed Rows (Best)' : (best === 'rotated') ? 'Rotated 90°' : 'Normal';
-  document.getElementById('bestPanelsLabel').textContent = '🏆 BEST LAYOUT (' + pps + ' PANELS)';
+  var bpl = document.getElementById('bestPanelsLabel');
+  if (bpl) bpl.textContent = '🏆 BEST LAYOUT (' + pps + ' PANELS)';
 
   /* --- 🔗 GANG PANEL PREVIEW (multiplier active ho to) --- */
   var gpEl = document.getElementById('gangPanel');
@@ -496,20 +575,22 @@ function computeLive(){
   mark(om, bm, best === 'mixed');
 
   /* --- SVG previews --- */
-  document.getElementById('svgPanel').innerHTML = svgPanel(pcbL, pcbW, px, py, gapXs, gapYs, bl, br, bt, bb, pL, pW, pcsPanel, gx, gy, kx, ky);
-  document.getElementById('svgSheet').innerHTML = svgSheet(sl, sw, cl, cw, gx2, gy2, gx, gy, kx, ky, pps, waste, best, mN, mM, perN, perR, gl, gw, pcsPanel);
+  document.getElementById('svgPanel').innerHTML = svgPanel(pcbL, pcbW, px, py, gapXs, gapYs, bl, br, bt, bb, pL, pW, pcsPanel, gx, gy, kx, ky, pgXs, pgYs);
   var sheetHead = document.getElementById('sheetPreviewHead');
   if (sheetHead) sheetHead.innerHTML = (best === 'mixed')
     ? '🔲 <span style="color:#16a34a;font-weight:700">Normal rows</span> · <span style="color:#2563eb;font-weight:700">Rotated rows</span> — <span style="display:inline-flex;gap:4px;align-items:center"><span style="width:10px;height:10px;background:#dcfce7;border:1.5px solid #16a34a;border-radius:2px;display:inline-block"></span>Gang</span> <span style="display:inline-flex;gap:4px;align-items:center"><span style="width:10px;height:10px;background:#bfdbfe;border:1.5px solid #2563eb;border-radius:2px;display:inline-block"></span>Panel</span>'
     : '🔲 <span style="color:#16a34a;font-weight:700">Gang panels</span> · Sheet — <span style="display:inline-flex;gap:4px;align-items:center"><span style="width:10px;height:10px;background:#dcfce7;border:1.5px solid #16a34a;border-radius:2px;display:inline-block"></span>Gang</span> <span style="display:inline-flex;gap:4px;align-items:center"><span style="width:10px;height:10px;background:#bfdbfe;border:1.5px solid #2563eb;border-radius:2px;display:inline-block"></span>Panel</span>';
 }
 
-function svgPanel(pcbL, pcbW, px, py, gapXs, gapYs, bl, br, bt, bb, pL, pW, pcsPanel, gx, gy, kx, ky){
+function svgPanel(pcbL, pcbW, px, py, gapXs, gapYs, bl, br, bt, bb, pL, pW, pcsPanel, gx, gy, kx, ky, pgXs, pgYs){
   var W = 430, H = 300, pad = 26;
-  var gl = pL * gx + kx * (gx - 1), gw = pW * gy + ky * (gy - 1);  /* total panel with multiplier */
+  pgXs = pgXs || []; pgYs = pgYs || [];
+  var gl = pL * gx + (pgXs.length ? _sumArr(pgXs) : kx * (gx - 1));
+  var gw = pW * gy + (pgYs.length ? _sumArr(pgYs) : ky * (gy - 1));
   var scale = Math.min((W - 2*pad) / gl, (H - 2*pad) / gw);
   var P = pL * scale, Q = pW * scale;
-  var Kx = kx * scale, Ky = ky * scale;
+  var offXs = pgXs.length ? pgXs : [kx], offYs = pgYs.length ? pgYs : [ky];
+  var Kx = offXs[0] * scale, Ky = offYs[0] * scale;
   var GL = gl * scale, GW = gw * scale;
   var x0 = pad + (W - 2*pad - GL) / 2, y0 = pad + (H - 2*pad - GW) / 2;
   var cw = pcbL * scale, ch = pcbW * scale;
@@ -518,7 +599,11 @@ function svgPanel(pcbL, pcbW, px, py, gapXs, gapYs, bl, br, bt, bb, pL, pW, pcsP
   var a, b, i, j;
   for (a = 0; a < gx; a++)
     for (b = 0; b < gy; b++) {
-      var xp = x0 + a * (P + Kx), yp = y0 + b * (Q + Ky);
+      var oxa = 0;
+      for (var ai = 0; ai < a; ai++) oxa += P + (ai < offXs.length ? offXs[ai] : 0) * scale;
+      var oyb = 0;
+      for (var bi = 0; bi < b; bi++) oyb += Q + (bi < offYs.length ? offYs[bi] : 0) * scale;
+      var xp = x0 + oxa, yp = y0 + oyb;
       s += '<rect x="' + xp.toFixed(1) + '" y="' + yp.toFixed(1) + '" width="' + P.toFixed(1) + '" height="' + Q.toFixed(1) + '" fill="#dbeafe" stroke="#2563eb" stroke-width="2" rx="3"/>';
       if (cw > 2.4 && ch > 2.4) {
         var ox = bx;
@@ -536,7 +621,9 @@ function svgPanel(pcbL, pcbW, px, py, gapXs, gapYs, bl, br, bt, bb, pL, pW, pcsP
     }
   if (gx > 1 || gy > 1) {
     s += '<rect x="' + x0.toFixed(1) + '" y="' + y0.toFixed(1) + '" width="' + GL.toFixed(1) + '" height="' + GW.toFixed(1) + '" fill="#dcfce7" fill-opacity="0.4" stroke="#16a34a" stroke-width="2" rx="5"/>';
-    s += '<text x="' + (x0 + GL/2) + '" y="' + (y0 - 6).toFixed(1) + '" text-anchor="middle" font-size="11" fill="#16a34a" font-family="Segoe UI,Arial">TOTAL WITH MULTIPLIER: ' + fmtNum(gl) + '×' + fmtNum(gw) + ' mm (' + gx + '×' + gy + ' + kerf)</text>';
+    var gTxt = (pgXs.length && !pgXs.every(function(v){ return v === kx; })) || (pgYs.length && !pgYs.every(function(v){ return v === ky; }))
+      ? 'gaps ' + pgStr(pgXs) + '/' + pgStr(pgYs) : 'uniform kerf ' + fmtNum(kx) + '/' + fmtNum(ky);
+    s += '<text x="' + (x0 + GL/2) + '" y="' + (y0 - 6).toFixed(1) + '" text-anchor="middle" font-size="11" fill="#16a34a" font-family="Segoe UI,Arial">TOTAL WITH MULTIPLIER: ' + fmtNum(gl) + '×' + fmtNum(gw) + ' mm (' + gx + '×' + gy + ' · ' + gTxt + ')</text>';
   }
   if ((_sumArr(gapXs) > 0 || _sumArr(gapYs) > 0) && Q > 24)
     s += '<text x="' + (x0 + P/2) + '" y="' + (y0 + Q - 10).toFixed(1) + '" text-anchor="middle" font-size="10" fill="#b45309" font-family="Segoe UI,Arial">gap X:' + fmtNum(_sumArr(gapXs)) + ' / Y:' + fmtNum(_sumArr(gapYs)) + ' mm</text>';
@@ -650,6 +737,10 @@ function svgGangSheet(sl, sw, cl, cw, gx2, gy2, gx, gy, kx, ky, pps, waste, best
 /* pcbs count badle to gap boxes dobara banao; default gap badle to saare boxes wahi value */
 ['pcbs_x','pcbs_y'].forEach(function(id){
   document.getElementById(id).addEventListener('input', function(){ renderGapCells(); computeLive(); });
+});
+/* gang multiplier badle to PANEL joint boxes TURANT banao (computeLive ke return hone par bhi) */
+['gang_x','gang_y'].forEach(function(id){
+  document.getElementById(id).addEventListener('input', function(){ renderPGapCells(); });
 });
 ['gap_x','gap_y'].forEach(function(id){
   document.getElementById(id).addEventListener('input', function(){
