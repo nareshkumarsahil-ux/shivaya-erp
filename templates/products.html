@@ -297,7 +297,7 @@ function pmThickRate(){
   <div class="panel-body" style="padding:0;overflow-x:auto">
     <table id="modelsTable">
       <thead>
-        <tr><th>Model</th><th>Sheet Thickness</th><th>PCB (mm)</th><th>PCBs</th><th>Panel (mm)</th><th class="t-right">PCS/Panel</th><th class="t-right">Panels/Sheet</th><th class="t-right">FG Stock</th><th class="t-right">Current / Last Price</th><th>Created</th><th></th></tr>
+        <tr><th>Model</th><th>Sheet Thickness</th><th>PCB (mm)</th><th>PCBs</th><th>PANEL & GANG PANEL</th><th class="t-right">PCS/Panel</th><th class="t-right">Panels/Sheet</th><th class="t-right">FG Stock</th><th class="t-right">Current / Last Price</th><th>Created</th><th></th></tr>
       </thead>
       <tbody>
         {% for m in models %}
@@ -306,7 +306,24 @@ function pmThickRate(){
           <td class="small mono" style="white-space:nowrap">{% if m.sheet_thickness %}<span class="badge b-blue">{{ m.sheet_thickness }}</span>{% else %}<span class="muted">—</span>{% endif %}</td>
           <td class="mono small">{{ m.pcb_len|gfmt }}×{{ m.pcb_w|gfmt }}</td>
           <td class="mono small">{{ m.pcbs_x }}×{{ m.pcbs_y }}</td>
-          <td class="mono small">{% if m.cutting_len %}<b style="color:#166534">{{ m.cutting_len|gfmt }}×{{ m.cutting_w|gfmt }}</b><div class="muted" style="font-size:10px">panel {{ m.panel_len|gfmt }}×{{ m.panel_w|gfmt }} · {{ m.gang_x }}×{{ m.gang_y }} gang</div>{% else %}{{ m.panel_len|gfmt }}×{{ m.panel_w|gfmt }}{% endif %}{% if m.note %}<div class="muted" style="font-size:10px">🔧 {{ m.note }}</div>{% endif %}</td>
+          <td class="mono small" style="white-space:nowrap">
+            {% set pl = m.panel_len|gfmt %}{% set pw = m.panel_w|gfmt %}
+            <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:7px;padding:3px 8px;margin:1px 0;display:inline-block">
+              <span style="font-size:9px;font-weight:800;color:#1d4ed8">PANEL</span>
+              <b style="color:#1d4ed8">{{ pl }}×{{ pw }}</b>
+              <span class="muted" style="font-size:10px">· {{ m.pcbs_x }}×{{ m.pcbs_y }} = <b>{{ m.pcs_panel }} PCB</b></span>
+            </div>
+            {% if m.cutting_len %}
+            <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:7px;padding:3px 8px;margin:1px 0;display:inline-block">
+              <span style="font-size:9px;font-weight:800;color:#166534">GANG PANEL</span>
+              <b style="color:#166534">{{ m.cutting_len|gfmt }}×{{ m.cutting_w|gfmt }}</b>
+              <span class="muted" style="font-size:10px">· {{ m.gang_x }}×{{ m.gang_y }} = <b>{{ (m.pcs_panel or 0) * (m.gang_x or 1) * (m.gang_y or 1) }} PCS</b></span>
+            </div>
+            {% else %}
+            <div class="muted" style="font-size:10px">gang nahi (single panel)</div>
+            {% endif %}
+            {% if m.note %}<div class="muted" style="font-size:10px">🔧 {{ m.note }}</div>{% endif %}
+          </td>
           <td class="t-right mono">{{ m.pcs_panel }}</td>
           <td class="t-right mono">{{ m.panels_sheet }}</td>
           <td class="t-right"><span class="badge {{'b-green' if (m.fg_stock or 0) > 0 else 'b-gray'}}">{{ m.fg_stock or 0 }} PCS</span></td>

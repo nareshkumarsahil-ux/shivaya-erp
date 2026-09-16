@@ -1185,6 +1185,61 @@ def svg_gang_preview(r):
     return "".join(s)
 
 
+def svg_sheet_layout_preview(r):
+    """SHEET LAYOUT PREVIEW — poori sheet me cutting panels kaise fit hote hain
+    (1 sheet = kitne cutting panel), har panel numbered + inner single-panel grid."""
+    W, H, pad = 430, 380, 26
+    sl, sw = r["sheet_len"], r["sheet_w"]
+    scale = min((W - 2 * pad) / sl, (H - 2 * pad) / sw)
+    S, T = sl * scale, sw * scale
+    x0, y0 = pad + (W - 2 * pad - S) / 2, pad + (H - 2 * pad - T) / 2
+    gx, gy = r["gang_x"], r["gang_y"]
+    kx, ky = r["kerf_x"] * scale, r["kerf_y"] * scale
+    s = [f'<svg viewBox="0 0 {W} {H}" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;display:block">']
+    s.append(f'<rect x="{x0:.1f}" y="{y0:.1f}" width="{S:.1f}" height="{T:.1f}" fill="#fffdf5" stroke="#b3ac99" stroke-width="2"/>')
+
+    def _panel_cell(cx, cy, cl, cw, num, fill, stroke):
+        s.append(f'<rect x="{cx:.1f}" y="{cy:.1f}" width="{cl:.1f}" height="{cw:.1f}" fill="{fill}" stroke="{stroke}" stroke-width="2" rx="3"/>')
+        if gx > 1 or gy > 1:
+            p = (cl - kx * (gx - 1)) / gx
+            q = (cw - ky * (gy - 1)) / gy
+            for a in range(gx):
+                for b in range(gy):
+                    s.append(f'<rect x="{cx + a * (p + kx):.1f}" y="{cy + b * (q + ky):.1f}" width="{p:.1f}" height="{q:.1f}" fill="none" stroke="{stroke}" stroke-width="0.7" opacity="0.55"/>')
+        if cl > 34 and cw > 22:
+            s.append(f'<text x="{cx + cl / 2:.1f}" y="{cy + cw / 2 + 4:.1f}" text-anchor="middle" font-size="11" font-weight="800" fill="{stroke}" font-family="Segoe UI,Arial">{num}</text>')
+
+    if r["best"] == "mixed":
+        num = 1
+        y = y0
+        cl, cw = r["gang_len"] * scale, r["gang_w"] * scale
+        for _row in range(r["mixed_n"]):
+            for i in range(r["per_normal"]):
+                _panel_cell(x0 + i * (cl + kx), y, cl, cw, num, "#eef2ff", "#6366f1")
+                num += 1
+            y += cw + ky
+        cl2, cw2 = r["gang_w"] * scale, r["gang_len"] * scale
+        for _row in range(r["mixed_m"]):
+            for i in range(r["per_rot"]):
+                _panel_cell(x0 + i * (cl2 + kx), y, cl2, cw2, num, "#fdf4ff", "#c026d3")
+                num += 1
+            y += cw2 + ky
+        cap = (f"1 SHEET {sl:.0f}x{sw:.0f} mm = {r['panels_per_sheet']} CUTTING PANELS "
+               f"({r['mixed_n']}x row {r['per_normal']} + {r['mixed_m']}x row {r['per_rot']}) = {r['pcs_per_sheet']} PCS")
+    else:
+        cl, cw = r["cell_len"] * scale, r["cell_w"] * scale
+        num = 1
+        for i in range(r["grid_x"]):
+            for j in range(r["grid_y"]):
+                _panel_cell(x0 + i * (cl + kx), y0 + j * (cw + ky), cl, cw, num, "#eef2ff", "#6366f1")
+                num += 1
+        cap = (f"1 SHEET {sl:.0f}x{sw:.0f} mm = {r['grid_x']}x{r['grid_y']} = "
+               f"{r['panels_per_sheet']} CUTTING PANELS x {r['pcs_unit']} PCS = {r['pcs_per_sheet']} PCS")
+    s.append(f'<text x="{W/2:.0f}" y="{H - 6:.0f}" text-anchor="middle" font-size="11.5" fill="#475569" font-family="Segoe UI,Arial">{cap}</text>')
+    s.append('</svg>')
+    return "".join(s)
+
+
 def _gap_list(raw, n, default):
     """'0,2,0' jaisa comma string -> n floats (kam pade to default se pad, -1/blank = default)."""
     vals = []
@@ -1466,6 +1521,7 @@ def cutlist():
     svg_sheet = svg_sheet_preview(result) if result else ""
     gang_info = gang_info_for(result)
     svg_gang_sheet = svg_gang_preview(result) if gang_info else ""
+    svg_sheet_layout = svg_sheet_layout_preview(result) if result else ""
     # PANEL fields display: gang active -> cutting size; warna single panel
     disp_pl = disp_pw = None
     if result:
@@ -1476,7 +1532,7 @@ def cutlist():
     return render_template("cutlist.html", active="cutlist", fields=fields, result=result,
                            models=models, orders=orders, SHEET_PRESETS=SHEET_PRESETS,
                            svg_panel=svg_panel, svg_sheet=svg_sheet, gang_info=gang_info,
-                           svg_gang_sheet=svg_gang_sheet,
+                           svg_gang_sheet=svg_gang_sheet, svg_sheet_layout=svg_sheet_layout,
                            disp_pl=disp_pl, disp_pw=disp_pw)
 
 
@@ -3720,6 +3776,24 @@ def prep_jobcard(order_id):
     if not order:
         return None, None, None
     jc = ensure_jobcard(order_id)
+    # AUTO PROCESS FLOW: process table KHAALI ho to SIDE+MATERIAL se khud seed karo —
+    # job card kholte hi table bhari milegi (khaali kabhi nahi dikhega). Data wali table
+    # ko touch nahi karte — sirf khaali wali me default flow bharo.
+    try:
+        # RAW count — get_jc_processes() khud 'Laminate Cutting' auto-insert karta hai,
+        # isliye guard uske upar nahi chal sakta
+        _jcc = db.query("SELECT COUNT(*) c FROM jobcard_process WHERE order_id=?", (order_id,), one=True)["c"]
+        if _jcc == 0:
+            _side = (jc["board_side"] or "SINGLE SIDE").strip() or "SINGLE SIDE"
+            _mat = (jc["board_material"] or "").strip()
+            _plist, _plabel = db.process_preset_for(_side, _mat)
+            for _i, _pn in enumerate(_plist):
+                _proc = db.JC_TOOL_OPTIONS[0] if _pn == db.JC_TOOL_SLOT else _pn
+                db.execute("INSERT INTO jobcard_process (order_id, process, next_process, ord) VALUES (?,?,?,?)",
+                           (order_id, _proc, "", (_i + 1) * 10))
+            db.execute("UPDATE orders SET current_process=? WHERE id=?", (_plist[0], order_id))
+    except Exception:
+        pass
     # SELF-HEAL: dispatch entry hai par job card ki Dispatch row khaali (purane orders) —
     # row me date/time/name bhar do taaki job card + preview me dikhe
     dl = db.query("SELECT * FROM dispatch_log WHERE order_id=? ORDER BY id DESC LIMIT 1", (order_id,), one=True)
