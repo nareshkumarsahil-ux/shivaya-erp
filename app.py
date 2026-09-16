@@ -1224,8 +1224,14 @@ def svg_sheet_layout_preview(r):
                 _panel_cell(x0 + i * (cl2 + kx), y, cl2, cw2, num, "#fdf4ff", "#c026d3")
                 num += 1
             y += cw2 + ky
-        cap = (f"1 SHEET {sl:.0f}x{sw:.0f} mm = {r['panels_per_sheet']} CUTTING PANELS "
-               f"({r['mixed_n']}x row {r['per_normal']} + {r['mixed_m']}x row {r['per_rot']}) = {r['pcs_per_sheet']} PCS")
+        if r["gang_active"]:
+            cap = (f"1 SHEET {sl:.0f}x{sw:.0f} mm ← CUTTING PANEL {r['cutting_len']:g}x{r['cutting_w']:g} mm = "
+                   f"{r['panels_per_sheet']} CUTTING PANELS "
+                   f"({r['mixed_n']}x row {r['per_normal']} + {r['mixed_m']}x row {r['per_rot']}) = {r['pcs_per_sheet']} PCS")
+        else:
+            cap = (f"1 SHEET {sl:.0f}x{sw:.0f} mm ← PANEL {r['panel_len']:g}x{r['panel_w']:g} mm = "
+                   f"{r['panels_per_sheet']} PANELS "
+                   f"({r['mixed_n']}x row {r['per_normal']} + {r['mixed_m']}x row {r['per_rot']}) = {r['pcs_per_sheet']} PCS")
     else:
         cl, cw = r["cell_len"] * scale, r["cell_w"] * scale
         num = 1
@@ -1233,8 +1239,12 @@ def svg_sheet_layout_preview(r):
             for j in range(r["grid_y"]):
                 _panel_cell(x0 + i * (cl + kx), y0 + j * (cw + ky), cl, cw, num, "#eef2ff", "#6366f1")
                 num += 1
-        cap = (f"1 SHEET {sl:.0f}x{sw:.0f} mm = {r['grid_x']}x{r['grid_y']} = "
-               f"{r['panels_per_sheet']} CUTTING PANELS x {r['pcs_unit']} PCS = {r['pcs_per_sheet']} PCS")
+        if r["gang_active"]:
+            cap = (f"1 SHEET {sl:.0f}x{sw:.0f} mm ← CUTTING PANEL {r['cell_len']:g}x{r['cell_w']:g} mm = "
+                   f"{r['grid_x']}x{r['grid_y']} = {r['panels_per_sheet']} CUTTING PANELS x {r['pcs_unit']} PCS = {r['pcs_per_sheet']} PCS")
+        else:
+            cap = (f"1 SHEET {sl:.0f}x{sw:.0f} mm ← PANEL {r['cell_len']:g}x{r['cell_w']:g} mm = "
+                   f"{r['grid_x']}x{r['grid_y']} = {r['panels_per_sheet']} PANELS x {r['pcs_unit']} PCS = {r['pcs_per_sheet']} PCS")
     s.append(f'<text x="{W/2:.0f}" y="{H - 6:.0f}" text-anchor="middle" font-size="11.5" fill="#475569" font-family="Segoe UI,Arial">{cap}</text>')
     s.append('</svg>')
     return "".join(s)

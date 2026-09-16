@@ -203,12 +203,12 @@
       <div class="panel-body" style="padding:12px 16px">
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px">
           <div class="gstat"><div class="glbl">SHEET SIZE</div><div class="gnum" style="font-size:15px"><span id="slSheet">—</span> <span class="u">mm</span></div></div>
-          <div class="gstat"><div class="glbl">1 SHEET ME CUTTING PANELS</div><div class="gnum" style="color:#4f46e5" id="slCount">—</div></div>
+          <div class="gstat"><div class="glbl">1 SHEET ME {{ 'CUTTING PANELS' if gang_info else 'PANELS' }}</div><div class="gnum" style="color:#4f46e5" id="slCount">—</div></div>
           <div class="gstat"><div class="glbl">TOTAL PCB (1 SHEET)</div><div class="gnum" style="color:#166534" id="slPcs">—</div></div>
         </div>
         <div style="margin-top:12px">
           <span class="muted small" style="display:inline-flex;gap:12px;flex-wrap:wrap">
-            <span style="display:inline-flex;gap:4px;align-items:center"><span style="width:12px;height:12px;background:#eef2ff;border:2px solid #6366f1;border-radius:2px;display:inline-block"></span><b style="color:#4f46e5">Cutting Panel</b> (numbered)</span>
+            <span style="display:inline-flex;gap:4px;align-items:center"><span style="width:12px;height:12px;background:#eef2ff;border:2px solid #6366f1;border-radius:2px;display:inline-block"></span><b style="color:#4f46e5">{{ 'CUTTING PANEL (GANG)' if gang_info else 'PANEL' }}</b> (numbered)</span>
             <span style="display:inline-flex;gap:4px;align-items:center"><span style="width:12px;height:12px;background:#fdf4ff;border:2px solid #c026d3;border-radius:2px;display:inline-block"></span>Rotated</span>
             <span style="display:inline-flex;gap:4px;align-items:center"><span style="width:12px;height:12px;background:#fffdf5;border:2px solid #b3ac99;border-radius:2px;display:inline-block"></span>Sheet</span>
           </span>
@@ -575,6 +575,17 @@ function computeLive(){
     gpEl.style.display = 'none';
   }
 
+  /* --- 📐 PANEL IN SHEET — gang ho to CUTTING PANEL fit, warna simple PANEL (live) --- */
+  var slSec = document.getElementById('sheetLayoutPanel');
+  if (slSec && pps > 0 && sl > 0) {
+    slSec.style.display = 'block';
+    document.getElementById('slSheet').textContent = fmtNum(sl) + '×' + fmtNum(sw);
+    document.getElementById('slCount').textContent = String(pps);
+    document.getElementById('slPcs').textContent = fmtNum(pps * pcsUnit);
+    document.getElementById('svgSheetLayout').innerHTML =
+      svgSheetLayout(sl, sw, cl, cw, gx2, gy2, gx, gy, kx, ky, pps, best, mN, mM, perN, perR, gl, gw, pcsUnit);
+  }
+
   /* --- orientation cards --- */
   document.getElementById('orientPanel').style.display = 'block';
   document.getElementById('liveNormal').textContent = nx + ' × ' + ny + ' = ' + normal + ' panels';
@@ -704,6 +715,46 @@ function svgSheet(sl, sw, cl, cw, gx2, gy2, gx, gy, kx, ky, pps, waste, best, mN
 }
 
 /* ---- GANG PANEL PREVIEW SVG — BEST LAYOUT jitne hi panels, gang borders THICK + VIOLET ---- */
+/* ---- 📐 PANEL IN SHEET (live mirror) — gang ho to CUTTING PANEL fit, warna PANEL ----
+   Poori sheet ke andar numbered panels + har panel ka andar single-PCB grid + caption
+   batata hai kaunsa panel fit hua (size ke saath) aur 1 sheet me kitne aate hai. ---- */
+function svgSheetLayout(sl, sw, cl, cw, gx2, gy2, gx, gy, kx, ky, pps, best, mN, mM, perN, perR, gl, gw, pcsUnit){
+  var W = 430, H = 380, pad = 26;
+  var scale = Math.min((W - 2*pad) / sl, (H - 2*pad) / sw);
+  var S = sl * scale, T = sw * scale;
+  var x0 = pad + (W - 2*pad - S) / 2, y0 = pad + (H - 2*pad - T) / 2;
+  var Kx = kx * scale, Ky = ky * scale;
+  var gang = (gx > 1 || gy > 1), ptype = gang ? 'CUTTING PANEL' : 'PANEL';
+  var s = '<svg viewBox="0 0 430 380" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;display:block">';
+  s += '<rect x="' + x0.toFixed(1) + '" y="' + y0.toFixed(1) + '" width="' + S.toFixed(1) + '" height="' + T.toFixed(1) + '" fill="#fffdf5" stroke="#b3ac99" stroke-width="2"/>';
+  function cell(cx, cy, Cl, Cw, num, fill, stroke){
+    s += '<rect x="' + cx.toFixed(1) + '" y="' + cy.toFixed(1) + '" width="' + Cl.toFixed(1) + '" height="' + Cw.toFixed(1) + '" fill="' + fill + '" stroke="' + stroke + '" stroke-width="2" rx="3"/>';
+    if (gx > 1 || gy > 1) {
+      var p = (Cl - Kx * (gx - 1)) / gx, q = (Cw - Ky * (gy - 1)) / gy;
+      for (var a = 0; a < gx; a++) for (var b = 0; b < gy; b++)
+        s += '<rect x="' + (cx + a*(p + Kx)).toFixed(1) + '" y="' + (cy + b*(q + Ky)).toFixed(1) + '" width="' + p.toFixed(1) + '" height="' + q.toFixed(1) + '" fill="none" stroke="' + stroke + '" stroke-width="0.7" opacity="0.55"/>';
+    }
+    if (Cl > 34 && Cw > 22)
+      s += '<text x="' + (cx + Cl/2).toFixed(1) + '" y="' + (cy + Cw/2 + 4).toFixed(1) + '" text-anchor="middle" font-size="11" font-weight="800" fill="' + stroke + '" font-family="Segoe UI,Arial">' + num + '</text>';
+  }
+  var cap, num, y, i;
+  if (best === 'mixed') {
+    num = 1; y = y0;
+    for (var rN = 0; rN < mN; rN++) { for (i = 0; i < perN; i++) { cell(x0 + i*(cl + Kx), y, cl, cw, num, '#eef2ff', '#6366f1'); num++; } y += cw + Ky; }
+    var cl2 = cw, cw2 = cl;
+    for (var rM = 0; rM < mM; rM++) { for (i = 0; i < perR; i++) { cell(x0 + i*(cl2 + Kx), y, cl2, cw2, num, '#fdf4ff', '#c026d3'); num++; } y += cw2 + Ky; }
+    cap = '1 SHEET ' + fmtNum(sl) + 'x' + fmtNum(sw) + ' mm ← ' + ptype + ' ' + fmtNum(gang ? gl : cl) + 'x' + fmtNum(gang ? gw : cw) +
+          ' mm = ' + pps + ' ' + ptype + 'S (' + mN + 'x row ' + perN + ' + ' + mM + 'x row ' + perR + ') = ' + fmtNum(pps * pcsUnit) + ' PCS';
+  } else {
+    num = 1;
+    for (var ix = 0; ix < gx2; ix++) for (var iy = 0; iy < gy2; iy++) { cell(x0 + ix*(cl + Kx), y0 + iy*(cw + Ky), cl, cw, num, '#eef2ff', '#6366f1'); num++; }
+    cap = '1 SHEET ' + fmtNum(sl) + 'x' + fmtNum(sw) + ' mm ← ' + ptype + ' ' + fmtNum(cl) + 'x' + fmtNum(cw) +
+          ' mm = ' + gx2 + 'x' + gy2 + ' = ' + pps + ' ' + ptype + 'S x ' + fmtNum(pcsUnit) + ' PCS = ' + fmtNum(pps * pcsUnit) + ' PCS';
+  }
+  s += '<text x="215" y="' + (H - 6) + '" text-anchor="middle" font-size="11.5" fill="#475569" font-family="Segoe UI,Arial">' + cap + '</text>';
+  s += '</svg>';
+  return s;
+}
 function svgGangSheet(sl, sw, cl, cw, gx2, gy2, gx, gy, kx, ky, pps, waste, best, mN, mM, perN, perR, gl, gw, pcsPanel){
   var W = 430, H = 380, pad = 26;
   var scale = Math.min((W - 2*pad) / sl, (H - 2*pad) / sw);
