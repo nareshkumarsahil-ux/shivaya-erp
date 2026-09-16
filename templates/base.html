@@ -49,7 +49,7 @@
   <div class="side-footer">
     <div class="saved-note"><span class="dot"></span> All changes saved</div>
     <div class="user-chip">👤 {{ current_user_name }}<span class="role">{{ current_user_role|upper }}</span></div>
-    <div class="ver-chip" title="App version — agar ye purana dikhe to naya ZIP deploy nahi hua">🛰 App v2.39 · auto process flow + panel labels</div>
+    <div class="ver-chip" title="App version — agar ye purana dikhe to naya ZIP deploy nahi hua">🛰 App v2.44 · cutlist blank new entry</div>
     <a class="logout" href="/logout">Logout ↩</a>
   </div>
 </aside>
@@ -247,6 +247,38 @@ document.addEventListener('click', function(e){
   }
   tick();
   setInterval(tick, 1000);
+})();
+</script>
+<style>@media print { #docHScroll { display:none!important } }</style>
+<div id="docHScroll" title="Horizontal scrollbar — ab hamesha nazar aayegi (sabse niche jaane ki zaroorat nahi)" style="position:fixed;left:0;right:0;bottom:0;height:16px;overflow-x:auto;overflow-y:hidden;z-index:90;background:#e8eef6;border-top:1.5px solid #94a3b8;display:none">
+  <div id="docHScrollInner" style="height:1px"></div>
+</div>
+<script>
+/* ↔️ STICKY HORIZONTAL SCROLLBAR — page left-right chaura ho to ye scrollbar
+   screen ke niche HAMESHA dikhegi (pehle wo document ke sabse niche laga karti
+   thi — poora page neeche scroll karna padta tha). Document ke horizontal
+   scroll ke saath 2-tarafa sync + bar par wheel ghumao to bhi chalega. */
+(function(){
+  var bar = document.getElementById('docHScroll'), inner = document.getElementById('docHScrollInner');
+  if (!bar) return;
+  function sync(){
+    var de = document.documentElement;
+    var show = de.scrollWidth > de.clientWidth + 1;
+    bar.style.display = show ? 'block' : 'none';
+    document.body.style.paddingBottom = show ? '20px' : '';
+    if (!show) return;
+    var w = de.scrollWidth + 'px';
+    if (inner.style.width !== w) inner.style.width = w;
+    if (Math.abs(bar.scrollLeft - de.scrollLeft) > 1) bar.scrollLeft = de.scrollLeft;
+  }
+  bar.addEventListener('scroll', function(){ document.documentElement.scrollLeft = bar.scrollLeft; });
+  bar.addEventListener('wheel', function(e){
+    if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) { e.preventDefault(); document.documentElement.scrollLeft += e.deltaY; }
+  }, {passive:false});
+  window.addEventListener('scroll', sync, {passive:true});
+  window.addEventListener('resize', sync);
+  setInterval(sync, 700);  /* accordion kholo/band → chaurai badal sakti hai */
+  sync();
 })();
 </script>
 </body>

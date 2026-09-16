@@ -121,6 +121,7 @@
         <div class="result-line" id="liveSheetLine" style="display:none"></div>
         <div style="display:flex;gap:10px;margin-top:14px">
           <button class="btn" type="submit" name="action" value="calculate">⚙️ Calculate / Refresh</button>
+          <a class="btn btn-outline" href="/cutlist" title="Form khaali karke nayi entry shuru karo — koi purani value nahi">🧹 NAYA ENTRY (blank)</a>
         </div>
       </div>
     </div>
@@ -174,7 +175,7 @@
         </span>
       </div>
       <div class="panel-body" style="padding:10px">
-        <div id="svgPanel">{{ svg_panel|safe }}</div>
+        <div id="svgPanel">{{ svg_panel|safe }}{% if not svg_panel %}<div class="muted small" style="padding:18px;text-align:center">Value bharke ⚙️ CALCULATE dabao — preview yahan banega</div>{% endif %}</div>
       </div>
     </div>
 
@@ -192,7 +193,7 @@
           <span class="muted small" style="display:inline-flex;gap:10px;align-items:center;flex-wrap:wrap">
             <span style="display:inline-flex;gap:4px;align-items:center"><span style="width:12px;height:12px;background:#ede9fe;border:3px solid #7c3aed;border-radius:2px;display:inline-block"></span><b style="color:#7c3aed">Gang Panel</b> (thick violet border)</span>
           </span>
-          <div id="svgGangSheet" style="margin-top:8px">{{ svg_gang_sheet|safe }}</div>
+          <div id="svgGangSheet" style="margin-top:8px">{{ svg_gang_sheet|safe }}{% if not svg_gang_sheet %}<div class="muted small" style="padding:18px;text-align:center">Value bharke ⚙️ CALCULATE dabao — preview yahan banega</div>{% endif %}</div>
         </div>
       </div>
     </div>
@@ -211,7 +212,7 @@
             <span style="display:inline-flex;gap:4px;align-items:center"><span style="width:12px;height:12px;background:#fdf4ff;border:2px solid #c026d3;border-radius:2px;display:inline-block"></span>Rotated</span>
             <span style="display:inline-flex;gap:4px;align-items:center"><span style="width:12px;height:12px;background:#fffdf5;border:2px solid #b3ac99;border-radius:2px;display:inline-block"></span>Sheet</span>
           </span>
-          <div id="svgSheetLayout" style="margin-top:8px">{{ svg_sheet_layout|safe }}</div>
+          <div id="svgSheetLayout" style="margin-top:8px">{{ svg_sheet_layout|safe }}{% if not svg_sheet_layout %}<div class="muted small" style="padding:18px;text-align:center">Value bharke ⚙️ CALCULATE dabao — preview yahan banega</div>{% endif %}</div>
         </div>
       </div>
     </div>

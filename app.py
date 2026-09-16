@@ -1512,8 +1512,10 @@ def cutlist():
     if fields:
         result = compute_layout(fields)  # fail ho to None — form mein wahi values dikhengi jo load hui
     else:
-        fields = dict(DEFAULTS)
-        result = compute_layout(DEFAULTS)
+        # NAYA ENTRY = form bilkul BLANK khulega (pehle DEFAULTS me 40/50/10x5/1200x1000
+        # preset bhar jaata tha — user ko har baar purani fixed values milti thi).
+        fields = {}
+        result = None
 
     models = db.query("SELECT * FROM product_models ORDER BY id DESC")
     orders = db.query("SELECT id, order_no, party, product FROM orders WHERE status!='done' ORDER BY id DESC")
@@ -3859,6 +3861,12 @@ def jobcard_new():
         if (f.get("product_id") or "").isdigit() and int(f.get("product_id") or 0) > 0:
             pmodel = db.query("SELECT * FROM product_models WHERE id=?",
                               (int(f.get("product_id")),), one=True)
+        if not pmodel:
+            # MODEL zaroori — isi se PCB/panel/sheet saari details auto aati hai,
+            # warna blank job card banta tha (sab 0/0.0).
+            flash("FINISHED PRODUCT (MODEL) select karo — isi se PCB size, panel, "
+                  "PCS/panel, sheet sab auto bharta hai. Bina model card blank banta hai.", "error")
+            return redirect_with_token(url_for("jobcard_new"))
         qty_pcs = int(f.get("qty", 0) or 0)
         party_model = pmodel["name"] if pmodel else ""
         model_code = (pmodel["model_code"] or "") if pmodel else ""
@@ -3936,7 +3944,7 @@ def jobcard_new():
                 "sheet_thickness, instructions) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (new_id, "", today, delivery_date, price, qty_pcs, qty_panel, pcs_panel, sheets,
                  board_type, board_side, sheet_material, thickness, instructions))
-        flash(f"Job card #{count + 1} create ho gaya ✅ — ab details verify karo.", "success")
+        flash(f"Job card #{count + 1} create ho gaya ✅ — saari details MODEL se auto bhari hai, verify kar lo.", "success")
         return redirect_with_token(url_for("jobcard", order_id=new_id))
     return render_template("jobcard_new.html", active="orders", parties=parties, models=models,
                            inv_items=inv_items, thicknesses=thicknesses,

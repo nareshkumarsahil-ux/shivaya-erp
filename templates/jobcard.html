@@ -4,6 +4,11 @@
 {% block content %}
 
 <!-- ================= HEADER ACTIONS ================= -->
+{% if not jc.party_model %}
+<div class="no-print" style="margin-bottom:10px;padding:10px 14px;border:1.5px solid #f59e0b;border-radius:10px;background:#fffbeb;color:#92400e;font-weight:700;font-size:13px">
+  ⚠ Ye job card <b>MODEL ke bina</b> bana tha — isliye saari sizing blank/0 hai. Upar <b>ORDER DETAILS</b> section kholo aur <b>PARTY MODEL (Finished Product)</b> select karo → PCB size, panel, PCS/panel, sheet sab <b>auto bhar jayega</b>, phir <b>Save</b> dabao.
+</div>
+{% endif %}
 <div class="jc-headbar no-print">
   <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
     <a class="btn btn-outline btn-sm" href="/orders">← Back</a>
@@ -1069,7 +1074,7 @@ function jcCalcStrip(){
   }
   var gm = jcGangMultiplier();
   if (gm)
-    lines.push('🧩 GANG PANEL — ' + px + '×' + py + ' ÷ ' + (gm.g > 0 ? '(<b>' + gm.cx + '+' + gm.g + '</b>)×(<b>' + gm.cy + '+' + gm.g + '</b>) gap ' + gm.g + 'mm' : 'single PCB ' + gm.cx + '×' + gm.cy) +
+    lines.push('🧩 CUTTING PANEL (GANG) — ' + px + '×' + py + ' ÷ ' + (gm.g > 0 ? '(<b>' + gm.cx + '+' + gm.g + '</b>)×(<b>' + gm.cy + '+' + gm.g + '</b>) gap ' + gm.g + 'mm' : 'single PCB ' + gm.cx + '×' + gm.cy) +
                ' → multiplier <b>' + gm.xc + '×' + gm.yc + ' = ' + gm.mult + ' PCS/panel</b>' +
                (_jcPcsManual ? ' <span class="muted">(manual override)</span>' : ''));
   var ct = jcCutAuto();
