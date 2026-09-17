@@ -4083,6 +4083,21 @@ def jobcard(order_id):
         flash("Order not found.", "error")
         return redirect_with_token(url_for("orders"))
     qty_pcs = order["qty"]
+    # AUTO-HEAL: job card khulte hi QTY sync — order.qty hi SACH hai.
+    # (Cut list se apply / advance create ke baad jc.total_qty purana/khaali reh jata tha —
+    #  isliye job card me value khaali ya galat dikhti thi.)
+    _jc_tot = jc["total_qty"] or 0
+    _jc_pan = jc["qty_panel"] or 0
+    _jc_pps = jc["pcs_panel"] or 0
+    _sets, _vals = [], []
+    if _jc_tot != qty_pcs:
+        _sets.append("total_qty=?"); _vals.append(qty_pcs)
+    if qty_pcs > 0 and _jc_pps > 0 and _jc_pan != math.ceil(qty_pcs / _jc_pps):
+        _sets.append("qty_panel=?"); _vals.append(math.ceil(qty_pcs / _jc_pps))
+    if _sets:
+        _vals.append(order_id)
+        db.execute(f"UPDATE jobcard SET {', '.join(_sets)} WHERE order_id=?", tuple(_vals))
+        jc = db.query("SELECT * FROM jobcard WHERE order_id=?", (order_id,), one=True)
     # QTY OF PANEL display default: saved nahi hai to selected model ke pcs/panel se nikaalo
     qty_panel_disp = 0
     bmodel_early = db.query("SELECT * FROM product_models WHERE name=?", (jc["party_model"],), one=True)
