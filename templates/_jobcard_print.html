@@ -33,6 +33,7 @@
     <div class="ps-cell"><span class="ps-lbl">NO. OF SHEET</span><span class="ps-val" id="pr_sheets">{{ jc.sheets }} SHEET</span></div>
 
     <div class="ps-cell"><span class="ps-lbl">SHEET MATERIAL</span><span class="ps-val" id="pr_sheet_material">{{ jc.sheet_material|dash }}{% if jc.sheet_thickness %} <span style="font-weight:800;color:#1d4ed8">({{ jc.sheet_thickness }})</span>{% endif %}</span></div>
+    <div class="ps-cell"><span class="ps-lbl">BOARD SIDE</span><span class="ps-val" id="pr_board_side" style="font-weight:800;color:#1d4ed8">{% set _bs = (jc.board_side or '').strip().upper() %}{% if _bs %}{{ _bs }}{% elif 'SINGLE' in (jc.board_type or '')|upper %}SINGLE SIDE{% elif 'DOUBLE' in (jc.board_type or '')|upper %}DOUBLE SIDE{% else %}—{% endif %}</span></div>
     <div class="ps-cell"><span class="ps-lbl">COPPER</span><span class="ps-val" id="pr_copper">{{ jc.copper_finish|dash }}</span></div>
     <div class="ps-cell"><span class="ps-lbl">LEGEND</span><span class="ps-val" id="pr_legend">{{ jc.legend_printing|dash }}</span></div>
     <div class="ps-cell"><span class="ps-lbl">FINISH</span><span class="ps-val" id="pr_finish">{{ jc.finish|dash }}</span></div>

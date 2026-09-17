@@ -820,6 +820,13 @@ def migrate(conn):
                  "total REAL DEFAULT 0, vendor TEXT DEFAULT '', bill_no TEXT DEFAULT '', "
                  "date TEXT DEFAULT '', status TEXT DEFAULT 'pending', notes TEXT DEFAULT '', "
                  "created_on TEXT DEFAULT '')")
+    # 💰 PCB COST CALCULATOR history — panel/pcb size + rate ya price se nikli calculation
+    conn.execute("CREATE TABLE IF NOT EXISTS pcb_calc_history ("
+                 "id INTEGER PRIMARY KEY AUTOINCREMENT, mode TEXT DEFAULT 'panel', "
+                 "party TEXT DEFAULT '', input_len REAL DEFAULT 0, input_w REAL DEFAULT 0, "
+                 "pcs INTEGER DEFAULT 0, direction TEXT DEFAULT 'rate', "
+                 "rate REAL DEFAULT 0, price REAL DEFAULT 0, area REAL DEFAULT 0, "
+                 "created_on TEXT DEFAULT '')")
     pocols = [r[1] for r in conn.execute("PRAGMA table_info(purchase_orders)")]
     for _col, _dfl in (("vendor_address", "TEXT DEFAULT ''"), ("vendor_phone", "TEXT DEFAULT ''"),
                        ("delivery_date", "TEXT DEFAULT ''"), ("tax_percent", "REAL DEFAULT 0"),
@@ -1111,6 +1118,13 @@ def ensure_db():
                         c.execute("CREATE TABLE IF NOT EXISTS billing_items ("
                                   "id INTEGER PRIMARY KEY AUTOINCREMENT, bill_id INTEGER, item TEXT DEFAULT '', "
                                   "qty TEXT DEFAULT '', rate REAL DEFAULT 0, amount REAL DEFAULT 0)")
+                        # 💰 PCB COST CALCULATOR history (fast-path self-heal)
+                        c.execute("CREATE TABLE IF NOT EXISTS pcb_calc_history ("
+                                  "id INTEGER PRIMARY KEY AUTOINCREMENT, mode TEXT DEFAULT 'panel', "
+                                  "party TEXT DEFAULT '', input_len REAL DEFAULT 0, input_w REAL DEFAULT 0, "
+                                  "pcs INTEGER DEFAULT 0, direction TEXT DEFAULT 'rate', "
+                                  "rate REAL DEFAULT 0, price REAL DEFAULT 0, area REAL DEFAULT 0, "
+                                  "created_on TEXT DEFAULT '')")
                         # naye column: sheet thickness (price ke saath)
                         try:
                             _phc = [x[1] for x in c.execute("PRAGMA table_info(price_history)").fetchall()]

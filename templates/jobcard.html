@@ -715,6 +715,9 @@ function syncPreview(){
   set('pr_pcb_sheet', (parseInt(val('jc_pcs_panel'))||0) * (parseInt(val('jc_panels_per_sheet'))||0));
   set('pr_sheets', (val('jc_sheets')||'0') + ' SHEET');
   set('pr_sheet_material', (val('jc_sheet_material') || '—') + (val('jc_sheet_thickness') ? ' (' + val('jc_sheet_thickness') + ')' : ''));
+  /* BOARD SIDE — SINGLE SIDE / DOUBLE SIDE preview me bhi */
+  var _bsEl = document.getElementById('jc_board_side');
+  set('pr_board_side', (_bsEl && _bsEl.value) ? _bsEl.value : '—');
   var instrEl = document.getElementById('pr_instructions');
   if (instrEl) {
     var iv = val('jc_instructions');

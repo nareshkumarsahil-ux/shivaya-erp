@@ -1141,18 +1141,59 @@ def svg_sheet_preview(r):
     return "".join(s)
 
 
+def _svg_dim_w(s, cx, cy, mm):
+    """Panel ke top edge par width label (white halo ke saath readable)."""
+    s.append(f'<text x="{cx:.1f}" y="{cy:.1f}" text-anchor="middle" font-size="8" fill="#475569" '
+             f'font-family="Segoe UI,Arial" style="paint-order:stroke" stroke="#ffffff" stroke-width="2.5">{mm:g}</text>')
+
+
+def _svg_dim_h(s, cx, cy, mm):
+    """Panel ke left edge par rotated height label."""
+    s.append(f'<text x="{cx:.1f}" y="{cy:.1f}" transform="rotate(-90 {cx:.1f} {cy:.1f})" text-anchor="middle" '
+             f'font-size="8" fill="#475569" font-family="Segoe UI,Arial" style="paint-order:stroke" '
+             f'stroke="#ffffff" stroke-width="2.5">{mm:g}</text>')
+
+
+def _svg_sheet_dims(s, x0, y0, S, T, sl, sw, qty):
+    """Sheet ke dimensions — neeche length (tick line), right par rotated width, qty ×N."""
+    c = "#94a3b8"
+    yd = y0 + T + 11
+    s.append(f'<line x1="{x0:.1f}" y1="{yd:.1f}" x2="{x0 + S:.1f}" y2="{yd:.1f}" stroke="{c}" stroke-width="1"/>')
+    for tx in (x0, x0 + S):
+        s.append(f'<line x1="{tx:.1f}" y1="{yd - 4:.1f}" x2="{tx:.1f}" y2="{yd + 4:.1f}" stroke="{c}" stroke-width="1"/>')
+    s.append(f'<text x="{x0 + S / 2:.1f}" y="{yd + 13:.1f}" text-anchor="middle" font-size="10.5" font-weight="700" '
+             f'fill="#475569" font-family="Segoe UI,Arial">{sl:g} mm</text>')
+    xd = x0 + S + 11
+    s.append(f'<line x1="{xd:.1f}" y1="{y0:.1f}" x2="{xd:.1f}" y2="{y0 + T:.1f}" stroke="{c}" stroke-width="1"/>')
+    for ty in (y0, y0 + T):
+        s.append(f'<line x1="{xd - 4:.1f}" y1="{ty:.1f}" x2="{xd + 4:.1f}" y2="{ty:.1f}" stroke="{c}" stroke-width="1"/>')
+    txx, tyy = xd + 12, y0 + T / 2
+    s.append(f'<text x="{txx:.1f}" y="{tyy:.1f}" transform="rotate(90 {txx:.1f} {tyy:.1f})" text-anchor="middle" '
+             f'font-size="10.5" font-weight="700" fill="#475569" font-family="Segoe UI,Arial">{sw:g} mm</text>')
+    if qty and qty > 1:
+        s.append(f'<text x="{x0 + S + 4:.1f}" y="{yd + 13:.1f}" text-anchor="end" font-size="10" font-weight="800" '
+                 f'fill="#94a3b8" font-family="Segoe UI,Arial">×{qty:g}</text>')
+
+
 def svg_gang_preview(r):
     """GANG PANEL PREVIEW SVG — BEST LAYOUT jitne hi GANG panels sheet par dikhte hain,
-    har gang panel ka border THICK + alag VIOLET color — taaki ek nazar me count match ho."""
-    W, H, pad = 430, 380, 26
+    har gang panel THICK violet border + har panel aur sheet par DIMENSION labels."""
+    W, H, pad = 470, 412, 30
     sl, sw = r["sheet_len"], r["sheet_w"]
-    scale = min((W - 2 * pad) / sl, (H - 2 * pad) / sw)
+    scale = min((W - pad - 46) / sl, (H - pad - 44) / sw)
     S, T = sl * scale, sw * scale
-    x0, y0 = pad + (W - 2 * pad - S) / 2, pad + (H - 2 * pad - T) / 2
+    x0, y0 = pad + (W - pad - 46 - S) / 2, pad + (H - pad - 44 - T) / 2
     gx, gy = r["gang_x"], r["gang_y"]
     kx, ky = r["kerf_x"] * scale, r["kerf_y"] * scale
     s = [f'<svg viewBox="0 0 {W} {H}" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;display:block">']
     s.append(f'<rect x="{x0:.1f}" y="{y0:.1f}" width="{S:.1f}" height="{T:.1f}" fill="#fffdf5" stroke="#b3ac99" stroke-width="2"/>')
+
+    def _dims(cx, cy, cl, cw, mm_l, mm_w):
+        if cl > 26 and cw > 15:
+            _svg_dim_w(s, cx + cl / 2, cy + 8.5, mm_l)
+        if cw > 26 and cl > 15:
+            _svg_dim_h(s, cx + 7.5, cy + cw / 2, mm_w)
+
     if r["best"] == "mixed":
         y = y0
         for _row in range(r["mixed_n"]):
@@ -1160,12 +1201,14 @@ def svg_gang_preview(r):
             for i in range(r["per_normal"]):
                 _svg_gang(s, x0 + i * (cl + kx), y, cl, cw, gx, gy, kx, ky,
                           "#ede9fe", "#7c3aed", 3.2, "#ddd6fe", "#8b5cf6")
+                _dims(x0 + i * (cl + kx), y, cl, cw, r["gang_len"], r["gang_w"])
             y += cw + ky
         for _row in range(r["mixed_m"]):
             cl, cw = r["gang_w"] * scale, r["gang_len"] * scale
             for i in range(r["per_rot"]):
                 _svg_gang(s, x0 + i * (cl + kx), y, cl, cw, gx, gy, kx, ky,
                           "#fce7f3", "#db2777", 3.2, "#fbcfe8", "#ec4899")
+                _dims(x0 + i * (cl + kx), y, cl, cw, r["gang_w"], r["gang_len"])
             y += cw + ky
         cap = (f"Sheet {sl:.2f}\u00d7{sw:.2f} mm \u00b7 {r['mixed_n']}\u00d7 row of {r['per_normal']} + "
                f"{r['mixed_m']}\u00d7 row of {r['per_rot']} = <tspan fill=\"#7c3aed\" font-weight=\"700\">{r['panels_per_sheet']} GANG panels</tspan> \u00b7 "
@@ -1177,28 +1220,31 @@ def svg_gang_preview(r):
                 cx, cy = x0 + i * (cl + kx), y0 + j * (cw + ky)
                 _svg_gang(s, cx, cy, cl, cw, gx, gy, kx, ky,
                           "#ede9fe", "#7c3aed", 3.2, "#ddd6fe", "#8b5cf6")
+                _dims(cx, cy, cl, cw, r["cell_len"], r["cell_w"])
         cap = (f"Sheet {sl:.2f}\u00d7{sw:.2f} mm \u00b7 {r['grid_x']}\u00d7{r['grid_y']} = "
                f"<tspan fill=\"#7c3aed\" font-weight=\"700\">{r['panels_per_sheet']} GANG panels</tspan> \u00b7 "
                f"{r['pcs_per_sheet']} PCS \u00b7 {r['wastage']}% waste")
+    _svg_sheet_dims(s, x0, y0, S, T, sl, sw, r.get("sheets") or 0)
     s.append(f'<text x="{W/2:.0f}" y="{H - 6:.0f}" text-anchor="middle" font-size="12.5" fill="#8a8f98" font-family="Segoe UI,Arial">{cap}</text>')
     s.append('</svg>')
     return "".join(s)
 
 
 def svg_sheet_layout_preview(r):
-    """SHEET LAYOUT PREVIEW — poori sheet me cutting panels kaise fit hote hain
-    (1 sheet = kitne cutting panel), har panel numbered + inner single-panel grid."""
-    W, H, pad = 430, 380, 26
+    """SHEET LAYOUT PREVIEW — poori sheet me cutting panels fit, NUMBERED + DIMENSION labels:
+    har panel par width (top) aur height (left rotated), sheet length neeche, width right,
+    qty ×N — cutting optimization software jaisa."""
+    W, H, pad = 470, 412, 30
     sl, sw = r["sheet_len"], r["sheet_w"]
-    scale = min((W - 2 * pad) / sl, (H - 2 * pad) / sw)
+    scale = min((W - pad - 46) / sl, (H - pad - 44) / sw)
     S, T = sl * scale, sw * scale
-    x0, y0 = pad + (W - 2 * pad - S) / 2, pad + (H - 2 * pad - T) / 2
+    x0, y0 = pad + (W - pad - 46 - S) / 2, pad + (H - pad - 44 - T) / 2
     gx, gy = r["gang_x"], r["gang_y"]
     kx, ky = r["kerf_x"] * scale, r["kerf_y"] * scale
     s = [f'<svg viewBox="0 0 {W} {H}" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;display:block">']
     s.append(f'<rect x="{x0:.1f}" y="{y0:.1f}" width="{S:.1f}" height="{T:.1f}" fill="#fffdf5" stroke="#b3ac99" stroke-width="2"/>')
 
-    def _panel_cell(cx, cy, cl, cw, num, fill, stroke):
+    def _panel_cell(cx, cy, cl, cw, num, fill, stroke, mm_l, mm_w):
         s.append(f'<rect x="{cx:.1f}" y="{cy:.1f}" width="{cl:.1f}" height="{cw:.1f}" fill="{fill}" stroke="{stroke}" stroke-width="2" rx="3"/>')
         if gx > 1 or gy > 1:
             p = (cl - kx * (gx - 1)) / gx
@@ -1206,8 +1252,15 @@ def svg_sheet_layout_preview(r):
             for a in range(gx):
                 for b in range(gy):
                     s.append(f'<rect x="{cx + a * (p + kx):.1f}" y="{cy + b * (q + ky):.1f}" width="{p:.1f}" height="{q:.1f}" fill="none" stroke="{stroke}" stroke-width="0.7" opacity="0.55"/>')
+        if cl > 26 and cw > 15:
+            _svg_dim_w(s, cx + cl / 2, cy + 8.5, mm_l)
+        if cw > 26 and cl > 15:
+            _svg_dim_h(s, cx + 7.5, cy + cw / 2, mm_w)
         if cl > 34 and cw > 22:
-            s.append(f'<text x="{cx + cl / 2:.1f}" y="{cy + cw / 2 + 4:.1f}" text-anchor="middle" font-size="11" font-weight="800" fill="{stroke}" font-family="Segoe UI,Arial">{num}</text>')
+            s.append(f'<text x="{cx + cl / 2:.1f}" y="{cy + cw / 2 + 4:.1f}" text-anchor="middle" font-size="10" font-weight="800" fill="{stroke}" font-family="Segoe UI,Arial">#{num}</text>')
+        elif cl > 22 and cw > 34:
+            _nx, _ny = cx + cl / 2 + 3.5, cy + cw / 2
+            s.append(f'<text x="{_nx:.1f}" y="{_ny:.1f}" transform="rotate(-90 {_nx:.1f} {_ny:.1f})" text-anchor="middle" font-size="10" font-weight="800" fill="{stroke}" font-family="Segoe UI,Arial">#{num}</text>')
 
     if r["best"] == "mixed":
         num = 1
@@ -1215,21 +1268,21 @@ def svg_sheet_layout_preview(r):
         cl, cw = r["gang_len"] * scale, r["gang_w"] * scale
         for _row in range(r["mixed_n"]):
             for i in range(r["per_normal"]):
-                _panel_cell(x0 + i * (cl + kx), y, cl, cw, num, "#eef2ff", "#6366f1")
+                _panel_cell(x0 + i * (cl + kx), y, cl, cw, num, "#eef2ff", "#6366f1", r["gang_len"], r["gang_w"])
                 num += 1
             y += cw + ky
         cl2, cw2 = r["gang_w"] * scale, r["gang_len"] * scale
         for _row in range(r["mixed_m"]):
             for i in range(r["per_rot"]):
-                _panel_cell(x0 + i * (cl2 + kx), y, cl2, cw2, num, "#fdf4ff", "#c026d3")
+                _panel_cell(x0 + i * (cl2 + kx), y, cl2, cw2, num, "#fdf4ff", "#c026d3", r["gang_w"], r["gang_len"])
                 num += 1
             y += cw2 + ky
         if r["gang_active"]:
-            cap = (f"1 SHEET {sl:.0f}x{sw:.0f} mm ← CUTTING PANEL {r['cutting_len']:g}x{r['cutting_w']:g} mm = "
+            cap = (f"1 SHEET {sl:.0f}x{sw:.0f} mm \u2190 CUTTING PANEL {r['cutting_len']:g}x{r['cutting_w']:g} mm = "
                    f"{r['panels_per_sheet']} CUTTING PANELS "
                    f"({r['mixed_n']}x row {r['per_normal']} + {r['mixed_m']}x row {r['per_rot']}) = {r['pcs_per_sheet']} PCS")
         else:
-            cap = (f"1 SHEET {sl:.0f}x{sw:.0f} mm ← PANEL {r['panel_len']:g}x{r['panel_w']:g} mm = "
+            cap = (f"1 SHEET {sl:.0f}x{sw:.0f} mm \u2190 PANEL {r['panel_len']:g}x{r['panel_w']:g} mm = "
                    f"{r['panels_per_sheet']} PANELS "
                    f"({r['mixed_n']}x row {r['per_normal']} + {r['mixed_m']}x row {r['per_rot']}) = {r['pcs_per_sheet']} PCS")
     else:
@@ -1237,14 +1290,16 @@ def svg_sheet_layout_preview(r):
         num = 1
         for i in range(r["grid_x"]):
             for j in range(r["grid_y"]):
-                _panel_cell(x0 + i * (cl + kx), y0 + j * (cw + ky), cl, cw, num, "#eef2ff", "#6366f1")
+                _panel_cell(x0 + i * (cl + kx), y0 + j * (cw + ky), cl, cw, num, "#eef2ff", "#6366f1",
+                            r["cell_len"], r["cell_w"])
                 num += 1
         if r["gang_active"]:
-            cap = (f"1 SHEET {sl:.0f}x{sw:.0f} mm ← CUTTING PANEL {r['cell_len']:g}x{r['cell_w']:g} mm = "
+            cap = (f"1 SHEET {sl:.0f}x{sw:.0f} mm \u2190 CUTTING PANEL {r['cell_len']:g}x{r['cell_w']:g} mm = "
                    f"{r['grid_x']}x{r['grid_y']} = {r['panels_per_sheet']} CUTTING PANELS x {r['pcs_unit']} PCS = {r['pcs_per_sheet']} PCS")
         else:
-            cap = (f"1 SHEET {sl:.0f}x{sw:.0f} mm ← PANEL {r['cell_len']:g}x{r['cell_w']:g} mm = "
+            cap = (f"1 SHEET {sl:.0f}x{sw:.0f} mm \u2190 PANEL {r['cell_len']:g}x{r['cell_w']:g} mm = "
                    f"{r['grid_x']}x{r['grid_y']} = {r['panels_per_sheet']} PANELS x {r['pcs_unit']} PCS = {r['pcs_per_sheet']} PCS")
+    _svg_sheet_dims(s, x0, y0, S, T, sl, sw, r.get("sheets") or 0)
     s.append(f'<text x="{W/2:.0f}" y="{H - 6:.0f}" text-anchor="middle" font-size="11.5" fill="#475569" font-family="Segoe UI,Arial">{cap}</text>')
     s.append('</svg>')
     return "".join(s)
@@ -1305,6 +1360,52 @@ def gang_info_for(r):
     return {"gl": gl, "gw": gw, "pcs_gang": pcs_gang,
             "layout": layout_html, "pcs_sheet": pcs_sheet, "note": note,
             "cut_html": cut_html}
+
+
+@app.route("/pcbcalc", methods=["GET", "POST"])
+@login_required
+def pcbcalc():
+    """💰 PCB COST CALCULATOR — panel/PCB size + PCS + RATE ya PRICE (dono direction):
+    RATE daalo → PRICE nikle, PRICE daalo → RATE nikle. Har calculation HISTORY me save."""
+    if request.method == "POST":
+        f = request.form
+        if f.get("action") == "delete_history" and (f.get("id") or "").isdigit():
+            db.execute("DELETE FROM pcb_calc_history WHERE id=?", (int(f.get("id")),))
+            flash("History entry delete ho gayi.", "success")
+            return redirect_with_token(url_for("pcbcalc"))
+        if f.get("action") == "clear_history":
+            db.execute("DELETE FROM pcb_calc_history")
+            flash("Poori history clear ho gayi.", "success")
+            return redirect_with_token(url_for("pcbcalc"))
+        if f.get("action") == "save":
+            L = _fl(f.get("input_len"))
+            W = _fl(f.get("input_w"))
+            pcs = int(_fl(f.get("pcs"))) if _fl(f.get("pcs")) > 0 else 0
+            rate_in = _fl(f.get("rate"))
+            price_in = _fl(f.get("price"))
+            party = (f.get("party") or "").strip()
+            mode = "panel" if pcs > 0 else "pcb"
+            if L <= 0 or W <= 0 or (rate_in <= 0 and price_in <= 0):
+                flash("SIZE (L×W) aur RATE ya PRICE me se koi ek value daalo.", "error")
+                return redirect_with_token(url_for("pcbcalc"))
+            sq_panel = (L / 25.4) * (W / 25.4)
+            area_pcb = (sq_panel / pcs) if pcs > 0 else sq_panel
+            if area_pcb <= 0:
+                flash("Area calculate nahi hua — size check karo.", "error")
+                return redirect_with_token(url_for("pcbcalc"))
+            if rate_in > 0:      # RATE daala → PRICE nikla
+                direction, rate, price = "rate", round(rate_in, 3), round(area_pcb * rate_in, 2)
+            else:                # PRICE daala → RATE nikla
+                direction, rate, price = "price", round(price_in / area_pcb, 3), round(price_in, 2)
+            db.execute("INSERT INTO pcb_calc_history (mode, party, input_len, input_w, pcs, direction, "
+                       "rate, price, area, created_on) VALUES (?,?,?,?,?,?,?,?,?,?)",
+                       (mode, party, L, W, pcs, direction, rate, price, round(area_pcb, 4), _now_dt()))
+            flash("Calculation history me save ho gayi ✅", "success")
+            return redirect_with_token(url_for("pcbcalc"))
+    models = db.query("SELECT id, name, model_code, pcb_len, pcb_w, cutting_len, cutting_w, "
+                      "panel_len, panel_w, pcs_panel, per_sq_inch FROM product_models ORDER BY name")
+    history = db.query("SELECT * FROM pcb_calc_history ORDER BY id DESC LIMIT 100")
+    return render_template("pcbcalc.html", active="pcbcalc", models=models, history=history)
 
 
 @app.route("/cutlist", methods=["GET", "POST"])

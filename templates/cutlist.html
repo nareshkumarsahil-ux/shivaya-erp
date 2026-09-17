@@ -175,7 +175,7 @@
         </span>
       </div>
       <div class="panel-body" style="padding:10px">
-        <div id="svgPanel">{{ svg_panel|safe }}{% if not svg_panel %}<div class="muted small" style="padding:18px;text-align:center">Value bharke ⚙️ CALCULATE dabao — preview yahan banega</div>{% endif %}</div>
+        <div id="svgPanel" style="max-width:470px;margin-left:auto;margin-right:auto">{{ svg_panel|safe }}{% if not svg_panel %}<div class="muted small" style="padding:18px;text-align:center">Value bharke ⚙️ CALCULATE dabao — preview yahan banega</div>{% endif %}</div>
       </div>
     </div>
 
@@ -193,7 +193,7 @@
           <span class="muted small" style="display:inline-flex;gap:10px;align-items:center;flex-wrap:wrap">
             <span style="display:inline-flex;gap:4px;align-items:center"><span style="width:12px;height:12px;background:#ede9fe;border:3px solid #7c3aed;border-radius:2px;display:inline-block"></span><b style="color:#7c3aed">Gang Panel</b> (thick violet border)</span>
           </span>
-          <div id="svgGangSheet" style="margin-top:8px">{{ svg_gang_sheet|safe }}{% if not svg_gang_sheet %}<div class="muted small" style="padding:18px;text-align:center">Value bharke ⚙️ CALCULATE dabao — preview yahan banega</div>{% endif %}</div>
+          <div id="svgGangSheet" style="margin-top:8px;max-width:470px;margin-left:auto;margin-right:auto">{{ svg_gang_sheet|safe }}{% if not svg_gang_sheet %}<div class="muted small" style="padding:18px;text-align:center">Value bharke ⚙️ CALCULATE dabao — preview yahan banega</div>{% endif %}</div>
         </div>
       </div>
     </div>
@@ -212,7 +212,7 @@
             <span style="display:inline-flex;gap:4px;align-items:center"><span style="width:12px;height:12px;background:#fdf4ff;border:2px solid #c026d3;border-radius:2px;display:inline-block"></span>Rotated</span>
             <span style="display:inline-flex;gap:4px;align-items:center"><span style="width:12px;height:12px;background:#fffdf5;border:2px solid #b3ac99;border-radius:2px;display:inline-block"></span>Sheet</span>
           </span>
-          <div id="svgSheetLayout" style="margin-top:8px">{{ svg_sheet_layout|safe }}{% if not svg_sheet_layout %}<div class="muted small" style="padding:18px;text-align:center">Value bharke ⚙️ CALCULATE dabao — preview yahan banega</div>{% endif %}</div>
+          <div id="svgSheetLayout" style="margin-top:8px;max-width:470px;margin-left:auto;margin-right:auto">{{ svg_sheet_layout|safe }}{% if not svg_sheet_layout %}<div class="muted small" style="padding:18px;text-align:center">Value bharke ⚙️ CALCULATE dabao — preview yahan banega</div>{% endif %}</div>
         </div>
       </div>
     </div>
@@ -719,14 +719,17 @@ function svgSheet(sl, sw, cl, cw, gx2, gy2, gx, gy, kx, ky, pps, waste, best, mN
    Poori sheet ke andar numbered panels + har panel ka andar single-PCB grid + caption
    batata hai kaunsa panel fit hua (size ke saath) aur 1 sheet me kitne aate hai. ---- */
 function svgSheetLayout(sl, sw, cl, cw, gx2, gy2, gx, gy, kx, ky, pps, best, mN, mM, perN, perR, gl, gw, pcsUnit){
-  var W = 430, H = 380, pad = 26;
-  var scale = Math.min((W - 2*pad) / sl, (H - 2*pad) / sw);
+  var W = 470, H = 412, pad = 30;
+  var scale = Math.min((W - pad - 46) / sl, (H - pad - 44) / sw);
   var S = sl * scale, T = sw * scale;
-  var x0 = pad + (W - 2*pad - S) / 2, y0 = pad + (H - 2*pad - T) / 2;
+  var x0 = pad + (W - pad - 46 - S) / 2, y0 = pad + (H - pad - 44 - T) / 2;
   var Kx = kx * scale, Ky = ky * scale;
   var gang = (gx > 1 || gy > 1), ptype = gang ? 'CUTTING PANEL' : 'PANEL';
-  var s = '<svg viewBox="0 0 430 380" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;display:block">';
+  var _qEl = document.getElementById('sheets'); var _qty = _qEl ? (parseInt(_qEl.value) || 0) : 0;
+  var s = '<svg viewBox="0 0 470 412" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;display:block">';
   s += '<rect x="' + x0.toFixed(1) + '" y="' + y0.toFixed(1) + '" width="' + S.toFixed(1) + '" height="' + T.toFixed(1) + '" fill="#fffdf5" stroke="#b3ac99" stroke-width="2"/>';
+  function lblW(cx, cy, mm){ s += '<text x="' + cx.toFixed(1) + '" y="' + cy.toFixed(1) + '" text-anchor="middle" font-size="8" fill="#475569" font-family="Segoe UI,Arial" style="paint-order:stroke" stroke="#ffffff" stroke-width="2.5">' + (Math.round(mm * 10) / 10) + '</text>'; }
+  function lblH(cx, cy, mm){ s += '<text x="' + cx.toFixed(1) + '" y="' + cy.toFixed(1) + '" transform="rotate(-90 ' + cx.toFixed(1) + ' ' + cy.toFixed(1) + ')" text-anchor="middle" font-size="8" fill="#475569" font-family="Segoe UI,Arial" style="paint-order:stroke" stroke="#ffffff" stroke-width="2.5">' + (Math.round(mm * 10) / 10) + '</text>'; }
   function cell(cx, cy, Cl, Cw, num, fill, stroke){
     s += '<rect x="' + cx.toFixed(1) + '" y="' + cy.toFixed(1) + '" width="' + Cl.toFixed(1) + '" height="' + Cw.toFixed(1) + '" fill="' + fill + '" stroke="' + stroke + '" stroke-width="2" rx="3"/>';
     if (gx > 1 || gy > 1) {
@@ -734,8 +737,14 @@ function svgSheetLayout(sl, sw, cl, cw, gx2, gy2, gx, gy, kx, ky, pps, best, mN,
       for (var a = 0; a < gx; a++) for (var b = 0; b < gy; b++)
         s += '<rect x="' + (cx + a*(p + Kx)).toFixed(1) + '" y="' + (cy + b*(q + Ky)).toFixed(1) + '" width="' + p.toFixed(1) + '" height="' + q.toFixed(1) + '" fill="none" stroke="' + stroke + '" stroke-width="0.7" opacity="0.55"/>';
     }
+    if (Cl > 26 && Cw > 15) lblW(cx + Cl/2, cy + 8.5, Cl / scale);
+    if (Cw > 26 && Cl > 15) lblH(cx + 7.5, cy + Cw/2, Cw / scale);
     if (Cl > 34 && Cw > 22)
-      s += '<text x="' + (cx + Cl/2).toFixed(1) + '" y="' + (cy + Cw/2 + 4).toFixed(1) + '" text-anchor="middle" font-size="11" font-weight="800" fill="' + stroke + '" font-family="Segoe UI,Arial">' + num + '</text>';
+      s += '<text x="' + (cx + Cl/2).toFixed(1) + '" y="' + (cy + Cw/2 + 4).toFixed(1) + '" text-anchor="middle" font-size="10" font-weight="800" fill="' + stroke + '" font-family="Segoe UI,Arial">#' + num + '</text>';
+    else if (Cl > 22 && Cw > 34) {
+      var _nx = (cx + Cl/2 + 3.5).toFixed(1), _ny = (cy + Cw/2).toFixed(1);
+      s += '<text x="' + _nx + '" y="' + _ny + '" transform="rotate(-90 ' + _nx + ' ' + _ny + ')" text-anchor="middle" font-size="10" font-weight="800" fill="' + stroke + '" font-family="Segoe UI,Arial">#' + num + '</text>';
+    }
   }
   var cap, num, y, i;
   if (best === 'mixed') {
@@ -743,26 +752,42 @@ function svgSheetLayout(sl, sw, cl, cw, gx2, gy2, gx, gy, kx, ky, pps, best, mN,
     for (var rN = 0; rN < mN; rN++) { for (i = 0; i < perN; i++) { cell(x0 + i*(cl + Kx), y, cl, cw, num, '#eef2ff', '#6366f1'); num++; } y += cw + Ky; }
     var cl2 = cw, cw2 = cl;
     for (var rM = 0; rM < mM; rM++) { for (i = 0; i < perR; i++) { cell(x0 + i*(cl2 + Kx), y, cl2, cw2, num, '#fdf4ff', '#c026d3'); num++; } y += cw2 + Ky; }
-    cap = '1 SHEET ' + fmtNum(sl) + 'x' + fmtNum(sw) + ' mm ← ' + ptype + ' ' + fmtNum(gang ? gl : cl) + 'x' + fmtNum(gang ? gw : cw) +
+    cap = '1 SHEET ' + fmtNum(sl) + 'x' + fmtNum(sw) + ' mm \u2190 ' + ptype + ' ' + fmtNum(gang ? gl : cl) + 'x' + fmtNum(gang ? gw : cw) +
           ' mm = ' + pps + ' ' + ptype + 'S (' + mN + 'x row ' + perN + ' + ' + mM + 'x row ' + perR + ') = ' + fmtNum(pps * pcsUnit) + ' PCS';
   } else {
     num = 1;
     for (var ix = 0; ix < gx2; ix++) for (var iy = 0; iy < gy2; iy++) { cell(x0 + ix*(cl + Kx), y0 + iy*(cw + Ky), cl, cw, num, '#eef2ff', '#6366f1'); num++; }
-    cap = '1 SHEET ' + fmtNum(sl) + 'x' + fmtNum(sw) + ' mm ← ' + ptype + ' ' + fmtNum(cl) + 'x' + fmtNum(cw) +
+    cap = '1 SHEET ' + fmtNum(sl) + 'x' + fmtNum(sw) + ' mm \u2190 ' + ptype + ' ' + fmtNum(cl) + 'x' + fmtNum(cw) +
           ' mm = ' + gx2 + 'x' + gy2 + ' = ' + pps + ' ' + ptype + 'S x ' + fmtNum(pcsUnit) + ' PCS = ' + fmtNum(pps * pcsUnit) + ' PCS';
   }
-  s += '<text x="215" y="' + (H - 6) + '" text-anchor="middle" font-size="11.5" fill="#475569" font-family="Segoe UI,Arial">' + cap + '</text>';
+  /* sheet dimensions — neeche length (ticks), right rotated width, qty */
+  var _c = '#94a3b8', _yd = y0 + T + 11;
+  s += '<line x1="' + x0.toFixed(1) + '" y1="' + _yd.toFixed(1) + '" x2="' + (x0+S).toFixed(1) + '" y2="' + _yd.toFixed(1) + '" stroke="' + _c + '" stroke-width="1"/>';
+  s += '<line x1="' + x0.toFixed(1) + '" y1="' + (_yd-4).toFixed(1) + '" x2="' + x0.toFixed(1) + '" y2="' + (_yd+4).toFixed(1) + '" stroke="' + _c + '" stroke-width="1"/>';
+  s += '<line x1="' + (x0+S).toFixed(1) + '" y1="' + (_yd-4).toFixed(1) + '" x2="' + (x0+S).toFixed(1) + '" y2="' + (_yd+4).toFixed(1) + '" stroke="' + _c + '" stroke-width="1"/>';
+  s += '<text x="' + (x0+S/2).toFixed(1) + '" y="' + (_yd+13).toFixed(1) + '" text-anchor="middle" font-size="10.5" font-weight="700" fill="#475569" font-family="Segoe UI,Arial">' + fmtNum(sl) + ' mm</text>';
+  var _xd = x0 + S + 11;
+  s += '<line x1="' + _xd.toFixed(1) + '" y1="' + y0.toFixed(1) + '" x2="' + _xd.toFixed(1) + '" y2="' + (y0+T).toFixed(1) + '" stroke="' + _c + '" stroke-width="1"/>';
+  s += '<line x1="' + (_xd-4).toFixed(1) + '" y1="' + y0.toFixed(1) + '" x2="' + (_xd+4).toFixed(1) + '" y2="' + y0.toFixed(1) + '" stroke="' + _c + '" stroke-width="1"/>';
+  s += '<line x1="' + (_xd-4).toFixed(1) + '" y1="' + (y0+T).toFixed(1) + '" x2="' + (_xd+4).toFixed(1) + '" y2="' + (y0+T).toFixed(1) + '" stroke="' + _c + '" stroke-width="1"/>';
+  s += '<text x="' + (_xd+12).toFixed(1) + '" y="' + (y0+T/2).toFixed(1) + '" transform="rotate(90 ' + (_xd+12).toFixed(1) + ' ' + (y0+T/2).toFixed(1) + ')" text-anchor="middle" font-size="10.5" font-weight="700" fill="#475569" font-family="Segoe UI,Arial">' + fmtNum(sw) + ' mm</text>';
+  if (_qty > 1) s += '<text x="' + (x0+S+4).toFixed(1) + '" y="' + (_yd+13).toFixed(1) + '" text-anchor="end" font-size="10" font-weight="800" fill="#94a3b8" font-family="Segoe UI,Arial">\u00d7' + _qty + '</text>';
+  s += '<text x="235" y="' + (H - 6) + '" text-anchor="middle" font-size="11.5" fill="#475569" font-family="Segoe UI,Arial">' + cap + '</text>';
   s += '</svg>';
   return s;
 }
 function svgGangSheet(sl, sw, cl, cw, gx2, gy2, gx, gy, kx, ky, pps, waste, best, mN, mM, perN, perR, gl, gw, pcsPanel){
-  var W = 430, H = 380, pad = 26;
-  var scale = Math.min((W - 2*pad) / sl, (H - 2*pad) / sw);
+  var W = 470, H = 412, pad = 30;
+  var scale = Math.min((W - pad - 46) / sl, (H - pad - 44) / sw);
   var S = sl * scale, T = sw * scale;
-  var x0 = pad + (W - 2*pad - S) / 2, y0 = pad + (H - 2*pad - T) / 2;
+  var x0 = pad + (W - pad - 46 - S) / 2, y0 = pad + (H - pad - 44 - T) / 2;
   var Kx = kx * scale, Ky = ky * scale;
-  var s = '<svg viewBox="0 0 ' + W + ' ' + H + '" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;display:block">';
+  var _qEl = document.getElementById('sheets'); var _qty = _qEl ? (parseInt(_qEl.value) || 0) : 0;
+  var s = '<svg viewBox="0 0 470 412" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;display:block">';
   s += '<rect x="' + x0.toFixed(1) + '" y="' + y0.toFixed(1) + '" width="' + S.toFixed(1) + '" height="' + T.toFixed(1) + '" fill="#fffdf5" stroke="#b3ac99" stroke-width="2"/>';
+  function lblW(cx, cy, mm){ s += '<text x="' + cx.toFixed(1) + '" y="' + cy.toFixed(1) + '" text-anchor="middle" font-size="8" fill="#475569" font-family="Segoe UI,Arial" style="paint-order:stroke" stroke="#ffffff" stroke-width="2.5">' + (Math.round(mm * 10) / 10) + '</text>'; }
+  function lblH(cx, cy, mm){ s += '<text x="' + cx.toFixed(1) + '" y="' + cy.toFixed(1) + '" transform="rotate(-90 ' + cx.toFixed(1) + ' ' + cy.toFixed(1) + ')" text-anchor="middle" font-size="8" fill="#475569" font-family="Segoe UI,Arial" style="paint-order:stroke" stroke="#ffffff" stroke-width="2.5">' + (Math.round(mm * 10) / 10) + '</text>'; }
+  function dims(cx, cy, Cl, Cw){ if (Cl > 26 && Cw > 15) lblW(cx + Cl/2, cy + 8.5, Cl / scale); if (Cw > 26 && Cl > 15) lblH(cx + 7.5, cy + Cw/2, Cw / scale); }
   var i, j, a, b;
   function gangCell(cx, cy, Cl, Cw, fill, stroke, inFill, inStroke){
     s += '<rect x="' + cx.toFixed(1) + '" y="' + cy.toFixed(1) + '" width="' + Cl.toFixed(1) + '" height="' + Cw.toFixed(1) + '" fill="' + fill + '" stroke="' + stroke + '" stroke-width="3.2" rx="2"/>';
@@ -772,6 +797,7 @@ function svgGangSheet(sl, sw, cl, cw, gx2, gy2, gx, gy, kx, ky, pps, waste, best
         for (b = 0; b < gy; b++)
           s += '<rect x="' + (cx + a*(p+Kx)).toFixed(1) + '" y="' + (cy + b*(q+Ky)).toFixed(1) + '" width="' + p.toFixed(1) + '" height="' + q.toFixed(1) + '" fill="' + inFill + '" stroke="' + inStroke + '" stroke-width="0.8"/>';
     }
+    dims(cx, cy, Cl, Cw);
   }
   if (best === 'mixed') {
     var y = y0;
@@ -785,17 +811,28 @@ function svgGangSheet(sl, sw, cl, cw, gx2, gy2, gx, gy, kx, ky, pps, waste, best
       for (j = 0; j < perR; j++) gangCell(x0 + j * (Cl2 + Kx), y, Cl2, Cw2, '#fce7f3', '#db2777', '#fbcfe8', '#ec4899');
       y += Cw2 + Ky;
     }
-    s += '<text x="' + (W/2) + '" y="' + (H-6) + '" text-anchor="middle" font-size="12.5" fill="#8a8f98" font-family="Segoe UI,Arial"><tspan fill="#7c3aed" font-weight="700">Normal gang</tspan> · <tspan fill="#db2777" font-weight="700">Rotated gang</tspan> — ' +
-         mN + '× row of ' + perN + ' + ' + mM + '× row of ' + perR + ' = <tspan fill="#7c3aed" font-weight="700">' + pps + ' GANG panels</tspan> · ' + waste + '% waste</text>';
+    s += '<text x="' + (W/2) + '" y="' + (H-6) + '" text-anchor="middle" font-size="12.5" fill="#8a8f98" font-family="Segoe UI,Arial"><tspan fill="#7c3aed" font-weight="700">Normal gang</tspan> \u00b7 <tspan fill="#db2777" font-weight="700">Rotated gang</tspan> — ' +
+         mN + '\u00d7 row of ' + perN + ' + ' + mM + '\u00d7 row of ' + perR + ' = <tspan fill="#7c3aed" font-weight="700">' + pps + ' GANG panels</tspan> \u00b7 ' + waste + '% waste</text>';
   } else {
     var Cl = cl * scale, Cw = cw * scale;
     for (i = 0; i < gx2; i++)
       for (j = 0; j < gy2; j++)
         gangCell(x0 + i * (Cl + Kx), y0 + j * (Cw + Ky), Cl, Cw, '#ede9fe', '#7c3aed', '#ddd6fe', '#8b5cf6');
     s += '<text x="' + (W/2) + '" y="' + (H-6) + '" text-anchor="middle" font-size="12.5" fill="#8a8f98" font-family="Segoe UI,Arial">Sheet ' +
-         fmtNum(sl) + '×' + fmtNum(sw) + ' mm · ' + gx2 + '×' + gy2 + ' = <tspan fill="#7c3aed" font-weight="700">' + pps + ' GANG panels</tspan> · ' +
-         (pps*pcsPanel*gx*gy) + ' PCS · ' + waste + '% waste</text>';
+         fmtNum(sl) + '\u00d7' + fmtNum(sw) + ' mm \u00b7 ' + gx2 + '\u00d7' + gy2 + ' = <tspan fill="#7c3aed" font-weight="700">' + pps + ' GANG panels</tspan> \u00b7 ' +
+         (pps*pcsPanel*gx*gy) + ' PCS \u00b7 ' + waste + '% waste</text>';
   }
+  var _c = '#94a3b8', _yd = y0 + T + 11;
+  s += '<line x1="' + x0.toFixed(1) + '" y1="' + _yd.toFixed(1) + '" x2="' + (x0+S).toFixed(1) + '" y2="' + _yd.toFixed(1) + '" stroke="' + _c + '" stroke-width="1"/>';
+  s += '<line x1="' + x0.toFixed(1) + '" y1="' + (_yd-4).toFixed(1) + '" x2="' + x0.toFixed(1) + '" y2="' + (_yd+4).toFixed(1) + '" stroke="' + _c + '" stroke-width="1"/>';
+  s += '<line x1="' + (x0+S).toFixed(1) + '" y1="' + (_yd-4).toFixed(1) + '" x2="' + (x0+S).toFixed(1) + '" y2="' + (_yd+4).toFixed(1) + '" stroke="' + _c + '" stroke-width="1"/>';
+  s += '<text x="' + (x0+S/2).toFixed(1) + '" y="' + (_yd+13).toFixed(1) + '" text-anchor="middle" font-size="10.5" font-weight="700" fill="#475569" font-family="Segoe UI,Arial">' + fmtNum(sl) + ' mm</text>';
+  var _xd = x0 + S + 11;
+  s += '<line x1="' + _xd.toFixed(1) + '" y1="' + y0.toFixed(1) + '" x2="' + _xd.toFixed(1) + '" y2="' + (y0+T).toFixed(1) + '" stroke="' + _c + '" stroke-width="1"/>';
+  s += '<line x1="' + (_xd-4).toFixed(1) + '" y1="' + y0.toFixed(1) + '" x2="' + (_xd+4).toFixed(1) + '" y2="' + y0.toFixed(1) + '" stroke="' + _c + '" stroke-width="1"/>';
+  s += '<line x1="' + (_xd-4).toFixed(1) + '" y1="' + (y0+T).toFixed(1) + '" x2="' + (_xd+4).toFixed(1) + '" y2="' + (y0+T).toFixed(1) + '" stroke="' + _c + '" stroke-width="1"/>';
+  s += '<text x="' + (_xd+12).toFixed(1) + '" y="' + (y0+T/2).toFixed(1) + '" transform="rotate(90 ' + (_xd+12).toFixed(1) + ' ' + (y0+T/2).toFixed(1) + ')" text-anchor="middle" font-size="10.5" font-weight="700" fill="#475569" font-family="Segoe UI,Arial">' + fmtNum(sw) + ' mm</text>';
+  if (_qty > 1) s += '<text x="' + (x0+S+4).toFixed(1) + '" y="' + (_yd+13).toFixed(1) + '" text-anchor="end" font-size="10" font-weight="800" fill="#94a3b8" font-family="Segoe UI,Arial">\u00d7' + _qty + '</text>';
   s += '</svg>';
   return s;
 }

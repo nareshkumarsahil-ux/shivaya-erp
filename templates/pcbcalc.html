@@ -1,0 +1,242 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+/* ---- 🧮 REAL CALCULATOR look (sirf is page par) ---- */
+.pcc-calc{width:200px;border:1px solid #cbd5e1;border-radius:16px;background:linear-gradient(180deg,#f8fafc,#e8edf4);padding:10px;box-shadow:0 8px 22px rgba(15,23,42,.16)}
+.pcc-disp{background:linear-gradient(180deg,#111827,#0b1220);border-radius:10px;padding:8px 12px;margin-bottom:9px;box-shadow:inset 0 2px 8px rgba(0,0,0,.55)}
+.pcc-disp .l{display:block;font-size:9px;font-weight:800;letter-spacing:1.2px;color:#94a3b8;text-align:left}
+.pcc-disp .v{display:block;font-family:Consolas,'Courier New',monospace;font-size:20px;font-weight:700;color:#4ade80;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-height:24px}
+.pcc-keys{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.pk{height:38px;border-radius:9px;border:1px solid #cbd5e1;background:linear-gradient(180deg,#ffffff,#eef2f7);font-size:16px;font-weight:800;color:#0f172a;cursor:pointer;box-shadow:0 3px 0 #c7d0db;transition:filter .1s}
+.pk:hover{filter:brightness(.96)}
+.pk:active{transform:translateY(2px);box-shadow:0 1px 0 #c7d0db}
+.pk-c{background:linear-gradient(180deg,#fb923c,#f97316);color:#fff;border-color:#ea580c;box-shadow:0 3px 0 #c2410c}
+.pk-b{background:linear-gradient(180deg,#60a5fa,#3b82f6);color:#fff;border-color:#2563eb;box-shadow:0 3px 0 #1d4ed8}
+.pk-0{grid-column:span 3;background:linear-gradient(180deg,#ffffff,#e2e8f0)}
+.pcc-hint{font-size:10.5px;color:#64748b;margin-top:6px;line-height:1.4}
+</style>
+<div style="max-width:1080px;margin:0 auto">
+
+  <!-- ============ CALCULATOR ============ -->
+  <div class="panel" style="border-left:4px solid #16a34a">
+    <div class="panel-head"><h3>💰 PCB COST CALCULATOR — RATE ⇄ PRICE</h3>
+      <span class="muted small">live dono taraf · 💾 save karke history banao</span>
+    </div>
+    <div class="panel-body" style="padding:14px 18px">
+    <form method="post" action="/pcbcalc" id="pccForm" autocomplete="off">
+      <input type="hidden" name="action" value="save">
+
+      <!-- MODEL se prefill -->
+      <div class="field" style="max-width:440px">
+        <label>MODEL SE BHARO (optional — Finished Product ki details auto)</label>
+        <select id="pccModel" onchange="pccModelFill()">
+          <option value="">— Select model —</option>
+          {% for m in models %}
+          <option value="{{ m.id }}"
+                  data-pcbl="{{ m.pcb_len|gfmt }}" data-pcbw="{{ m.pcb_w|gfmt }}"
+                  data-cutl="{{ m.cutting_len|gfmt }}" data-cutw="{{ m.cutting_w|gfmt }}"
+                  data-pcs="{{ m.pcs_panel }}" data-rate="{{ m.per_sq_inch|gfmt }}">{{ m.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div style="display:flex;gap:18px;flex-wrap:wrap;align-items:flex-start;margin-top:12px">
+        <!-- SIZE: EK HI ROW — L × W + (panel ho to) NO. OF PCB -->
+        <div style="flex:1;min-width:300px">
+          <div style="display:flex;gap:10px;flex-wrap:wrap">
+            <div class="field" style="width:140px"><label>LENGTH (MM)</label><input type="number" step="0.01" id="pccLen" name="input_len" class="pcc-num" placeholder="e.g. 802"></div>
+            <div class="field" style="width:140px"><label>WIDTH (MM)</label><input type="number" step="0.01" id="pccWid" name="input_w" class="pcc-num" placeholder="e.g. 100"></div>
+            <div class="field" style="width:160px"><label>NO. OF PCB / PANEL</label><input type="number" step="1" id="pccPcs" name="pcs" class="pcc-num" placeholder="single ho to khaali"></div>
+          </div>
+
+          <!-- NICHE: RATE ⇄ PRICE dono box — jo bharo/edit karo dusra khud niklega -->
+          <div class="muted small" style="font-weight:800;margin-top:12px">RATE ⇄ PRICE <span style="font-weight:400">(koi ek bharo ya badlo — dusra khud nikal aayega)</span></div>
+          <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:4px;align-items:flex-end">
+            <div class="field" style="width:210px"><label>RATE (₹ / SQ.INCH) → PRICE</label><input type="number" step="0.001" id="pccValRate" name="rate" class="pcc-num" placeholder="e.g. 1.5"></div>
+            <div style="font-size:20px;font-weight:800;color:#94a3b8;padding-bottom:8px">⇄</div>
+            <div class="field" style="width:210px"><label>PRICE (₹ / PCB) → RATE</label><input type="number" step="0.01" id="pccValPrice" name="price" class="pcc-num" placeholder="e.g. 20"></div>
+            <div class="field" style="width:230px"><label>NOTE / PARTY (history ke liye, optional)</label><input name="party" id="pccParty" placeholder="e.g. ALLIED sample rate"></div>
+            <button class="btn btn-outline btn-sm" type="button" onclick="pccClear()" title="Sab khaali">🧹 Clear</button>
+            <button class="btn btn-sm" type="submit" style="background:#16a34a">💾 SAVE TO HISTORY</button>
+          </div>
+          <div class="muted small" style="margin-top:8px">💡 PRICE edit karoge to <b>RATE khud naya niklega</b> — aur RATE badlaoge to PRICE. Dono taraf chalta hai.</div>
+        </div>
+
+        <!-- 🧮 REAL CALCULATOR — display + buttons (jis box par click, number wahin) -->
+        <div class="pcc-calc">
+          <div class="pcc-disp"><span class="l" id="pccDispLbl">LENGTH (MM)</span><span class="v" id="pccDispVal">0</span></div>
+          <div class="pcc-keys">
+            <button type="button" class="pk pk-c" onclick="padKey('clear')">C</button>
+            <button type="button" class="pk pk-b" onclick="padKey('back')">⌫</button>
+            <button type="button" class="pk" onclick="padKey('.')">.</button>
+            <button type="button" class="pk" onclick="padKey('7')">7</button>
+            <button type="button" class="pk" onclick="padKey('8')">8</button>
+            <button type="button" class="pk" onclick="padKey('9')">9</button>
+            <button type="button" class="pk" onclick="padKey('4')">4</button>
+            <button type="button" class="pk" onclick="padKey('5')">5</button>
+            <button type="button" class="pk" onclick="padKey('6')">6</button>
+            <button type="button" class="pk" onclick="padKey('1')">1</button>
+            <button type="button" class="pk" onclick="padKey('2')">2</button>
+            <button type="button" class="pk" onclick="padKey('3')">3</button>
+            <button type="button" class="pk pk-0" onclick="padKey('0')">0</button>
+          </div>
+          <div class="pcc-hint">Green LCD me wahi number dikhega jo box me hai — button dabao <b>ya</b> seedha type karo (dono tarike chalega).</div>
+        </div>
+      </div>
+    </form>
+
+      <!-- LIVE RESULT -->
+      <div id="pccResult" style="display:none;margin-top:16px;padding:14px 18px;border:2px solid #16a34a;border-radius:12px;background:#f2fbf4">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px">
+          <div><div class="muted small" style="font-weight:700">PCB AREA (1 PC)</div><div id="pccArea" style="font-size:19px;font-weight:800;color:#1d4ed8">—</div></div>
+          <div><div class="muted small" style="font-weight:700">RATE (₹/SQ.INCH)</div><div id="pccRateOut" style="font-size:19px;font-weight:800;color:#b45309">—</div></div>
+          <div><div class="muted small" style="font-weight:700">PCB PRICE (1 PC)</div><div id="pccPrice" style="font-size:24px;font-weight:800;color:#166534">—</div></div>
+          <div id="pccPanelPriceBox"><div class="muted small" style="font-weight:700">PORE PANEL PRICE</div><div id="pccPanelPrice" style="font-size:19px;font-weight:800;color:#9333ea">—</div></div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-top:10px">
+          <div><div class="muted small" style="font-weight:700">100 PCS LOT</div><div id="pccLot100" style="font-weight:800">—</div></div>
+          <div><div class="muted small" style="font-weight:700">500 PCS LOT</div><div id="pccLot500" style="font-weight:800">—</div></div>
+          <div><div class="muted small" style="font-weight:700">1000 PCS LOT</div><div id="pccLot1000" style="font-weight:800">—</div></div>
+        </div>
+        <div class="muted small" id="pccFormula" style="margin-top:10px;line-height:1.7"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ HISTORY ============ -->
+  <div class="panel" style="border-left:4px solid #b45309">
+    <div class="panel-head"><h3>🕘 CALCULATION HISTORY</h3>
+      <form method="post" action="/pcbcalc" onsubmit="return confirm('Poori history delete?')" style="display:inline">
+        <input type="hidden" name="action" value="clear_history">
+        <button class="btn btn-danger btn-sm" type="submit">🗑 Poori History Clear</button>
+      </form>
+    </div>
+    <div class="panel-body" style="padding:0">
+      <div style="overflow-x:auto">
+      <table style="min-width:860px">
+        <thead><tr>
+          <th>DATE · TIME (IST)</th><th>MODE</th><th>NOTE / PARTY</th><th>SIZE (MM)</th><th>PCS/PANEL</th>
+          <th class="t-right">AREA/PCB (SQ.INCH)</th><th class="t-right">RATE (₹/SQ.INCH)</th>
+          <th class="t-right">PCB PRICE (₹)</th><th class="t-right">PANEL PRICE (₹)</th><th></th>
+        </tr></thead>
+        <tbody>
+        {% for h in history %}
+          <tr>
+            <td style="white-space:nowrap">{{ h.created_on }}</td>
+            <td>{% if h.mode == 'panel' %}<span class="badge b-blue">PANEL</span>{% else %}<span class="badge b-pending">PCB</span>{% endif %}</td>
+            <td>{{ h.party|dash }}</td>
+            <td style="white-space:nowrap">{{ h.input_len|gfmt }} × {{ h.input_w|gfmt }}</td>
+            <td>{{ h.pcs if h.pcs else '—' }}</td>
+            <td class="t-right">{{ '%0.4g'|format(h.area) }}</td>
+            <td class="t-right" style="font-weight:800;color:#b45309">{{ '%0.3f'|format(h.rate) }}</td>
+            <td class="t-right" style="font-weight:800;color:#166534">{{ '%0.2f'|format(h.price) }}</td>
+            <td class="t-right">{% if h.pcs %}{{ '%0.2f'|format(h.price * h.pcs) }}{% else %}—{% endif %}</td>
+            <td><form method="post" action="/pcbcalc" style="display:inline" onsubmit="return confirm('Delete this history entry?')">
+              <input type="hidden" name="action" value="delete_history"><input type="hidden" name="id" value="{{ h.id }}">
+              <button class="btn btn-danger btn-xs" type="submit">🗑</button></form></td>
+          </tr>
+        {% else %}
+          <tr><td colspan="10" class="muted small" style="padding:16px;text-align:center">Abhi koi history nahi — value bharke 💾 SAVE TO HISTORY dabao</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ---- 💰 PCB COST CALCULATOR — ek size row + RATE ⇄ PRICE + REAL keypad ----
+   RULE: jis value box me LAST baar likha/edit kiya (rate ya price), wahi SOURCE hai —
+   dusra box khud naya niklega. RATE edit → PRICE naya · PRICE edit → RATE naya. ---- */
+var pccLast = null;        /* focused input — keypad wahin likhega */
+var pccLastVal = 'rate';   /* rate | price — kaunsi value SOURCE hai */
+var pccLabels = {pccLen:'LENGTH (MM)', pccWid:'WIDTH (MM)', pccPcs:'PCS / PANEL',
+                 pccValRate:'RATE ₹/SQ.INCH', pccValPrice:'PRICE ₹/PCB'};
+function pccMoney(v){ return '₹' + (Math.round(v * 100) / 100).toLocaleString('en-IN'); }
+function pccN(id){ var v = parseFloat(document.getElementById(id).value); return isNaN(v) ? 0 : v; }
+function pccClear(){
+  ['pccLen','pccWid','pccPcs','pccValRate','pccValPrice','pccParty'].forEach(function(id){ document.getElementById(id).value = ''; });
+  document.getElementById('pccModel').value = '';
+  pccLastVal = 'rate';
+  pccCalc(); pccDisp();
+}
+/* 🧮 keypad — focused .pcc-num input me digit jodta hai + LCD display update */
+function padKey(k){
+  var el = pccLast || document.getElementById('pccLen');
+  if (k === 'clear') { el.value = ''; }
+  else if (k === 'back') { el.value = el.value.slice(0, -1); }
+  else if (k === '.') { if (el.value.indexOf('.') < 0) el.value += '.'; }
+  else { el.value += k; }
+  pccDisp();
+  el.dispatchEvent(new Event('input', {bubbles:true}));
+  el.focus();
+}
+function pccDisp(){
+  var el = pccLast || document.getElementById('pccLen');
+  document.getElementById('pccDispLbl').textContent = pccLabels[el.id] || '';
+  document.getElementById('pccDispVal').textContent = el.value === '' ? '0' : el.value;
+}
+/* MODEL se prefill */
+function pccModelFill(){
+  var o = document.getElementById('pccModel').options[document.getElementById('pccModel').selectedIndex];
+  if (!o || !o.value) return;
+  var g = function(a){ return parseFloat(o.getAttribute(a)) || 0; };
+  document.getElementById('pccLen').value = (g('data-cutl') || g('data-pcbl')) || '';
+  document.getElementById('pccWid').value = (g('data-cutw') || g('data-pcbw')) || '';
+  document.getElementById('pccPcs').value = (g('data-cutl') > 0 ? g('data-pcs') : '') || '';
+  document.getElementById('pccValRate').value = (g('data-rate') > 0 ? g('data-rate') : '');
+  document.getElementById('pccValPrice').value = '';
+  pccLastVal = 'rate';
+  pccCalc(); pccDisp();
+}
+/* LIVE CALC — src batata hai kaunsi value SOURCE hai ('rate' | 'price' | null=last) */
+function pccCalc(src){
+  if (!src) src = pccLastVal;
+  var L = pccN('pccLen'), W = pccN('pccWid'), pcs = pccN('pccPcs');
+  var res = document.getElementById('pccResult');
+  if (!(L > 0 && W > 0)) { res.style.display = 'none'; return; }
+  var isPanel = pcs > 0;
+  var sqPanel = (L / 25.4) * (W / 25.4);
+  var areaPcb = isPanel ? (sqPanel / pcs) : sqPanel;
+  var rOut = document.getElementById('pccValRate'), pOut = document.getElementById('pccValPrice');
+  var rate = pccN('pccValRate'), price = pccN('pccValPrice');
+  if (src === 'rate' && rate > 0) {            /* RATE SOURCE → PRICE naya */
+    price = areaPcb * rate;
+    pOut.value = (Math.round(price * 100) / 100).toString();
+  } else if (src === 'price' && price > 0) {   /* PRICE SOURCE → RATE naya (price edit par rate badlega) */
+    rate = price / areaPcb;
+    rOut.value = (Math.round(rate * 1000) / 1000).toString();
+  } else if (rate > 0) {
+    price = areaPcb * rate;
+    pOut.value = (Math.round(price * 100) / 100).toString();
+  } else if (price > 0) {
+    rate = price / areaPcb;
+    rOut.value = (Math.round(rate * 1000) / 1000).toString();
+  } else { res.style.display = 'none'; return; }
+  document.getElementById('pccArea').textContent = (Math.round(areaPcb * 1000) / 1000) + ' sq.inch';
+  document.getElementById('pccRateOut').textContent = '₹' + (Math.round(rate * 1000) / 1000);
+  document.getElementById('pccPrice').textContent = pccMoney(price);
+  document.getElementById('pccPanelPriceBox').style.display = isPanel ? 'block' : 'none';
+  if (isPanel) document.getElementById('pccPanelPrice').textContent = pccMoney(price * pcs);
+  document.getElementById('pccLot100').textContent = pccMoney(price * 100);
+  document.getElementById('pccLot500').textContent = pccMoney(price * 500);
+  document.getElementById('pccLot1000').textContent = pccMoney(price * 1000);
+  var base = isPanel
+    ? '(' + L + ' × ' + W + ') mm ÷ 645.16 ÷ ' + pcs + ' PCS'
+    : L + ' × ' + W + ' mm ÷ 645.16';
+  document.getElementById('pccFormula').innerHTML =
+    '📌 AREA per PCB = ' + base + ' = ' + (Math.round(areaPcb * 1000) / 1000) + ' sq.inch → ' +
+    (src === 'price' ? '₹' + price + ' ÷ ' + (Math.round(areaPcb * 1000) / 1000) + ' = <b>₹' + (Math.round(rate * 1000) / 1000) + '/sq.inch</b>'
+                     : '₹' + (Math.round(rate * 1000) / 1000) + ' × ' + (Math.round(areaPcb * 1000) / 1000) + ' = <b>' + pccMoney(price) + ' per PCB</b>');
+  res.style.display = 'block';
+}
+['pccLen','pccWid','pccPcs','pccValRate','pccValPrice'].forEach(function(id){
+  var el = document.getElementById(id);
+  el.addEventListener('input', function(){ if (id === 'pccValRate') pccLastVal = 'rate'; if (id === 'pccValPrice') pccLastVal = 'price'; pccCalc(id === 'pccValRate' ? 'rate' : (id === 'pccValPrice' ? 'price' : null)); });  /* pccCalc('price') — PRICE SOURCE → RATE naya */
+  el.addEventListener('focus', function(){ pccLast = el; if (id === 'pccValRate') pccLastVal = 'rate'; if (id === 'pccValPrice') pccLastVal = 'price'; pccDisp(); });
+});
+pccLast = document.getElementById('pccLen');
+pccDisp();
+</script>
+{% endblock %}
