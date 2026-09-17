@@ -13,7 +13,18 @@
         <option value="">— Select saved model —</option>
         {% for m in models %}<option value="{{ m.id }}">{{ m.name }} · {% if m.cutting_len %}Cutting {{ m.cutting_len|gfmt }}×{{ m.cutting_w|gfmt }}mm{% else %}Panel {{ m.panel_len|gfmt }}×{{ m.panel_w|gfmt }}mm{% endif %} · {{ m.pcs_panel }} PCS/panel</option>{% endfor %}
       </select>
-      <button class="btn btn-outline btn-sm" type="submit" name="action" value="load">Load</button>
+      <button class="btn btn-outline btn-sm" type="button" onclick="clLoadModel(this)" title="Model ki saari details form me bhar do">Load</button>
+      <script>
+      /* LOAD — model select → ?model=ID par jao (server wahan form bhar deta hai).
+         POST-redirect nahi use karte: sandbox preview me redirect ke baad token/flash
+         kho jaata tha aur form khaali hi dikhta tha (LOAD na hota dikhta tha). */
+      function clLoadModel(btn){
+        var sel = btn.parentElement.querySelector('select[name="model_id"]');
+        if (!sel || !sel.value) { alert('Pehle model chuno — dropdown se Finished Product select karo.'); return; }
+        var t = new URLSearchParams(window.location.search).get('token');
+        window.location.href = '/cutlist?model=' + encodeURIComponent(sel.value) + (t ? '&token=' + encodeURIComponent(t) : '');
+      }
+      </script>
     </div>
 
     <div class="panel">

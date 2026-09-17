@@ -1584,6 +1584,9 @@ def cutlist():
             if model:
                 for k in FIELD_KEYS:
                     val = model[k] if k in model.keys() and model[k] is not None else ""
+                    # 0 values ko KHAALI chhodo — '0.0' likha user ko blank hi dikhna chahiye
+                    if val in (0, 0.0) or str(val) in ("0", "0.0"):
+                        val = ""
                     fields[k] = str(val)
                 has_pcb = (model["pcb_len"] or 0) > 0 and (model["pcb_w"] or 0) > 0
                 fields["use"] = "1" if has_pcb else ""
@@ -1612,9 +1615,19 @@ def cutlist():
                         _xmsg += f" — PCB PRICE ₹{model['pcb_price']:g} bhi load ho gaya"
                     flash(f"Loaded model '{model['name']}' — saari details load ho gayi ({_xmsg}).", "success")
                 else:
-                    fields["panel_len"] = f"{(model['panel_len'] or 0):g}"
-                    fields["panel_w"] = f"{(model['panel_w'] or 0):g}"
-                    flash(f"Loaded model '{model['name']}' — panel size bhara hai. Sheet size chuno, PCB size daalo, Calculate dabao.", "success")
+                    if not fields.get("panel_len"):
+                        fields["panel_len"] = f"{(model['panel_len'] or 0):g}"
+                    if not fields.get("panel_w"):
+                        fields["panel_w"] = f"{(model['panel_w'] or 0):g}"
+                    if not fields.get("sheet_len") and (model["sheet_len"] or 0) > 0:
+                        fields["sheet_len"] = f"{model['sheet_len']:g}"
+                    if not fields.get("sheet_w") and (model["sheet_w"] or 0) > 0:
+                        fields["sheet_w"] = f"{model['sheet_w']:g}"
+                    if not fields.get("kerf_x"):
+                        fields["kerf_x"] = "2"
+                    if not fields.get("kerf_y"):
+                        fields["kerf_y"] = "2"
+                    flash(f"Loaded model '{model['name']}' — panel/PCB details load ho gayi. PCB size khaali hai: {model['pcs_panel']} PCS/panel diya hai. Sheet size bharo, Calculate dabao.", "success")
         except (ValueError, TypeError):
             pass
     elif any(q.get(k, "") for k in FIELD_KEYS):
