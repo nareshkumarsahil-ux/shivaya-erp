@@ -17,12 +17,25 @@
       <script>
       /* LOAD — model select → ?model=ID par jao (server wahan form bhar deta hai).
          POST-redirect nahi use karte: sandbox preview me redirect ke baad token/flash
-         kho jaata tha aur form khaali hi dikhta tha (LOAD na hota dikhta tha). */
+         kho jaata tha aur form khaali hi dikhta tha (LOAD na hota dikhta tha).
+         TOKEN: preview me har navigation par ?token= zaroori (cookies blocked) —
+         URL se mile to theek, warna localStorage ki yaad wala token use karo. */
+      (function(){
+        var _t = new URLSearchParams(window.location.search).get('token');
+        if (_t) { try { localStorage.setItem('jcToken', _t); } catch(e){} }
+      })();
+      function clToken(){
+        var t = new URLSearchParams(window.location.search).get('token');
+        if (!t) { try { t = localStorage.getItem('jcToken'); } catch(e){} }
+        return t || '';
+      }
       function clLoadModel(btn){
         var sel = btn.parentElement.querySelector('select[name="model_id"]');
         if (!sel || !sel.value) { alert('Pehle model chuno — dropdown se Finished Product select karo.'); return; }
-        var t = new URLSearchParams(window.location.search).get('token');
-        window.location.href = '/cutlist?model=' + encodeURIComponent(sel.value) + (t ? '&token=' + encodeURIComponent(t) : '');
+        var u = '/cutlist?model=' + encodeURIComponent(sel.value);
+        var t = clToken();
+        if (t) u += '&token=' + encodeURIComponent(t);
+        window.location.href = u;
       }
       </script>
     </div>
