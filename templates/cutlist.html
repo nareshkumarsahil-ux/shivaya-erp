@@ -732,6 +732,19 @@ function svgSheetLayout(sl, sw, cl, cw, gx2, gy2, gx, gy, kx, ky, pps, best, mN,
   /* cl/cw MM me aate hai — pehle PX me banao (varna cell sheet se BADA draw hota hai:
      1x1 multiplier par preview page se bahar jata tha, 2x1 me chhota hone se chhupta tha) */
   cl = cl * scale; cw = cw * scale;
+  /* v2.62 \u2014 axis-wise USE + WASTE (mm) \u2014 sheet ke andar kitna use hua, kitna jali */
+  var clMM = cl / scale, cwMM = cw / scale, uxMM = 0, uyMM = 0;
+  if (best === 'mixed') {
+    var _un = (perN && mN) ? perN * gl + (perN - 1) * kx : 0;
+    var _ur = (perR && mM) ? perR * gw + (perR - 1) * kx : 0;
+    uxMM = Math.max(_un, _ur);
+    var _rows = mN + mM;
+    uyMM = _rows ? (mN * gw + mM * gl + (_rows - 1) * ky) : 0;
+  } else {
+    uxMM = gx2 ? gx2 * clMM + (gx2 - 1) * kx : 0;
+    uyMM = gy2 ? gy2 * cwMM + (gy2 - 1) * ky : 0;
+  }
+  var wxMM = Math.max(sl - uxMM, 0), wyMM = Math.max(sw - uyMM, 0);
   var S = sl * scale, T = sw * scale;
   var x0 = pad + (W - pad - 46 - S) / 2, y0 = pad + (H - pad - 44 - T) / 2;
   var Kx = kx * scale, Ky = ky * scale;
@@ -739,6 +752,18 @@ function svgSheetLayout(sl, sw, cl, cw, gx2, gy2, gx, gy, kx, ky, pps, best, mN,
   var _qEl = document.getElementById('sheets'); var _qty = _qEl ? (parseInt(_qEl.value) || 0) : 0;
   var s = '<svg viewBox="0 0 470 412" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;display:block">';
   s += '<rect x="' + x0.toFixed(1) + '" y="' + y0.toFixed(1) + '" width="' + S.toFixed(1) + '" height="' + T.toFixed(1) + '" fill="#fffdf5" stroke="#b3ac99" stroke-width="2"/>';
+  /* v2.62 \u2014 USE + WASTE red strips (cells inhi ke UPAR draw hote hai) */
+  var uxPx = uxMM * scale, uyPx = uyMM * scale;
+  if (uxMM > 0 && wxMM > 0.05) {
+    s += '<rect x="' + (x0 + uxPx).toFixed(1) + '" y="' + y0.toFixed(1) + '" width="' + (S - uxPx).toFixed(1) + '" height="' + T.toFixed(1) + '" fill="#fee2e2" fill-opacity="0.75" stroke="#fca5a5" stroke-width="1" stroke-dasharray="3 2"/>';
+    if (S - uxPx > 20 && T > 60)
+      s += '<text x="' + (x0 + uxPx + (S - uxPx) / 2).toFixed(1) + '" y="' + (y0 + T / 2).toFixed(1) + '" transform="rotate(90 ' + (x0 + uxPx + (S - uxPx) / 2).toFixed(1) + ' ' + (y0 + T / 2).toFixed(1) + ')" text-anchor="middle" font-size="8.5" font-weight="700" fill="#dc2626" font-family="Segoe UI,Arial">WASTE ' + fmtNum(wxMM) + '</text>';
+  }
+  if (uyMM > 0 && wyMM > 0.05) {
+    s += '<rect x="' + x0.toFixed(1) + '" y="' + (y0 + uyPx).toFixed(1) + '" width="' + S.toFixed(1) + '" height="' + (T - uyPx).toFixed(1) + '" fill="#fee2e2" fill-opacity="0.75" stroke="#fca5a5" stroke-width="1" stroke-dasharray="3 2"/>';
+    if (T - uyPx > 14 && S > 60)
+      s += '<text x="' + (x0 + S / 2).toFixed(1) + '" y="' + (y0 + uyPx + (T - uyPx) / 2 + 3).toFixed(1) + '" text-anchor="middle" font-size="8.5" font-weight="700" fill="#dc2626" font-family="Segoe UI,Arial">WASTE ' + fmtNum(wyMM) + '</text>';
+  }
   function lblW(cx, cy, mm){ s += '<text x="' + cx.toFixed(1) + '" y="' + cy.toFixed(1) + '" text-anchor="middle" font-size="8" fill="#475569" font-family="Segoe UI,Arial" style="paint-order:stroke" stroke="#ffffff" stroke-width="2.5">' + (Math.round(mm * 10) / 10) + '</text>'; }
   function lblH(cx, cy, mm){ s += '<text x="' + cx.toFixed(1) + '" y="' + cy.toFixed(1) + '" transform="rotate(-90 ' + cx.toFixed(1) + ' ' + cy.toFixed(1) + ')" text-anchor="middle" font-size="8" fill="#475569" font-family="Segoe UI,Arial" style="paint-order:stroke" stroke="#ffffff" stroke-width="2.5">' + (Math.round(mm * 10) / 10) + '</text>'; }
   function cell(cx, cy, Cl, Cw, num, fill, stroke){
@@ -783,6 +808,13 @@ function svgSheetLayout(sl, sw, cl, cw, gx2, gy2, gx, gy, kx, ky, pps, best, mN,
   s += '<line x1="' + (_xd-4).toFixed(1) + '" y1="' + (y0+T).toFixed(1) + '" x2="' + (_xd+4).toFixed(1) + '" y2="' + (y0+T).toFixed(1) + '" stroke="' + _c + '" stroke-width="1"/>';
   s += '<text x="' + (_xd+12).toFixed(1) + '" y="' + (y0+T/2).toFixed(1) + '" transform="rotate(90 ' + (_xd+12).toFixed(1) + ' ' + (y0+T/2).toFixed(1) + ')" text-anchor="middle" font-size="10.5" font-weight="700" fill="#475569" font-family="Segoe UI,Arial">' + fmtNum(sw) + ' mm</text>';
   if (_qty > 1) s += '<text x="' + (x0+S+4).toFixed(1) + '" y="' + (_yd+13).toFixed(1) + '" text-anchor="end" font-size="10" font-weight="800" fill="#94a3b8" font-family="Segoe UI,Arial">\u00d7' + _qty + '</text>';
+  /* v2.62 \u2014 USE + WASTE labels (bottom = length axis, right = width axis) */
+  if (uxMM > 0 && wxMM > 0.05)
+    s += '<text x="' + (x0 + S / 2).toFixed(1) + '" y="400" text-anchor="middle" font-size="9.5" font-weight="700" fill="#475569" font-family="Segoe UI,Arial">USE ' + fmtNum(uxMM) + ' + <tspan fill="#dc2626">WASTE ' + fmtNum(wxMM) + '</tspan> = ' + fmtNum(sl) + ' mm</text>';
+  if (uyMM > 0 && wyMM > 0.05 && T > 120) {
+    var _rx = x0 + S + 33, _ry = y0 + T / 2;
+    s += '<text x="' + _rx.toFixed(1) + '" y="' + _ry.toFixed(1) + '" transform="rotate(90 ' + _rx.toFixed(1) + ' ' + _ry.toFixed(1) + ')" text-anchor="middle" font-size="9" font-weight="700" fill="#475569" font-family="Segoe UI,Arial">USE ' + fmtNum(uyMM) + ' \u00b7 <tspan fill="#dc2626">WASTE ' + fmtNum(wyMM) + '</tspan></text>';
+  }
   s += '<text x="235" y="' + (H - 6) + '" text-anchor="middle" font-size="11.5" fill="#475569" font-family="Segoe UI,Arial">' + cap + '</text>';
   s += '</svg>';
   return s;

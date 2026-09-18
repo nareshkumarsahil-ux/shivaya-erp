@@ -1232,6 +1232,28 @@ def svg_sheet_layout_preview(r):
     kx, ky = r["kerf_x"] * scale, r["kerf_y"] * scale
     s = [f'<svg viewBox="0 0 {W} {H}" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;display:block">']
     s.append(f'<rect x="{x0:.1f}" y="{y0:.1f}" width="{S:.1f}" height="{T:.1f}" fill="#fffdf5" stroke="#b3ac99" stroke-width="2"/>')
+    # v2.62 \u2014 axis-wise USE + WASTE breakdown (red strips + USE/WASTE labels)
+    kx_m, ky_m = r["kerf_x"], r["kerf_y"]
+    if r["best"] == "mixed":
+        _un = r["per_normal"] * r["gang_len"] + (r["per_normal"] - 1) * kx_m if r["per_normal"] and r["mixed_n"] else 0
+        _ur = r["per_rot"] * r["gang_w"] + (r["per_rot"] - 1) * kx_m if r["per_rot"] and r["mixed_m"] else 0
+        used_x = max(_un, _ur)
+        _rows = r["mixed_n"] + r["mixed_m"]
+        used_y = (r["mixed_n"] * r["gang_w"] + r["mixed_m"] * r["gang_len"] + (_rows - 1) * ky_m) if _rows else 0
+    else:
+        used_x = r["grid_x"] * r["cell_len"] + (r["grid_x"] - 1) * kx_m if r["grid_x"] else 0
+        used_y = r["grid_y"] * r["cell_w"] + (r["grid_y"] - 1) * ky_m if r["grid_y"] else 0
+    waste_x, waste_y = max(sl - used_x, 0.0), max(sw - used_y, 0.0)
+    ux, uy = used_x * scale, used_y * scale
+    if used_x > 0 and waste_x > 0.05:
+        s.append(f'<rect x="{x0 + ux:.1f}" y="{y0:.1f}" width="{S - ux:.1f}" height="{T:.1f}" fill="#fee2e2" fill-opacity="0.75" stroke="#fca5a5" stroke-width="1" stroke-dasharray="3 2"/>')
+        if S - ux > 20 and T > 60:
+            _wx, _wy2 = x0 + ux + (S - ux) / 2, y0 + T / 2
+            s.append(f'<text x="{_wx:.1f}" y="{_wy2:.1f}" transform="rotate(90 {_wx:.1f} {_wy2:.1f})" text-anchor="middle" font-size="8.5" font-weight="700" fill="#dc2626" font-family="Segoe UI,Arial">WASTE {waste_x:.2f}</text>')
+    if used_y > 0 and waste_y > 0.05:
+        s.append(f'<rect x="{x0:.1f}" y="{y0 + uy:.1f}" width="{S:.1f}" height="{T - uy:.1f}" fill="#fee2e2" fill-opacity="0.75" stroke="#fca5a5" stroke-width="1" stroke-dasharray="3 2"/>')
+        if T - uy > 14 and S > 60:
+            s.append(f'<text x="{x0 + S / 2:.1f}" y="{y0 + uy + (T - uy) / 2 + 3:.1f}" text-anchor="middle" font-size="8.5" font-weight="700" fill="#dc2626" font-family="Segoe UI,Arial">WASTE {waste_y:.2f}</text>')
 
     def _panel_cell(cx, cy, cl, cw, num, fill, stroke, mm_l, mm_w):
         s.append(f'<rect x="{cx:.1f}" y="{cy:.1f}" width="{cl:.1f}" height="{cw:.1f}" fill="{fill}" stroke="{stroke}" stroke-width="2" rx="3"/>')
@@ -1289,6 +1311,12 @@ def svg_sheet_layout_preview(r):
             cap = (f"1 SHEET {sl:.0f}x{sw:.0f} mm \u2190 PANEL {r['cell_len']:g}x{r['cell_w']:g} mm = "
                    f"{r['grid_x']}x{r['grid_y']} = {r['panels_per_sheet']} PANELS x {r['pcs_unit']} PCS = {r['pcs_per_sheet']} PCS")
     _svg_sheet_dims(s, x0, y0, S, T, sl, sw, r.get("sheets") or 0)
+    # v2.62 \u2014 USE + WASTE dim labels (bottom = length axis, right = width axis)
+    if used_x > 0 and waste_x > 0.05:
+        s.append(f'<text x="{x0 + S / 2:.1f}" y="400" text-anchor="middle" font-size="9.5" font-weight="700" fill="#475569" font-family="Segoe UI,Arial">USE {used_x:.2f} + <tspan fill="#dc2626">WASTE {waste_x:.2f}</tspan> = {sl:.2f} mm</text>')
+    if used_y > 0 and waste_y > 0.05 and T > 120:
+        _rx, _ry = x0 + S + 33, y0 + T / 2
+        s.append(f'<text x="{_rx:.1f}" y="{_ry:.1f}" transform="rotate(90 {_rx:.1f} {_ry:.1f})" text-anchor="middle" font-size="9" font-weight="700" fill="#475569" font-family="Segoe UI,Arial">USE {used_y:.2f} \u00b7 <tspan fill="#dc2626">WASTE {waste_y:.2f}</tspan></text>')
     s.append(f'<text x="{W/2:.0f}" y="{H - 6:.0f}" text-anchor="middle" font-size="11.5" fill="#475569" font-family="Segoe UI,Arial">{cap}</text>')
     s.append('</svg>')
     return "".join(s)
