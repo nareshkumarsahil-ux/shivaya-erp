@@ -50,7 +50,7 @@
   <div class="side-footer">
     <div class="saved-note"><span class="dot"></span> All changes saved</div>
     <div class="user-chip">👤 {{ current_user_name }}<span class="role">{{ current_user_role|upper }}</span></div>
-    <div class="ver-chip" title="App version — agar ye purana dikhe to naya ZIP deploy nahi hua">🛰 App v2.64 · sheet preview right side fix</div>
+    <div class="ver-chip" title="App version — agar ye purana dikhe to naya ZIP deploy nahi hua">🛰 App v2.65 · finished good scrollbar fix</div>
     <a class="logout" href="/logout">Logout ↩</a>
   </div>
 </aside>
@@ -271,26 +271,79 @@ document.addEventListener('click', function(e){
 <script>
 /* ↔️ STICKY HORIZONTAL SCROLLBAR — page left-right chaura ho to ye scrollbar
    screen ke niche HAMESHA dikhegi (pehle wo document ke sabse niche laga karti
-   thi — poora page neeche scroll karna padta tha). Document ke horizontal
-   scroll ke saath 2-tarafa sync + bar par wheel ghumao to bhi chalega. */
+   thi — poora page neeche scroll karna padta tha).
+   v2.65: WIDE TABLES (FINISHED GOOD jaisa) panel ke ANDAR scroll hote hai — unki
+   scrollbar panel ke tall niche rehti thi (right side ke columns ke liye pehle
+   poora page neeche scroll karna padta tha). Ab ye bar panel overflow ko bhi
+   pakdti hai: jis panel me aap ho (viewport ke sabse paas wala overflow-x panel)
+   uske scroll se 2-tarafa sync — bar hamesha screen ke niche mast dikhti hai. */
 (function(){
   var bar = document.getElementById('docHScroll'), inner = document.getElementById('docHScrollInner');
   if (!bar) return;
+  var conts = [], active = null, lock = 0;
+  function scan(){
+    var divs = document.querySelectorAll('div');
+    for (var i = 0; i < divs.length; i++){
+      var el = divs[i];
+      if (el.hasAttribute('data-hsync')) continue;
+      var s = getComputedStyle(el);
+      el.setAttribute('data-hsync', '1');
+      if ((s.overflowX === 'auto' || s.overflowX === 'scroll') && s.position !== 'fixed' && el.id !== 'docHScroll')
+        conts.push(el);
+    }
+  }
+  function activeCont(){
+    var mid = window.innerHeight / 2, best = null, bestD = 1e9;
+    for (var i = 0; i < conts.length; i++){
+      var c = conts[i];
+      if (!document.contains(c) || c.scrollWidth <= c.clientWidth + 2) continue;
+      var r = c.getBoundingClientRect();
+      if (r.height < 40 || r.bottom < 0 || r.top > window.innerHeight) continue;
+      var d = Math.abs((r.top + r.bottom) / 2 - mid);
+      if (d < bestD){ bestD = d; best = c; }
+    }
+    return best;
+  }
   function sync(){
+    scan();
     var de = document.documentElement;
-    var show = de.scrollWidth > de.clientWidth + 1;
+    var docOver = de.scrollWidth > de.clientWidth + 1;
+    var c = docOver ? null : activeCont();
+    if (c !== active){
+      active = c;
+      if (active){
+        var w0 = active.scrollWidth + 'px';
+        if (inner.style.width !== w0) inner.style.width = w0;
+        if (Math.abs(bar.scrollLeft - active.scrollLeft) > 1) bar.scrollLeft = active.scrollLeft;
+      }
+    }
+    var show = docOver || !!active;
     bar.style.display = show ? 'block' : 'none';
     document.body.style.paddingBottom = show ? '20px' : '';
     if (!show) return;
-    var w = de.scrollWidth + 'px';
-    if (inner.style.width !== w) inner.style.width = w;
-    if (Math.abs(bar.scrollLeft - de.scrollLeft) > 1) bar.scrollLeft = de.scrollLeft;
+    if (active){
+      var w = active.scrollWidth + 'px';
+      if (inner.style.width !== w) inner.style.width = w;
+      if (Date.now() > lock && Math.abs(bar.scrollLeft - active.scrollLeft) > 1) bar.scrollLeft = active.scrollLeft;
+    } else {
+      var w2 = de.scrollWidth + 'px';
+      if (inner.style.width !== w2) inner.style.width = w2;
+      if (Math.abs(bar.scrollLeft - de.scrollLeft) > 1) bar.scrollLeft = de.scrollLeft;
+    }
   }
-  bar.addEventListener('scroll', function(){ document.documentElement.scrollLeft = bar.scrollLeft; });
+  bar.addEventListener('scroll', function(){
+    if (Date.now() < lock) return;
+    lock = Date.now() + 60;
+    (active || document.documentElement).scrollLeft = bar.scrollLeft;
+  });
   bar.addEventListener('wheel', function(e){
-    if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) { e.preventDefault(); document.documentElement.scrollLeft += e.deltaY; }
+    if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) { e.preventDefault(); (active || document.documentElement).scrollLeft += e.deltaY; }
   }, {passive:false});
-  window.addEventListener('scroll', sync, {passive:true});
+  window.addEventListener('scroll', function(){
+    /* scroll par active panel doondho — par bar ko uske scroll me na ghumao (lock) */
+    lock = Date.now() + 40;
+    sync();
+  }, {passive:true});
   window.addEventListener('resize', sync);
   setInterval(sync, 700);  /* accordion kholo/band → chaurai badal sakti hai */
   sync();
