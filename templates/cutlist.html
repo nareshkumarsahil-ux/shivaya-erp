@@ -237,7 +237,7 @@
             <span style="display:inline-flex;gap:4px;align-items:center"><span style="width:12px;height:12px;background:#fdf4ff;border:2px solid #c026d3;border-radius:2px;display:inline-block"></span>Rotated</span>
             <span style="display:inline-flex;gap:4px;align-items:center"><span style="width:12px;height:12px;background:#fffdf5;border:2px solid #b3ac99;border-radius:2px;display:inline-block"></span>Sheet</span>
           </span>
-          <div id="svgSheetLayout" style="margin-top:8px;max-width:470px;margin-left:auto;margin-right:auto">{{ svg_sheet_layout|safe }}{% if not svg_sheet_layout %}<div class="muted small" style="padding:18px;text-align:center">Value bharke ⚙️ CALCULATE dabao — preview yahan banega</div>{% endif %}</div>
+          <div id="svgSheetLayout" style="margin-top:8px;max-width:500px;margin-left:auto;margin-right:auto">{{ svg_sheet_layout|safe }}{% if not svg_sheet_layout %}<div class="muted small" style="padding:18px;text-align:center">Value bharke ⚙️ CALCULATE dabao — preview yahan banega</div>{% endif %}</div>
         </div>
       </div>
     </div>
@@ -729,7 +729,7 @@ function svgSheet(sl, sw, cl, cw, gx2, gy2, gx, gy, kx, ky, pps, waste, best, mN
 function svgSheetLayout(sl, sw, cl, cw, gx2, gy2, gx, gy, kx, ky, pps, best, mN, mM, perN, perR, gl, gw, pcsUnit){
   /* v2.63 — canvas 500x448: neeche 3 rows (sheet-dim / USE-WASTE / caption), right pe 2 rotated columns */
   var W = 500, H = 448, pad = 30;
-  var scale = Math.min((W - pad - 76) / sl, (H - pad - 64) / sw);
+  var scale = Math.min((W - pad - 84) / sl, (H - pad - 64) / sw);
   /* cl/cw MM me aate hai — pehle PX me banao (varna cell sheet se BADA draw hota hai:
      1x1 multiplier par preview page se bahar jata tha, 2x1 me chhota hone se chhupta tha) */
   cl = cl * scale; cw = cw * scale;
@@ -747,7 +747,7 @@ function svgSheetLayout(sl, sw, cl, cw, gx2, gy2, gx, gy, kx, ky, pps, best, mN,
   }
   var wxMM = Math.max(sl - uxMM, 0), wyMM = Math.max(sw - uyMM, 0);
   var S = sl * scale, T = sw * scale;
-  var x0 = pad + (W - pad - 76 - S) / 2, y0 = pad + (H - pad - 64 - T) / 2;
+  var x0 = pad + (W - pad - 84 - S) / 2, y0 = pad + (H - pad - 64 - T) / 2;
   var Kx = kx * scale, Ky = ky * scale;
   var gang = (gx > 1 || gy > 1), ptype = gang ? 'GANG PANEL' : 'PANEL';
   var _qEl = document.getElementById('sheets'); var _qty = _qEl ? (parseInt(_qEl.value) || 0) : 0;
@@ -813,8 +813,8 @@ function svgSheetLayout(sl, sw, cl, cw, gx2, gy2, gx, gy, kx, ky, pps, best, mN,
   if (uxMM > 0 && wxMM > 0.05)
     s += '<text x="' + (x0 + S / 2).toFixed(1) + '" y="' + (y0 + T + 40).toFixed(1) + '" text-anchor="middle" font-size="9.5" font-weight="700" fill="#475569" font-family="Segoe UI,Arial">USE ' + fmtNum(uxMM) + ' + <tspan fill="#dc2626">WASTE ' + fmtNum(wxMM) + '</tspan> = ' + fmtNum(sl) + ' mm</text>';
   if (uyMM > 0 && wyMM > 0.05 && T > 120) {
-    var _rx = x0 + S + 43, _ry = y0 + T / 2;
-    s += '<text x="' + _rx.toFixed(1) + '" y="' + _ry.toFixed(1) + '" transform="rotate(90 ' + _rx.toFixed(1) + ' ' + _ry.toFixed(1) + ')" text-anchor="middle" font-size="9" font-weight="700" fill="#475569" font-family="Segoe UI,Arial">USE ' + fmtNum(uyMM) + ' \u00b7 <tspan fill="#dc2626">WASTE ' + fmtNum(wyMM) + '</tspan></text>';
+    var _rx = x0 + S + 40, _ry = y0 + T / 2;
+    s += '<text x="' + _rx.toFixed(1) + '" y="' + _ry.toFixed(1) + '" transform="rotate(90 ' + _rx.toFixed(1) + ' ' + _ry.toFixed(1) + ')" text-anchor="middle" font-size="10" font-weight="700" fill="#475569" font-family="Segoe UI,Arial">USE ' + fmtNum(uyMM) + ' \u00b7 <tspan fill="#dc2626">WASTE ' + fmtNum(wyMM) + '</tspan></text>';
   }
   s += '<text x="' + (W / 2) + '" y="' + (H - 6) + '" text-anchor="middle" font-size="11" fill="#475569" font-family="Segoe UI,Arial">' + cap + '</text>';
   s += '</svg>';
