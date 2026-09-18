@@ -1028,59 +1028,36 @@ def compute_layout(p):
 
 
 def svg_panel_preview(r):
-    """Panel outline + individual PCB grid, with multiplier (gang) copies + total size."""
+    """PREVIEW #1 — PANEL: sirf EK panel + individual PCB grid (borders, per-boundary gaps).
+    Multiplier copies yahan NAHI — gang unit ka zoom alag GANG PANEL PREVIEW me hai."""
     W, H, pad = 430, 300, 26
     pl, pw = r["panel_len"], r["panel_w"]
-    gx, gy = r["gang_x"], r["gang_y"]
-    kx, ky = r["kerf_x"], r["kerf_y"]
-    pgx = r.get("pgaps_x") or []
-    pgy = r.get("pgaps_y") or []
-    gl = pl * gx + (sum(pgx) if pgx else kx * (gx - 1))   # total panel size with multiplier
-    gw = pw * gy + (sum(pgy) if pgy else ky * (gy - 1))
-    scale = min((W - 2 * pad) / gl, (H - 2 * pad) / gw)
+    scale = min((W - 2 * pad) / pl, (H - 2 * pad) / pw)
     P, Q = pl * scale, pw * scale
-    off_xs = pgx if pgx else [kx]
-    off_ys = pgy if pgy else [ky]
-    Kx, Ky = off_xs[0] * scale, off_ys[0] * scale
-    GL, GW = gl * scale, gw * scale
-    x0, y0 = pad + (W - 2 * pad - GL) / 2, pad + (H - 2 * pad - GW) / 2
+    x0, y0 = pad + (W - 2 * pad - P) / 2, pad + (H - 2 * pad - Q) / 2
     cw, ch = r["pcb_len"] * scale, r["pcb_w"] * scale
     gxs, gys = r["gap_x"] * scale, r["gap_y"] * scale
     bx, by = r["border_l"] * scale, r["border_t"] * scale
     gaps_x_s = r.get("gaps_x") or [r["gap_x"]] * max(0, r["pcbs_x"] - 1)
     gaps_y_s = r.get("gaps_y") or [r["gap_y"]] * max(0, r["pcbs_y"] - 1)
     s = [f'<svg viewBox="0 0 {W} {H}" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;display:block">']
-    for a in range(gx):
-        for b in range(gy):
-            _oxa = sum(P + off_xs[i] * scale for i in range(a))
-            _oyb = sum(Q + off_ys[i] * scale for i in range(b))
-            xp, yp = x0 + _oxa, y0 + _oyb
-            s.append(f'<rect x="{xp:.1f}" y="{yp:.1f}" width="{P:.1f}" height="{Q:.1f}" fill="#dbeafe" stroke="#2563eb" stroke-width="2" rx="3"/>')
-            if cw > 2.4 and ch > 2.4:
-                # HAR boundary ka apna gap — positions accumulate karte hain
-                ox = bx
-                for i in range(r["pcbs_x"]):
-                    oy = by
-                    for j in range(r["pcbs_y"]):
-                        s.append(f'<rect x="{xp + ox:.1f}" y="{yp + oy:.1f}" width="{cw:.1f}" height="{ch:.1f}" fill="#fbbf24" fill-opacity="0.5" stroke="#f59e0b" stroke-width="0.8"/>')
-                        oy += ch + (gaps_y_s[j] * scale if j < len(gaps_y_s) else gys)
-                    if i < r["pcbs_x"] - 1:
-                        ox += cw + (gaps_x_s[i] * scale if i < len(gaps_x_s) else gxs)
-                if r["border_l"] or r["border_r"] or r["border_t"] or r["border_b"]:
-                    cw2 = r["pcbs_x"] * cw + sum(gaps_x_s) * scale
-                    ch2 = r["pcbs_y"] * ch + sum(gaps_y_s) * scale
-                    s.append(f'<rect x="{xp + bx:.1f}" y="{yp + by:.1f}" width="{cw2:.1f}" height="{ch2:.1f}" fill="none" stroke="#64748b" stroke-width="1" stroke-dasharray="4 3"/>')
-    if gx > 1 or gy > 1:
-        s.append(f'<rect x="{x0:.1f}" y="{y0:.1f}" width="{GL:.1f}" height="{GW:.1f}" fill="#dcfce7" fill-opacity="0.4" stroke="#16a34a" stroke-width="2" rx="5"/>')
-        pcs_gang = r["pcs_panel"] * gx * gy
-        s.append(f'<text x="{x0 + GL/2:.0f}" y="{y0 - 6:.1f}" text-anchor="middle" font-size="11" fill="#16a34a" font-family="Segoe UI,Arial">TOTAL WITH MULTIPLIER: {gl:.2f}\u00d7{gw:.2f} mm \u00b7 {pcs_gang} PCS ({gx}\u00d7{gy} + kerf)</text>')
+    s.append(f'<rect x="{x0:.1f}" y="{y0:.1f}" width="{P:.1f}" height="{Q:.1f}" fill="#dbeafe" stroke="#2563eb" stroke-width="2" rx="3"/>')
+    if cw > 2.4 and ch > 2.4:
+        ox = bx
+        for i in range(r["pcbs_x"]):
+            oy = by
+            for j in range(r["pcbs_y"]):
+                s.append(f'<rect x="{x0 + ox:.1f}" y="{y0 + oy:.1f}" width="{cw:.1f}" height="{ch:.1f}" fill="#fbbf24" fill-opacity="0.5" stroke="#f59e0b" stroke-width="0.8"/>')
+                oy += ch + (gaps_y_s[j] * scale if j < len(gaps_y_s) else gys)
+            if i < r["pcbs_x"] - 1:
+                ox += cw + (gaps_x_s[i] * scale if i < len(gaps_x_s) else gxs)
+        if r["border_l"] or r["border_r"] or r["border_t"] or r["border_b"]:
+            cw2 = r["pcbs_x"] * cw + sum(gaps_x_s) * scale
+            ch2 = r["pcbs_y"] * ch + sum(gaps_y_s) * scale
+            s.append(f'<rect x="{x0 + bx:.1f}" y="{y0 + by:.1f}" width="{cw2:.1f}" height="{ch2:.1f}" fill="none" stroke="#64748b" stroke-width="1" stroke-dasharray="4 3"/>')
     if (sum(gaps_x_s) > 0.1 or sum(gaps_y_s) > 0.1) and Q > 24:
         s.append(f'<text x="{x0 + P/2:.0f}" y="{y0 + Q - 10:.1f}" text-anchor="middle" font-size="10" fill="#b45309" font-family="Segoe UI,Arial">gap X: {sum(gaps_x_s):.2f} / Y: {sum(gaps_y_s):.2f} mm</text>')
-    lbl = f'Panel {pl:.2f}\u00d7{pw:.2f} mm \u00b7 {r["pcs_panel"]} PCBs ({r["pcbs_x"]}\u00d7{r["pcbs_y"]})'
-    if gx > 1 or gy > 1:
-        pcs_gang = r["pcs_panel"] * gx * gy
-        lbl += f' \u00b7 {gx}\u00d7{gy} gang \u2192 <tspan fill="#16a34a" font-weight="700">Total {gl:.2f}\u00d7{gw:.2f} mm \u00b7 {pcs_gang} PCS</tspan>'
-    s.append(f'<text x="{W/2:.0f}" y="{H - 6:.0f}" text-anchor="middle" font-size="12.5" fill="#8a8f98" font-family="Segoe UI,Arial">{lbl}</text>')
+    s.append(f'<text x="{W/2:.0f}" y="{H - 6:.0f}" text-anchor="middle" font-size="12.5" fill="#8a8f98" font-family="Segoe UI,Arial">Panel {pl:.2f}\u00d7{pw:.2f} mm \u00b7 {r["pcs_panel"]} PCBs ({r["pcbs_x"]}\u00d7{r["pcbs_y"]}) = {r["pcs_panel"]} PCS</text>')
     s.append('</svg>')
     return "".join(s)
 
@@ -1175,57 +1152,69 @@ def _svg_sheet_dims(s, x0, y0, S, T, sl, sw, qty):
                  f'fill="#94a3b8" font-family="Segoe UI,Arial">×{qty:g}</text>')
 
 
-def svg_gang_preview(r):
-    """GANG PANEL PREVIEW SVG — BEST LAYOUT jitne hi GANG panels sheet par dikhte hain,
-    har gang panel THICK violet border + har panel aur sheet par DIMENSION labels."""
+def svg_gang_panel_preview(r):
+    """PREVIEW #2 — GANG PANEL: EK gang unit zoom — multiplier panels, har panel me PCBs,
+    per-joint gap labels, total cutting size (gang_len x gang_w) dimension dims ke saath.
+    Sheet fit alag preview hai (#3 PANEL/GANG PANEL IN SHEET)."""
     W, H, pad = 470, 412, 30
-    sl, sw = r["sheet_len"], r["sheet_w"]
-    scale = min((W - pad - 46) / sl, (H - pad - 44) / sw)
-    S, T = sl * scale, sw * scale
-    x0, y0 = pad + (W - pad - 46 - S) / 2, pad + (H - pad - 44 - T) / 2
     gx, gy = r["gang_x"], r["gang_y"]
-    kx, ky = r["kerf_x"] * scale, r["kerf_y"] * scale
+    pl, pw = r["panel_len"], r["panel_w"]
+    kx, ky = r["kerf_x"], r["kerf_y"]
+    pgx = r.get("pgaps_x") or []
+    pgy = r.get("pgaps_y") or []
+    gl = pl * gx + (sum(pgx) if pgx else kx * (gx - 1))
+    gw = pw * gy + (sum(pgy) if pgy else ky * (gy - 1))
+    scale = min((W - pad - 46) / gl, (H - pad - 44) / gw)
+    S, T = gl * scale, gw * scale
+    x0, y0 = pad + (W - pad - 46 - S) / 2, pad + (H - pad - 44 - T) / 2
+    P, Q = pl * scale, pw * scale
+    off_xs = pgx if pgx else [kx]
+    off_ys = pgy if pgy else [ky]
+    cw, ch = r["pcb_len"] * scale, r["pcb_w"] * scale
+    gxs, gys = r["gap_x"] * scale, r["gap_y"] * scale
+    bx, by = r["border_l"] * scale, r["border_t"] * scale
+    gaps_x_s = r.get("gaps_x") or [r["gap_x"]] * max(0, r["pcbs_x"] - 1)
+    gaps_y_s = r.get("gaps_y") or [r["gap_y"]] * max(0, r["pcbs_y"] - 1)
     s = [f'<svg viewBox="0 0 {W} {H}" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;display:block">']
-    s.append(f'<rect x="{x0:.1f}" y="{y0:.1f}" width="{S:.1f}" height="{T:.1f}" fill="#fffdf5" stroke="#b3ac99" stroke-width="2"/>')
-
-    def _dims(cx, cy, cl, cw, mm_l, mm_w):
-        if cl > 26 and cw > 15:
-            _svg_dim_w(s, cx + cl / 2, cy + 8.5, mm_l)
-        if cw > 26 and cl > 15:
-            _svg_dim_h(s, cx + 7.5, cy + cw / 2, mm_w)
-
-    if r["best"] == "mixed":
-        y = y0
-        for _row in range(r["mixed_n"]):
-            cl, cw = r["gang_len"] * scale, r["gang_w"] * scale
-            for i in range(r["per_normal"]):
-                _svg_gang(s, x0 + i * (cl + kx), y, cl, cw, gx, gy, kx, ky,
-                          "#ede9fe", "#7c3aed", 3.2, "#ddd6fe", "#8b5cf6")
-                _dims(x0 + i * (cl + kx), y, cl, cw, r["gang_len"], r["gang_w"])
-            y += cw + ky
-        for _row in range(r["mixed_m"]):
-            cl, cw = r["gang_w"] * scale, r["gang_len"] * scale
-            for i in range(r["per_rot"]):
-                _svg_gang(s, x0 + i * (cl + kx), y, cl, cw, gx, gy, kx, ky,
-                          "#fce7f3", "#db2777", 3.2, "#fbcfe8", "#ec4899")
-                _dims(x0 + i * (cl + kx), y, cl, cw, r["gang_w"], r["gang_len"])
-            y += cw + ky
-        cap = (f"Sheet {sl:.2f}\u00d7{sw:.2f} mm \u00b7 {r['mixed_n']}\u00d7 row of {r['per_normal']} + "
-               f"{r['mixed_m']}\u00d7 row of {r['per_rot']} = <tspan fill=\"#7c3aed\" font-weight=\"700\">{r['panels_per_sheet']} GANG panels</tspan> \u00b7 "
-               f"{r['pcs_per_sheet']} PCS \u00b7 {r['wastage']}% waste")
-    else:
-        cl, cw = r["cell_len"] * scale, r["cell_w"] * scale
-        for i in range(r["grid_x"]):
-            for j in range(r["grid_y"]):
-                cx, cy = x0 + i * (cl + kx), y0 + j * (cw + ky)
-                _svg_gang(s, cx, cy, cl, cw, gx, gy, kx, ky,
-                          "#ede9fe", "#7c3aed", 3.2, "#ddd6fe", "#8b5cf6")
-                _dims(cx, cy, cl, cw, r["cell_len"], r["cell_w"])
-        cap = (f"Sheet {sl:.2f}\u00d7{sw:.2f} mm \u00b7 {r['grid_x']}\u00d7{r['grid_y']} = "
-               f"<tspan fill=\"#7c3aed\" font-weight=\"700\">{r['panels_per_sheet']} GANG panels</tspan> \u00b7 "
-               f"{r['pcs_per_sheet']} PCS \u00b7 {r['wastage']}% waste")
-    _svg_sheet_dims(s, x0, y0, S, T, sl, sw, r.get("sheets") or 0)
-    s.append(f'<text x="{W/2:.0f}" y="{H - 6:.0f}" text-anchor="middle" font-size="12.5" fill="#8a8f98" font-family="Segoe UI,Arial">{cap}</text>')
+    s.append(f'<rect x="{x0:.1f}" y="{y0:.1f}" width="{S:.1f}" height="{T:.1f}" fill="#ede9fe" fill-opacity="0.55" stroke="#7c3aed" stroke-width="3.2" rx="4"/>')
+    pcs_panel = r["pcs_panel"]
+    for a in range(gx):
+        for b in range(gy):
+            _oxa = sum(P + off_xs[i] * scale for i in range(a))
+            _oyb = sum(Q + off_ys[i] * scale for i in range(b))
+            xp, yp = x0 + _oxa, y0 + _oyb
+            s.append(f'<rect x="{xp:.1f}" y="{yp:.1f}" width="{P:.1f}" height="{Q:.1f}" fill="#dbeafe" stroke="#2563eb" stroke-width="1.6" rx="2"/>')
+            if P > 26 and Q > 15:
+                _svg_dim_w(s, xp + P / 2, yp + 8.5, pl)
+            if Q > 26 and P > 15:
+                _svg_dim_h(s, xp + 7.5, yp + Q / 2, pw)
+            if cw > 2.4 and ch > 2.4:
+                ox = bx
+                for i in range(r["pcbs_x"]):
+                    oy = by
+                    for j in range(r["pcbs_y"]):
+                        s.append(f'<rect x="{xp + ox:.1f}" y="{yp + oy:.1f}" width="{cw:.1f}" height="{ch:.1f}" fill="#fbbf24" fill-opacity="0.5" stroke="#f59e0b" stroke-width="0.8"/>')
+                        oy += ch + (gaps_y_s[j] * scale if j < len(gaps_y_s) else gys)
+                    if i < r["pcbs_x"] - 1:
+                        ox += cw + (gaps_x_s[i] * scale if i < len(gaps_x_s) else gxs)
+                if r["border_l"] or r["border_r"] or r["border_t"] or r["border_b"]:
+                    cw2 = r["pcbs_x"] * cw + sum(gaps_x_s) * scale
+                    ch2 = r["pcbs_y"] * ch + sum(gaps_y_s) * scale
+                    s.append(f'<rect x="{xp + bx:.1f}" y="{yp + by:.1f}" width="{cw2:.1f}" height="{ch2:.1f}" fill="none" stroke="#64748b" stroke-width="1" stroke-dasharray="4 3"/>')
+    # per-joint gap labels (joint ke beech, white halo ke saath)
+    for a in range(gx - 1):
+        if P > 40:
+            jx = x0 + sum(P + off_xs[i] * scale for i in range(a + 1)) - off_xs[a] * scale / 2
+            s.append(f'<text x="{jx:.1f}" y="{y0 + T / 2:.1f}" text-anchor="middle" font-size="8" fill="#b45309" font-family="Segoe UI,Arial" style="paint-order:stroke" stroke="#ffffff" stroke-width="2.5">{off_xs[a]:g}</text>')
+    for b in range(gy - 1):
+        if Q > 40:
+            jy = y0 + sum(Q + off_ys[i] * scale for i in range(b + 1)) - off_ys[b] * scale / 2
+            s.append(f'<text x="{x0 + S / 2:.1f}" y="{jy + 3:.1f}" text-anchor="middle" font-size="8" fill="#b45309" font-family="Segoe UI,Arial" style="paint-order:stroke" stroke="#ffffff" stroke-width="2.5">{off_ys[b]:g}</text>')
+    _svg_sheet_dims(s, x0, y0, S, T, gl, gw, 0)
+    pcs_gang = r["pcs_unit"]
+    cap = (f'GANG PANEL {gx}\u00d7{gy} \u2192 {gl:.2f}\u00d7{gw:.2f} mm \u00b7 {gx * gy} PANELS \u00d7 {pcs_panel} PCS = '
+           f'<tspan fill="#7c3aed" font-weight="700">{pcs_gang} PCS</tspan>')
+    s.append(f'<text x="{W/2:.0f}" y="{H - 6:.0f}" text-anchor="middle" font-size="12" fill="#8a8f98" font-family="Segoe UI,Arial">{cap}</text>')
     s.append('</svg>')
     return "".join(s)
 
@@ -1278,8 +1267,8 @@ def svg_sheet_layout_preview(r):
                 num += 1
             y += cw2 + ky
         if r["gang_active"]:
-            cap = (f"1 SHEET {sl:.0f}x{sw:.0f} mm \u2190 CUTTING PANEL {r['cutting_len']:g}x{r['cutting_w']:g} mm = "
-                   f"{r['panels_per_sheet']} CUTTING PANELS "
+            cap = (f"1 SHEET {sl:.0f}x{sw:.0f} mm \u2190 GANG PANEL {r['cutting_len']:g}x{r['cutting_w']:g} mm = "
+                   f"{r['panels_per_sheet']} GANG PANELS "
                    f"({r['mixed_n']}x row {r['per_normal']} + {r['mixed_m']}x row {r['per_rot']}) = {r['pcs_per_sheet']} PCS")
         else:
             cap = (f"1 SHEET {sl:.0f}x{sw:.0f} mm \u2190 PANEL {r['panel_len']:g}x{r['panel_w']:g} mm = "
@@ -1294,8 +1283,8 @@ def svg_sheet_layout_preview(r):
                             r["cell_len"], r["cell_w"])
                 num += 1
         if r["gang_active"]:
-            cap = (f"1 SHEET {sl:.0f}x{sw:.0f} mm \u2190 CUTTING PANEL {r['cell_len']:g}x{r['cell_w']:g} mm = "
-                   f"{r['grid_x']}x{r['grid_y']} = {r['panels_per_sheet']} CUTTING PANELS x {r['pcs_unit']} PCS = {r['pcs_per_sheet']} PCS")
+            cap = (f"1 SHEET {sl:.0f}x{sw:.0f} mm \u2190 GANG PANEL {r['cell_len']:g}x{r['cell_w']:g} mm = "
+                   f"{r['grid_x']}x{r['grid_y']} = {r['panels_per_sheet']} GANG PANELS x {r['pcs_unit']} PCS = {r['pcs_per_sheet']} PCS")
         else:
             cap = (f"1 SHEET {sl:.0f}x{sw:.0f} mm \u2190 PANEL {r['cell_len']:g}x{r['cell_w']:g} mm = "
                    f"{r['grid_x']}x{r['grid_y']} = {r['panels_per_sheet']} PANELS x {r['pcs_unit']} PCS = {r['pcs_per_sheet']} PCS")
@@ -1357,7 +1346,8 @@ def gang_info_for(r):
             f'mm ({pcs_gang} PCS/unit). Sheet {r["sheet_len"]:.2f}×{r["sheet_w"]:.2f} mm me <b>{lay.lower()}</b> fit '
             f'hoti hai — calculation isi ke hisaab se: {gang_count} × {pcs_gang} PCS = '
             f'<b>{pcs_sheet} PCS per sheet</b>.')
-    return {"gl": gl, "gw": gw, "pcs_gang": pcs_gang,
+    return {"gl": gl, "gw": gw, "pcs_gang": pcs_gang, "gx": gx, "gy": gy,
+            "pcs_panel": r["pcs_panel"],
             "layout": layout_html, "pcs_sheet": pcs_sheet, "note": note,
             "cut_html": cut_html}
 
@@ -1646,7 +1636,7 @@ def cutlist():
     svg_panel = svg_panel_preview(result) if result else ""
     svg_sheet = svg_sheet_preview(result) if result else ""
     gang_info = gang_info_for(result)
-    svg_gang_sheet = svg_gang_preview(result) if gang_info else ""
+    svg_gang_panel = svg_gang_panel_preview(result) if gang_info else ""
     svg_sheet_layout = svg_sheet_layout_preview(result) if result else ""
     # PANEL fields display: gang active -> cutting size; warna single panel
     disp_pl = disp_pw = None
@@ -1658,7 +1648,7 @@ def cutlist():
     return render_template("cutlist.html", active="cutlist", fields=fields, result=result,
                            models=models, orders=orders, SHEET_PRESETS=SHEET_PRESETS,
                            svg_panel=svg_panel, svg_sheet=svg_sheet, gang_info=gang_info,
-                           svg_gang_sheet=svg_gang_sheet, svg_sheet_layout=svg_sheet_layout,
+                           svg_gang_panel=svg_gang_panel, svg_sheet_layout=svg_sheet_layout,
                            disp_pl=disp_pl, disp_pw=disp_pw)
 
 
