@@ -745,6 +745,9 @@ function svgSheet(sl, sw, cl, cw, gx2, gy2, gx, gy, kx, ky, pps, waste, best, mN
 function svgSheetLayout(sl, sw, cl, cw, gx2, gy2, gx, gy, kx, ky, pps, best, mN, mM, perN, perR, gl, gw, pcsUnit){
   var W = 470, H = 412, pad = 30;
   var scale = Math.min((W - pad - 46) / sl, (H - pad - 44) / sw);
+  /* cl/cw MM me aate hai — pehle PX me banao (varna cell sheet se BADA draw hota hai:
+     1x1 multiplier par preview page se bahar jata tha, 2x1 me chhota hone se chhupta tha) */
+  cl = cl * scale; cw = cw * scale;
   var S = sl * scale, T = sw * scale;
   var x0 = pad + (W - pad - 46 - S) / 2, y0 = pad + (H - pad - 44 - T) / 2;
   var Kx = kx * scale, Ky = ky * scale;
