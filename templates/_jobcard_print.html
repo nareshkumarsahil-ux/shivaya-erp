@@ -22,15 +22,15 @@
     <div class="ps-cell"><span class="ps-lbl">DELIVERY</span><span class="ps-val" id="pr_exp_delivery">{{ jc.exp_delivery|dash }}</span></div>
     <div class="ps-cell"><span class="ps-lbl">CREATED BY</span><span class="ps-val" id="pr_created_by">{{ jc.created_by|dash }}</span></div>
 
-    <div class="ps-cell"><span class="ps-lbl">ACTUAL PCB SIZE</span><span class="ps-val" id="pr_actual">{{ jc.actual_pcb_x|gfmt }}×{{ jc.actual_pcb_y|gfmt }}mm</span></div>
-    <div class="ps-cell"><span class="ps-lbl">ACTUAL PANEL SIZE</span><span class="ps-val" id="pr_panel">{% set pgx = jc.x_size if jc.x_size else jc.panel_x %}{% set pgy = jc.y_size if jc.y_size else jc.panel_y %}{{ pgx|gfmt }}x{{ pgy|gfmt }}mm</span></div>
-    <div class="ps-cell"><span class="ps-lbl">CNC MARGIN</span><span class="ps-val" id="pr_cnc">{{ jc.cnc_margin_x|gfmt }}x{{ jc.cnc_margin_y|gfmt }}mm{% if jc.pcb_gap %} · GAP {{ jc.pcb_gap|gfmt }}mm{% endif %}</span></div>
-    <div class="ps-cell"><span class="ps-lbl">PCB IN ONE PANEL</span><span class="ps-val" id="pr_pcs_panel">{{ jc.pcs_panel }}</span></div>
+    <div class="ps-cell"><span class="ps-lbl">ACTUAL PCB SIZE</span><span class="ps-val" id="pr_actual">{% if jc.actual_pcb_x %}{{ jc.actual_pcb_x|gfmt }}×{{ jc.actual_pcb_y|gfmt }}mm{% else %}—{% endif %}</span></div>
+    <div class="ps-cell"><span class="ps-lbl">ACTUAL PANEL SIZE</span><span class="ps-val" id="pr_panel">{% set pgx = jc.x_size if jc.x_size else jc.panel_x %}{% set pgy = jc.y_size if jc.y_size else jc.panel_y %}{% if pgx %}{{ pgx|gfmt }}x{{ pgy|gfmt }}mm{% else %}—{% endif %}</span></div>
+    <div class="ps-cell"><span class="ps-lbl">CNC MARGIN</span><span class="ps-val" id="pr_cnc">{% if jc.cnc_margin_x or jc.cnc_margin_y %}{{ jc.cnc_margin_x|gfmt }}x{{ jc.cnc_margin_y|gfmt }}mm{% elif jc.pcb_gap %}GAP {{ jc.pcb_gap|gfmt }}mm{% else %}—{% endif %}{% if jc.pcb_gap and (jc.cnc_margin_x or jc.cnc_margin_y) %} · GAP {{ jc.pcb_gap|gfmt }}mm{% endif %}</span></div>
+    <div class="ps-cell"><span class="ps-lbl">PCB IN ONE PANEL</span><span class="ps-val" id="pr_pcs_panel">{% if jc.pcs_panel %}{{ jc.pcs_panel }}{% else %}—{% endif %}</span></div>
 
-    <div class="ps-cell"><span class="ps-lbl">X CUTTING SIZE</span><span class="ps-val" id="pr_xcut">{% set cgx = (jc.x_size + 2 * (jc.cnc_margin_x or 0)) if jc.x_size else jc.panel_x %}L-{{ cgx|gfmt }}({{ jc.sheet_len|gfmt }})×{{ jc.x_qty }}</span></div>
-    <div class="ps-cell"><span class="ps-lbl">Y CUTTING SIZE</span><span class="ps-val" id="pr_ycut">{% set cgy = (jc.y_size + 2 * (jc.cnc_margin_y or 0)) if jc.y_size else jc.panel_y %}W-{{ cgy|gfmt }}({{ jc.sheet_w|gfmt }})×{{ jc.y_qty }}</span></div>
-    <div class="ps-cell"><span class="ps-lbl">PCB IN ONE SHEET</span><span class="ps-val" id="pr_pcb_sheet">{{ jc.pcs_panel * jc.panels_per_sheet }}</span></div>
-    <div class="ps-cell"><span class="ps-lbl">NO. OF SHEET</span><span class="ps-val" id="pr_sheets">{{ jc.sheets }} SHEET</span></div>
+    <div class="ps-cell"><span class="ps-lbl">X CUTTING SIZE</span><span class="ps-val" id="pr_xcut">{% if jc.x_size %}{% set cgx = (jc.x_size + 2 * (jc.cnc_margin_x or 0)) %}L-{{ cgx|gfmt }}({{ jc.sheet_len|gfmt }})×{{ jc.x_qty }}{% else %}—{% endif %}</span></div>
+    <div class="ps-cell"><span class="ps-lbl">Y CUTTING SIZE</span><span class="ps-val" id="pr_ycut">{% if jc.y_size %}{% set cgy = (jc.y_size + 2 * (jc.cnc_margin_y or 0)) %}W-{{ cgy|gfmt }}({{ jc.sheet_w|gfmt }})×{{ jc.y_qty }}{% else %}—{% endif %}</span></div>
+    <div class="ps-cell"><span class="ps-lbl">PCB IN ONE SHEET</span><span class="ps-val" id="pr_pcb_sheet">{% if jc.pcs_panel and jc.panels_per_sheet %}{{ jc.pcs_panel * jc.panels_per_sheet }}{% else %}—{% endif %}</span></div>
+    <div class="ps-cell"><span class="ps-lbl">NO. OF SHEET</span><span class="ps-val" id="pr_sheets">{% if jc.sheets %}{{ jc.sheets }} SHEET{% else %}—{% endif %}</span></div>
 
     <div class="ps-cell"><span class="ps-lbl">SHEET MATERIAL</span><span class="ps-val" id="pr_sheet_material">{{ jc.sheet_material|dash }}{% if jc.sheet_thickness %} <span style="font-weight:800;color:#1d4ed8">({{ jc.sheet_thickness }})</span>{% endif %}</span></div>
     <div class="ps-cell"><span class="ps-lbl">BOARD SIDE</span><span class="ps-val" id="pr_board_side" style="font-weight:800;color:#1d4ed8">{% set _bs = (jc.board_side or '').strip().upper() %}{% if _bs %}{{ _bs }}{% elif 'SINGLE' in (jc.board_type or '')|upper %}SINGLE SIDE{% elif 'DOUBLE' in (jc.board_type or '')|upper %}DOUBLE SIDE{% else %}—{% endif %}</span></div>
@@ -40,11 +40,11 @@
 
     <div class="ps-cell"><span class="ps-lbl">MASKING</span><span class="ps-val" id="pr_masking">{{ jc.masking|dash }}</span></div>
     <div class="ps-cell"><span class="ps-lbl">TYPE</span><span class="ps-val" id="pr_type">{{ jc.pcb_type|dash }}</span></div>
-    <div class="ps-cell"><span class="ps-lbl">QTY OF PANEL</span><span class="ps-val" id="pr_qty_panel">{{ jc.qty_panel }} PANEL</span></div>
+    <div class="ps-cell"><span class="ps-lbl">QTY OF PANEL</span><span class="ps-val" id="pr_qty_panel">{% if jc.qty_panel %}{{ jc.qty_panel }} PANEL{% else %}—{% endif %}</span></div>
     <div class="ps-cell"><span class="ps-lbl">NO OF PCB</span><span class="ps-val" id="pr_qty_pcs">{{ order.qty }} PCS</span></div>
 
-    <div class="ps-cell"><span class="ps-lbl">PRICE (₹)/PC</span><span class="ps-val" id="pr_price">{{ jc.price|inr }}</span></div>
-    <div class="ps-cell"><span class="ps-lbl">RATE/SQ.INCH</span><span class="ps-val" id="pr_rs_pcb">{{ jc.rs_pcb|gfmt }}</span></div>
+    <div class="ps-cell"><span class="ps-lbl">PRICE (₹)/PC</span><span class="ps-val" id="pr_price">{% if jc.price %}{{ jc.price|inr }}{% else %}—{% endif %}</span></div>
+    <div class="ps-cell"><span class="ps-lbl">RATE/SQ.INCH</span><span class="ps-val" id="pr_rs_pcb">{% if jc.rs_pcb %}{{ jc.rs_pcb|gfmt }}{% else %}—{% endif %}</span></div>
     <div class="ps-cell"><span class="ps-lbl">PRIORITY</span><span class="ps-val" id="pr_priority" style="font-weight:800;color:{{'#b45309' if order.priority=='urgent' else 'inherit'}}">{{ order.priority|upper }}</span></div>
     <div class="ps-cell"><span class="ps-lbl">CHECKED BY</span><span class="ps-val" id="pr_checked_by">{{ jc.checked_by|dash }}</span></div>
   </div>

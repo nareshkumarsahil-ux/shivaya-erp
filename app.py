@@ -1593,6 +1593,35 @@ def cutlist():
                         _record_price(base, "", price, rs_pcb, order_id,
                                       order["order_no"], order["party"],
                                       _today_ist().isoformat(), _model_thickness(base))
+                    # v2.74 \u2014 CUT LIST -> SEEDHA FINISHED PRODUCT: apply karte hi model
+                    # finished products me bhi chala jata hai (dropdown kabhi blank nahi hoga)
+                    _pname = (f.get("save_name") or "").strip()
+                    if not _pname:
+                        _jcm = db.query("SELECT party_model FROM jobcard WHERE order_id=?", (order_id,), one=True)
+                        _pname = ((_jcm["party_model"] if _jcm else "") or "").strip()
+                    if _pname and not db.query("SELECT id FROM product_models WHERE name=?", (_pname,), one=True):
+                        _cx74 = result["cutting_len"] if result["gang_active"] else result["panel_len"]
+                        _cy74 = result["cutting_w"] if result["gang_active"] else result["panel_w"]
+                        db.execute(
+                            "INSERT INTO product_models (name, pcb_len, pcb_w, pcbs_x, pcbs_y, gap_x, gap_y, border_l, "
+                            "border_r, border_t, border_b, gang_x, gang_y, sheet_len, sheet_w, panel_len, panel_w, "
+                            "cutting_len, cutting_w, kerf_x, kerf_y, orientation, pcs_panel, panels_sheet, sheets, "
+                            "x_qty, y_qty, cnc_margin_x, cnc_margin_y, pcb_price, per_sq_inch, gaps_x, gaps_y, created_on) "
+                            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                            (_pname, result["pcb_len"], result["pcb_w"], result["pcbs_x"], result["pcbs_y"],
+                             result["gap_x"], result["gap_y"],
+                             result["border_l"], result["border_r"], result["border_t"], result["border_b"],
+                             result["gang_x"], result["gang_y"], result["sheet_len"], result["sheet_w"],
+                             result["panel_len"], result["panel_w"], _cx74, _cy74,
+                             result["kerf_x"], result["kerf_y"],
+                             result["best"], result["pcs_panel"], result["panels_per_sheet"], result["sheets"],
+                             result["grid_x"], result["grid_y"],
+                             result["border_l"], result["border_t"],
+                             price if price is not None else 0, rs_pcb if rs_pcb is not None else 0,
+                             ",".join(f"{g:g}" for g in result["gaps_x"]),
+                             ",".join(f"{g:g}" for g in result["gaps_y"]),
+                             _today_ist().isoformat()))
+                        flash(f"Finished Product '{_pname}' bhi save ho gaya \u2014 ab FINISHED PRODUCT dropdown me milega.", "success")
                     _qtxt = f"Qty set to {result['total_pcs']} pcs" if (result["total_pcs"] or 0) > 0 \
                         else f"Qty purani rakhi ({order['qty'] or 0} pcs) \u2014 cut list me sheets 0 thi"
                     flash(f"Layout applied to {order['order_no']} ({order['party']}). "
@@ -1604,6 +1633,9 @@ def cutlist():
                 flash("Select a valid job order.", "error")
 
         from urllib.parse import urlencode
+        # v2.74 \u2014 apply ke baad CUT LIST se SEEDHA JOB ORDER (preview) par
+        if action == "apply_order" and result and (f.get("apply_order") or "").strip().isdigit():
+            return redirect_with_token(url_for("jobcard", order_id=int(f.get("apply_order"))))
         params = urlencode({k: fields.get(k, "") for k in FIELD_KEYS})
         return redirect_with_token(url_for("cutlist") + "?" + params)
 
@@ -4017,6 +4049,9 @@ def jobcard_new():
             edit_jc = db.query("SELECT * FROM jobcard WHERE order_id=?", (int(_eid),), one=True)
             if edit_jc:
                 edit_id = int(_eid)
+                _hj78 = _jc_autofill(int(_eid))
+                if _hj78:
+                    edit_jc = _hj78
                 if edit_jc["party_model"]:
                     _em = db.query("SELECT id FROM product_models WHERE name=?", (edit_jc["party_model"],), one=True)
                     edit_model_id = _em["id"] if _em else 0
@@ -4030,6 +4065,35 @@ def jobcard_new():
         if (f.get("product_id") or "").isdigit() and int(f.get("product_id") or 0) > 0:
             pmodel = db.query("SELECT * FROM product_models WHERE id=?",
                               (int(f.get("product_id")),), one=True)
+        # v2.73 EDIT MODE fallback: CUT LIST se bane job card ka model dropdown me NAHI hota
+        # (party_model blank/feature hai) — purana jobcard data se VIRTUAL MODEL banao,
+        # warna update par details 0 ho jaati (blank job card ka wahi purana bug)
+        _edit_id_post = 0
+        if (f.get("edit_id") or "").isdigit() and int(f.get("edit_id") or 0) > 0:
+            _edit_id_post = int(f.get("edit_id"))
+            _ej_p = db.query("SELECT * FROM jobcard WHERE order_id=?", (_edit_id_post,), one=True)
+            if _ej_p and not pmodel:
+                class _VM(dict):
+                    pass
+                _vpx = _ej_p["panel_x"] or _ej_p["x_size"] or 0
+                _vpy = _ej_p["panel_y"] or _ej_p["y_size"] or 0
+                _vpcb = _ej_p["actual_pcb_x"] if (_ej_p["actual_pcb_x"] or 0) > 0 else _vpx
+                _vpcb_w = _ej_p["actual_pcb_y"] if (_ej_p["actual_pcb_y"] or 0) > 0 else _vpy
+                _vpcs = _ej_p["pcs_panel"] if (_ej_p["pcs_panel"] or 0) > 0 else 1
+                pmodel = _VM(name=_ej_p["party_model"] or _ej_p["model"] or "CUSTOM", model_code=_ej_p["model"] or "",
+                             pcb_len=_vpcb, pcb_w=_vpcb_w,
+                             pcs_panel=_vpcs,
+                             cutting_len=_vpx, cutting_w=_vpy,
+                             panel_len=_vpx, panel_w=_vpy,
+                             sheet_len=_ej_p["sheet_len"] or 0, sheet_w=_ej_p["sheet_w"] or 0,
+                             kerf_x=2.0, kerf_y=2.0, x_qty=_ej_p["x_qty"] or 0, y_qty=_ej_p["y_qty"] or 0,
+                             cnc_margin_x=_ej_p["cnc_margin_x"] or 0, cnc_margin_y=_ej_p["cnc_margin_y"] or 0,
+                             sheet_thickness=_ej_p["sheet_thickness"] or "", pcb_price=_ej_p["price"] or 0,
+                             per_sq_inch=_ej_p["rs_pcb"] or 0)
+                party_model = _ej_p["party_model"] or (f.get("party", "").strip() or "")
+                model_code = _ej_p["model"] or ""
+                prod_display = party_model if party_model else (_ej_p["model"] or "")
+                product_str = f"{prod_display} · {int(f.get('qty', 0) or 0)} pcs" if prod_display else product_str
         if not pmodel:
             # MODEL zaroori — isi se PCB/panel/sheet saari details auto aati hai,
             # warna blank job card banta tha (sab 0/0.0).
@@ -4087,8 +4151,12 @@ def jobcard_new():
             x_qty, y_qty = nx_, ny_
             panels_per_sheet = normal_
         if not panels_per_sheet:
-            panels_per_sheet = int(pmodel["panels_sheet"] or 0) if pmodel else 0
+            panels_per_sheet = (int(pmodel["panels_sheet"]) if "panels_sheet" in pmodel.keys() else 0) if pmodel else 0
         qty_panel = math.ceil(qty_pcs / pcs_panel) if pcs_panel and qty_pcs else 0
+        # v2.73 fallback (bina-size card): model/panel-size kuch nahi to 1 panel/sheet rakho —
+        # sheets = qty_panel, is order ka data 0-0 me na chale jaye
+        if _edit_id_post and not panels_per_sheet and qty_panel > 0:
+            panels_per_sheet = 1
         sheets = math.ceil(qty_panel / panels_per_sheet) if panels_per_sheet and qty_panel else 0
         price = float(f.get("value", 0) or 0) or (float(pmodel["pcb_price"] or 0) if pmodel else 0)
         rs_pcb = float(pmodel["per_sq_inch"] or 0) if pmodel else 0
@@ -4107,16 +4175,20 @@ def jobcard_new():
                 w in sheet_material.upper() for w in ("METAL", "ALUMIN", "ALU"))
                 else "FR4/CEM-1/FR1/XPC/OTHER")
         # ---- v2.71 EDIT MODE: naya order banane ke bajaye EXISTING order + jobcard UPDATE ----
-        edit_id = 0
-        _e = None
-        if (f.get("edit_id") or "").isdigit() and int(f.get("edit_id")) > 0:
-            _e = db.query("SELECT * FROM orders WHERE id=?", (int(f["edit_id"]),), one=True)
-            if _e:
-                edit_id = _e["id"]
+        edit_id = _edit_id_post
+        _e = db.query("SELECT * FROM orders WHERE id=?", (edit_id,), one=True) if edit_id else None
         if edit_id:
             _ej = db.query("SELECT * FROM jobcard WHERE order_id=?", (edit_id,), one=True)
             _pri = priority if f.get("priority") else (_e["priority"] or "normal")
             _del = delivery_date if delivery_date else (_e["delivery_date"] or "")
+            # v2.73: material khali submit ho to PURANA rakho (cutlist wale cards me
+            # wizard ka material dropdown model-based hai — blank aa sakta hai)
+            if not sheet_material and _ej:
+                sheet_material = _ej["sheet_material"] or ""
+            if not thickness and _ej:
+                thickness = _ej["sheet_thickness"] or ""
+            if not instructions and _ej:
+                instructions = _ej["instructions"] or ""
             _btype = board_type if f.get("board_type") else (_e["board"] or "Single Side")
             _bside = ("SINGLE SIDE" if "SINGLE" in _btype.upper() else
                       ("DOUBLE SIDE" if "DOUBLE" in _btype.upper() else _btype.upper()))
@@ -4196,6 +4268,91 @@ def jobcard_new():
                            edit_model_id=edit_model_id)
 
 
+def _jc_autofill(order_id):
+    """v2.78 \u2014 jobcard row ki KHAALI details auto-heal (idempotent):
+    product string ('MODEL - CODE ... N pcs') se finished product dhundo, blank
+    sizing/price us se bharo; warna orders ke qty_panel/pcs_panel/board/delivery copy karo."""
+    o = db.query("SELECT * FROM orders WHERE id=?", (order_id,), one=True)
+    if not o:
+        return None
+    jc = db.query("SELECT * FROM jobcard WHERE order_id=?", (order_id,), one=True)
+    if not jc:
+        return jc
+    sets, vals = [], []
+    pmodel = None
+    if not (jc["party_model"] or "").strip():
+        base = (o["product"] or "").split(" \u00b7 ")[0].strip()
+        cands = []
+        if " - " in base:
+            cands += [base.split(" - ")[0].strip(), base.split(" - ")[-1].strip()]
+        cands.append(base)
+        for c in cands:
+            if not c:
+                continue
+            pmodel = db.query("SELECT * FROM product_models WHERE name=? OR model_code=? ORDER BY id LIMIT 1",
+                              (c, c), one=True)
+            if pmodel:
+                break
+        if pmodel:
+            sets.append("party_model=?")
+            vals.append(pmodel["name"])
+            if pmodel["model_code"] and not (jc["model"] or "").strip():
+                sets.append("model=?")
+                vals.append(pmodel["model_code"])
+    else:
+        pmodel = db.query("SELECT * FROM product_models WHERE name=?", (jc["party_model"],), one=True)
+
+    def _z(col):
+        return not (jc[col] or 0)
+
+    if pmodel:
+        for col, v in (("actual_pcb_x", pmodel["pcb_len"]), ("actual_pcb_y", pmodel["pcb_w"]),
+                       ("panel_x", pmodel["panel_len"]), ("panel_y", pmodel["panel_w"]),
+                       ("x_size", pmodel["cutting_len"] or pmodel["panel_len"]),
+                       ("y_size", pmodel["cutting_w"] or pmodel["panel_w"]),
+                       ("x_qty", pmodel["x_qty"]), ("y_qty", pmodel["y_qty"]),
+                       ("cnc_margin_x", pmodel["cnc_margin_x"]), ("cnc_margin_y", pmodel["cnc_margin_y"]),
+                       ("sheet_len", pmodel["sheet_len"]), ("sheet_w", pmodel["sheet_w"]),
+                       ("panels_per_sheet", pmodel["panels_sheet"]), ("sheets", pmodel["sheets"]),
+                       ("pcs_panel", pmodel["pcs_panel"])):
+            if _z(col) and (v or 0) > 0:
+                sets.append(col + "=?")
+                vals.append(v)
+        if _z("price") and (pmodel["pcb_price"] or 0) > 0:
+            sets.append("price=?")
+            vals.append(pmodel["pcb_price"])
+        if _z("rs_pcb") and (pmodel["per_sq_inch"] or 0) > 0:
+            sets.append("rs_pcb=?")
+            vals.append(pmodel["per_sq_inch"])
+        if not (jc["sheet_material"] or "").strip() and "sheet_material" in pmodel.keys() \
+                and (pmodel["sheet_material"] or "").strip():
+            sets.append("sheet_material=?")
+            vals.append(pmodel["sheet_material"])
+        if not (jc["sheet_thickness"] or "").strip() and (pmodel["sheet_thickness"] or "").strip():
+            sets.append("sheet_thickness=?")
+            vals.append(pmodel["sheet_thickness"])
+    if _z("pcs_panel") and (o["pcs_panel"] or 0) > 0:
+        sets.append("pcs_panel=?")
+        vals.append(o["pcs_panel"])
+    if _z("qty_panel") and (o["qty_panel"] or 0) > 0:
+        sets.append("qty_panel=?")
+        vals.append(o["qty_panel"])
+    if _z("sheets") and (jc["panels_per_sheet"] or 0) > 0 and (jc["qty_panel"] or 0) > 0:
+        sets.append("sheets=?")
+        vals.append(math.ceil(jc["qty_panel"] / jc["panels_per_sheet"]))
+    if not (jc["board_side"] or "").strip() and (o["board"] or "").strip():
+        sets.append("board_side=?")
+        vals.append(o["board"].strip().upper())
+    if not (jc["exp_delivery"] or "").strip() and (o["delivery_date"] or "").strip():
+        sets.append("exp_delivery=?")
+        vals.append(o["delivery_date"])
+    if sets:
+        vals.append(order_id)
+        db.execute("UPDATE jobcard SET " + ", ".join(sets) + " WHERE order_id=?", tuple(vals))
+        jc = db.query("SELECT * FROM jobcard WHERE order_id=?", (order_id,), one=True)
+    return jc
+
+
 @app.route("/jobcard/<int:order_id>")
 @login_required
 def jobcard(order_id):
@@ -4203,6 +4360,7 @@ def jobcard(order_id):
     if not order:
         flash("Order not found.", "error")
         return redirect_with_token(url_for("orders"))
+    jc = _jc_autofill(order_id) or jc  # v2.78: blank details auto-heal (product/orders se)
     qty_pcs = order["qty"]
     # AUTO-HEAL: job card khulte hi QTY sync — order.qty hi SACH hai.
     # (Cut list se apply / advance create ke baad jc.total_qty purana/khaali reh jata tha —
@@ -4267,6 +4425,35 @@ def jobcard(order_id):
     all_employees = db.query("SELECT * FROM employees WHERE status='active' ORDER BY name")
     thicknesses = [r["thickness"] for r in db.query(
         "SELECT DISTINCT thickness FROM thickness_rates WHERE thickness!='' ORDER BY thickness")]
+    # v2.74 \u2014 ADVANCE preview visuals: PANEL (PCB grid) + SHEET (panels grid)
+    def _viz_grid(cols, rows, count, cls, lbl):
+        cols = max(1, min(int(cols or 0) or 1, 12)); rows = max(1, min(int(rows or 0) or 1, 12))
+        count = max(1, min(int(count or 0) or 1, cols * rows))
+        gap = 5.0
+        cw = (280.0 - (cols - 1) * gap) / cols
+        ch = (148.0 - (rows - 1) * gap) / rows
+        parts = []
+        for i in range(count):
+            r, c = divmod(i, cols)
+            parts.append(f'<rect x="{6 + c * (cw + gap):.1f}" y="{6 + r * (ch + gap):.1f}" '
+                         f'width="{cw:.1f}" height="{ch:.1f}" rx="3"/>')
+        return ('<svg viewBox="0 0 292 176" class="' + cls + '" role="img">' + "".join(parts)
+                + '<text x="146" y="172" text-anchor="middle" class="vizLbl">' + lbl + '</text></svg>')
+
+    viz_panel_svg = viz_sheet_svg = ""
+    _v_xq, _v_yq = int(jc["x_qty"] or 0), int(jc["y_qty"] or 0)
+    _v_pcs = jc["pcs_panel"] or (_v_xq * _v_yq)
+    if _v_xq > 0 and _v_yq > 0 and _v_pcs:
+        viz_panel_svg = _viz_grid(_v_xq, _v_yq, _v_pcs, "vizP",
+                                  f"PANEL {(jc['x_size'] or 0):g}×{(jc['y_size'] or 0):g} mm · {_v_pcs} PCS")
+    _v_pps = int(jc["panels_per_sheet"] or 0)
+    if _v_pps > 0:
+        _v_c = math.isqrt(_v_pps)
+        while _v_c > 1 and _v_pps % _v_c:
+            _v_c -= 1
+        _v_r = (_v_pps + _v_c - 1) // _v_c
+        viz_sheet_svg = _viz_grid(_v_c, _v_r, _v_pps, "vizS",
+                                  f"SHEET {(jc['sheet_len'] or 0):g}×{(jc['sheet_w'] or 0):g} mm · {_v_pps} PANELS/SHEET")
     return render_template("jobcard.html", active="orders", order=order, jc=jc, procs=procs,
                            machines=machines, all_employees=all_employees,
                            flat_next=db.all_process_options(),
@@ -4277,6 +4464,7 @@ def jobcard(order_id):
                            inv_items=inv_items, inv_names=inv_names,
                            bom_rows=bom_rows, bmodel=bmodel, last_price=last_price, lp_map=lp_map,
                            issues=issues, issue_total=issue_total, worker_names=worker_names,
+                           viz_panel_svg=viz_panel_svg, viz_sheet_svg=viz_sheet_svg,
                            pm_extra=(jc["party_model"] not in pm_values and jc["party_model"] != ""),
                            md_extra=(jc["model"] not in md_values and jc["model"] != ""),
                            party_extra=(order["party"] not in party_names and bool(order["party"])))

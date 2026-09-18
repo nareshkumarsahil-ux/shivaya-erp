@@ -6,7 +6,7 @@
 <!-- ================= HEADER ACTIONS ================= -->
 {% if not jc.party_model %}
 <div class="no-print" style="margin-bottom:10px;padding:10px 14px;border:1.5px solid #f59e0b;border-radius:10px;background:#fffbeb;color:#92400e;font-weight:700;font-size:13px">
-  ⚠ Ye job card <b>MODEL ke bina</b> bana tha — isliye saari sizing blank/0 hai. Upar <b>ORDER DETAILS</b> section kholo aur <b>PARTY MODEL (Finished Product)</b> select karo → PCB size, panel, PCS/panel, sheet sab <b>auto bhar jayega</b>, phir <b>Save</b> dabao.
+  ⚠ Ye job card <b>MODEL ke bina</b> bana tha (CUT LIST se) — neeche order ki apni details chal rahi hain. ✏️ <b>EDIT JOB CARD</b> dabao — sab details <b>pre-filled</b> milengi, SAVE par <b>yahi order</b> update hota hai.
 </div>
 {% endif %}
 <div class="jc-headbar no-print">
@@ -41,6 +41,100 @@
   </div>
 </div>
 
+<!-- ================= v2.74 ADVANCE JOB ORDER PREVIEW (hatke) ================= -->
+<div class="jcHero no-print">
+  <div class="jcHero-top">
+    <div style="min-width:0">
+      <div class="jcHero-kick">🔷 ADVANCE JOB ORDER · <span class="mono">{{ order.order_no }}</span>{% if jc.odate %} · {{ jc.odate[:10] }}{% endif %}</div>
+      <div class="jcHero-party">{{ order.party }}</div>
+      {% if not jc.sheet_len and not jc.pcs_panel %}
+      <div class="jcHero-note">⚠ SIZING abhi blank hai — ✏️ <b>EDIT JOB CARD</b> me <b>FINISHED PRODUCT</b> select karke (ya cut list APPLY karke) SAVE karo — details yahin bhar jayengi</div>
+      {% endif %}
+      <div class="jcHero-model">📐 <b>{{ jc.party_model or 'CUT LIST — bina model' }}</b>{% if jc.model %} <span class="jcHero-chipmono">{{ jc.model }}</span>{% endif %}</div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:8px;align-items:flex-end;flex-shrink:0">
+      <a class="jcHero-edit" href="/jobcard/new?edit={{ order.id }}" title="Edit page par purana data pre-filled milega — SAVE par yahi order update hoga">✏️ EDIT JOB CARD</a>
+      <button class="jcHero-print" type="button" onclick="printJobcard()">🖨️ PRINT</button>
+    </div>
+  </div>
+  <div class="jcHero-stats">
+    <div class="jcTile"><span class="jcTile-n">{{ order.qty }}</span><span class="jcTile-l">QTY (PCS)</span></div>
+    <div class="jcTile"><span class="jcTile-n">{{ jc.pcs_panel or '—' }}</span><span class="jcTile-l">PCS / PANEL</span></div>
+    <div class="jcTile"><span class="jcTile-n">{{ jc.panels_per_sheet or '—' }}</span><span class="jcTile-l">PANELS / SHEET</span></div>
+    <div class="jcTile"><span class="jcTile-n">{{ jc.sheets or '—' }}</span><span class="jcTile-l">SHEETS</span></div>
+    <div class="jcTile"><span class="jcTile-s">{% if jc.sheet_len %}{{ jc.sheet_len|gfmt }} × {{ jc.sheet_w|gfmt }}{% else %}—{% endif %}</span><span class="jcTile-l">SHEET (MM)</span></div>
+    <div class="jcTile"><span class="jcTile-s">{% if jc.actual_pcb_x %}{{ jc.actual_pcb_x|gfmt }} × {{ jc.actual_pcb_y|gfmt }}{% else %}—{% endif %}</span><span class="jcTile-l">PCB (MM)</span></div>
+    <div class="jcTile"><span class="jcTile-s">{% if jc.x_size %}{{ jc.x_size|gfmt }} × {{ jc.y_size|gfmt }}{% else %}—{% endif %}</span><span class="jcTile-l">PANEL (MM)</span></div>
+    <div class="jcTile"><span class="jcTile-s">{{ jc.board_side or '—' }}</span><span class="jcTile-l">BOARD SIDE</span></div>
+    <div class="jcTile"><span class="jcTile-s">{{ jc.sheet_material or '—' }}</span><span class="jcTile-l">MATERIAL</span></div>
+    <div class="jcTile"><span class="jcTile-s">{{ jc.exp_delivery or '—' }}</span><span class="jcTile-l">DELIVERY</span></div>
+  </div>
+  {% if viz_panel_svg or viz_sheet_svg %}
+  <div class="jcHero-viz">
+    {% if viz_panel_svg %}<div class="jcViz">{{ viz_panel_svg|safe }}</div>{% endif %}
+    {% if viz_sheet_svg %}<div class="jcViz">{{ viz_sheet_svg|safe }}</div>{% endif %}
+    <div class="jcViz-note">🔲 CUTTING LAYOUT — sheet me kaise katega (andaza — actual cutting CUT LIST se)</div>
+  </div>
+  {% endif %}
+</div>
+
+<!-- ================= v2.75 CLASSIC JOB CARD TABLE (CARD tab) ================= -->
+<div id="jcClassic" class="no-print" style="background:#e8e5de;border-radius:12px;padding:14px;margin-bottom:14px;overflow-x:auto">
+  <div class="print-sheet" style="width:auto;max-width:100%;padding:18px 22px">
+<div class="ps-head">
+    <div class="ps-company">
+      <div class="ps-logo">SC</div>
+      <div>
+        <div class="ps-co">SHIVAYA CIRCUIT PVT. LTD.</div>
+        <div class="ps-tag">PCB Manufacturing · Job Card</div>
+      </div>
+    </div>
+    <div class="ps-jc">JOB CARD <b>#{{ order.order_no }}</b></div>
+  </div>
+
+  <div class="ps-grid">
+    <div class="ps-cell"><span class="ps-lbl">ORDER NO.</span><span class="ps-val mono" id="pr_order_no">{{ order.order_no }}</span></div>
+    <div class="ps-cell"><span class="ps-lbl">MODEL</span><span class="ps-val" id="pr_model">{{ jc.model|dash }}</span></div>
+    <div class="ps-cell"><span class="ps-lbl">PARTY MODEL</span><span class="ps-val" id="pr_party_model">{{ jc.party_model|dash }}</span></div>
+    <div class="ps-cell"><span class="ps-lbl">DATE</span><span class="ps-val" id="pr_odate">{{ jc.odate|dash }}</span></div>
+
+    <div class="ps-cell"><span class="ps-lbl">PARTY</span><span class="ps-val" id="pr_party">{{ order.party|dash }}</span></div>
+    <div class="ps-cell"><span class="ps-lbl">ORDER VIA</span><span class="ps-val" id="pr_order_via">{{ jc.order_via|dash }}{% if jc.odate %} ({{ jc.odate }}){% endif %}</span></div>
+    <div class="ps-cell"><span class="ps-lbl">DELIVERY</span><span class="ps-val" id="pr_exp_delivery">{{ jc.exp_delivery|dash }}</span></div>
+    <div class="ps-cell"><span class="ps-lbl">CREATED BY</span><span class="ps-val" id="pr_created_by">{{ jc.created_by|dash }}</span></div>
+
+    <div class="ps-cell"><span class="ps-lbl">ACTUAL PCB SIZE</span><span class="ps-val" id="pr_actual">{% if jc.actual_pcb_x %}{{ jc.actual_pcb_x|gfmt }}×{{ jc.actual_pcb_y|gfmt }}mm{% else %}—{% endif %}</span></div>
+    <div class="ps-cell"><span class="ps-lbl">ACTUAL PANEL SIZE</span><span class="ps-val" id="pr_panel">{% set pgx = jc.x_size if jc.x_size else jc.panel_x %}{% set pgy = jc.y_size if jc.y_size else jc.panel_y %}{% if pgx %}{{ pgx|gfmt }}x{{ pgy|gfmt }}mm{% else %}—{% endif %}</span></div>
+    <div class="ps-cell"><span class="ps-lbl">CNC MARGIN</span><span class="ps-val" id="pr_cnc">{% if jc.cnc_margin_x or jc.cnc_margin_y %}{{ jc.cnc_margin_x|gfmt }}x{{ jc.cnc_margin_y|gfmt }}mm{% elif jc.pcb_gap %}GAP {{ jc.pcb_gap|gfmt }}mm{% else %}—{% endif %}{% if jc.pcb_gap and (jc.cnc_margin_x or jc.cnc_margin_y) %} · GAP {{ jc.pcb_gap|gfmt }}mm{% endif %}</span></div>
+    <div class="ps-cell"><span class="ps-lbl">PCB IN ONE PANEL</span><span class="ps-val" id="pr_pcs_panel">{% if jc.pcs_panel %}{{ jc.pcs_panel }}{% else %}—{% endif %}</span></div>
+
+    <div class="ps-cell"><span class="ps-lbl">X CUTTING SIZE</span><span class="ps-val" id="pr_xcut">{% if jc.x_size %}{% set cgx = (jc.x_size + 2 * (jc.cnc_margin_x or 0)) %}L-{{ cgx|gfmt }}({{ jc.sheet_len|gfmt }})×{{ jc.x_qty }}{% else %}—{% endif %}</span></div>
+    <div class="ps-cell"><span class="ps-lbl">Y CUTTING SIZE</span><span class="ps-val" id="pr_ycut">{% if jc.y_size %}{% set cgy = (jc.y_size + 2 * (jc.cnc_margin_y or 0)) %}W-{{ cgy|gfmt }}({{ jc.sheet_w|gfmt }})×{{ jc.y_qty }}{% else %}—{% endif %}</span></div>
+    <div class="ps-cell"><span class="ps-lbl">PCB IN ONE SHEET</span><span class="ps-val" id="pr_pcb_sheet">{% if jc.pcs_panel and jc.panels_per_sheet %}{{ jc.pcs_panel * jc.panels_per_sheet }}{% else %}—{% endif %}</span></div>
+    <div class="ps-cell"><span class="ps-lbl">NO. OF SHEET</span><span class="ps-val" id="pr_sheets">{% if jc.sheets %}{{ jc.sheets }} SHEET{% else %}—{% endif %}</span></div>
+
+    <div class="ps-cell"><span class="ps-lbl">SHEET MATERIAL</span><span class="ps-val" id="pr_sheet_material">{{ jc.sheet_material|dash }}{% if jc.sheet_thickness %} <span style="font-weight:800;color:#1d4ed8">({{ jc.sheet_thickness }})</span>{% endif %}</span></div>
+    <div class="ps-cell"><span class="ps-lbl">BOARD SIDE</span><span class="ps-val" id="pr_board_side" style="font-weight:800;color:#1d4ed8">{% set _bs = (jc.board_side or '').strip().upper() %}{% if _bs %}{{ _bs }}{% elif 'SINGLE' in (jc.board_type or '')|upper %}SINGLE SIDE{% elif 'DOUBLE' in (jc.board_type or '')|upper %}DOUBLE SIDE{% else %}—{% endif %}</span></div>
+    <div class="ps-cell"><span class="ps-lbl">COPPER</span><span class="ps-val" id="pr_copper">{{ jc.copper_finish|dash }}</span></div>
+    <div class="ps-cell"><span class="ps-lbl">LEGEND</span><span class="ps-val" id="pr_legend">{{ jc.legend_printing|dash }}</span></div>
+    <div class="ps-cell"><span class="ps-lbl">FINISH</span><span class="ps-val" id="pr_finish">{{ jc.finish|dash }}</span></div>
+
+    <div class="ps-cell"><span class="ps-lbl">MASKING</span><span class="ps-val" id="pr_masking">{{ jc.masking|dash }}</span></div>
+    <div class="ps-cell"><span class="ps-lbl">TYPE</span><span class="ps-val" id="pr_type">{{ jc.pcb_type|dash }}</span></div>
+    <div class="ps-cell"><span class="ps-lbl">QTY OF PANEL</span><span class="ps-val" id="pr_qty_panel">{% if jc.qty_panel %}{{ jc.qty_panel }} PANEL{% else %}—{% endif %}</span></div>
+    <div class="ps-cell"><span class="ps-lbl">NO OF PCB</span><span class="ps-val" id="pr_qty_pcs">{{ order.qty }} PCS</span></div>
+
+    <div class="ps-cell"><span class="ps-lbl">PRICE (₹)/PC</span><span class="ps-val" id="pr_price">{% if jc.price %}{{ jc.price|inr }}{% else %}—{% endif %}</span></div>
+    <div class="ps-cell"><span class="ps-lbl">RATE/SQ.INCH</span><span class="ps-val" id="pr_rs_pcb">{% if jc.rs_pcb %}{{ jc.rs_pcb|gfmt }}{% else %}—{% endif %}</span></div>
+    <div class="ps-cell"><span class="ps-lbl">PRIORITY</span><span class="ps-val" id="pr_priority" style="font-weight:800;color:{{'#b45309' if order.priority=='urgent' else 'inherit'}}">{{ order.priority|upper }}</span></div>
+    <div class="ps-cell"><span class="ps-lbl">CHECKED BY</span><span class="ps-val" id="pr_checked_by">{{ jc.checked_by|dash }}</span></div>
+  </div>
+  </div>
+  <div style="display:flex;gap:10px;align-items:center;margin-top:10px;flex-wrap:wrap">
+    <a class="btn" href="/jobcard/new?edit={{ order.id }}" style="background:#f59e0b;color:#111827;font-weight:800">✏️ EDIT JOB CARD</a>
+    <span class="muted small" style="font-weight:700">Edit page par sab details pre-filled milengi — SAVE par yahi order update hota hai.</span>
+  </div>
+</div>
 <!-- ================= EDIT SECTIONS ================= -->
 <form method="post" action="/jobcard/{{ order.id }}/update" id="jcForm" class="no-print">
 <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:14px">
@@ -611,6 +705,32 @@ function delProcRow(ev, oid, pid, name){
 .ps-bottom .ps-cell:last-child{border-right:none}
 .ps-sign{border:1px solid #c9c4b8;border-radius:8px;padding:8px 12px}
 .ps-sign-line{min-height:34px;border-bottom:1.5px dashed #9a9a9a;margin-top:6px;font-size:13px;font-weight:600}
+
+/* ---------- v2.74 ADVANCE preview hero ---------- */
+.jcHero{background:linear-gradient(135deg,#0f1b33 0%,#1e293b 55%,#0f766e 140%);border-radius:16px;padding:18px 20px;color:#fff;box-shadow:0 10px 30px -12px rgba(15,23,42,.55);margin-bottom:16px}
+.jcHero-top{display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap}
+.jcHero-kick{font-size:11px;letter-spacing:.14em;font-weight:800;color:#fbbf24;text-transform:uppercase}
+.jcHero-party{font-size:26px;font-weight:900;letter-spacing:-.02em;margin-top:4px}
+.jcHero-model{margin-top:6px;font-size:14px;color:#cbd5e1}
+.jcHero-note{margin-top:8px;font-size:12px;font-weight:700;color:#fde68a;background:rgba(245,158,11,.15);border:1px solid rgba(245,158,11,.4);border-radius:8px;padding:6px 10px;display:inline-block}
+.jcHero-chipmono{background:rgba(255,255,255,.12);border-radius:6px;padding:2px 8px;font-family:monospace}
+.jcHero-edit{display:inline-block;background:#f59e0b;color:#111827;font-weight:900;font-size:14px;padding:12px 18px;border-radius:10px;text-decoration:none;box-shadow:0 6px 16px -6px rgba(245,158,11,.7)}
+.jcHero-edit:hover{filter:brightness(1.08)}
+.jcHero-print{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.3);color:#fff;font-weight:700;padding:10px 14px;border-radius:10px;cursor:pointer}
+.jcHero-print:hover{background:rgba(255,255,255,.2)}
+.jcHero-stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(126px,1fr));gap:10px;margin-top:16px}
+.jcTile{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.14);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:2px}
+.jcTile-n{font-size:24px;font-weight:900;color:#fde68a;line-height:1.1}
+.jcTile-s{font-size:14px;font-weight:800;color:#fff;line-height:1.25;word-break:break-word}
+.jcTile-l{font-size:9.5px;letter-spacing:.1em;color:#94a3b8;font-weight:700}
+.jcHero-viz{display:flex;gap:14px;margin-top:14px;flex-wrap:wrap;align-items:flex-end}
+.jcViz{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.14);border-radius:12px;padding:8px;flex:0 0 292px;max-width:100%}
+.jcViz svg{width:100%;height:auto;display:block}
+.vizP rect{fill:#fbbf24;stroke:#92400e;stroke-width:1}
+.vizS rect{fill:#38bdf8;stroke:#075985;stroke-width:1}
+.vizLbl{font-size:11px;font-weight:700;fill:#e2e8f0;font-family:'Segoe UI',Arial,sans-serif}
+.jcViz-note{font-size:11px;color:#94a3b8;font-weight:700;flex-basis:100%}
+@media print{.jcHero{display:none!important}}
 
 /* ---------- print rules ---------- */
 @page { size: A4 portrait; margin: 10mm; }
@@ -1326,8 +1446,13 @@ document.getElementById('jcForm').addEventListener('input', function(){
   var pCust = panelByTitle(/CUSTOMER REQUIREMENT/);
   var pIss  = panelByTitle(/MATERIAL ISSUES/);
   var pDisp = panelByTitle(/DISPATCH — PCB KAISE BHEJA/);
+  /* v2.75 \u2014 CARD tab ab CLASSIC job card table dikhata hai; purana sections-form
+     DOM me hi hai (syncPreview/autoQty helpers usi ke fields padhte hai) par hamesha hidden */
+  var jcClassic = document.getElementById('jcClassic');
+  if (editGrid) editGrid.style.display = 'none';
+  form.style.display = 'none';
   var GROUPS = {
-    card:    { els: [warn, editGrid, totalsGrid, saveRow] },
+    card:    { els: [warn, jcClassic, totalsGrid, saveRow] },
     process: { els: [pProc, pLog] },
     material:{ els: [pCust, pBom, pIss] },
     dispatch:{ els: [pDisp] }
