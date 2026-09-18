@@ -50,7 +50,7 @@
             <option value="">— Select product —</option>
             {% for m in models %}
             <option value="{{ m.id }}"
-              data-name="{{ m.name }}" data-code="{{ m.model_code or '' }}"
+              data-name="{{ m.name }}" data-code="{{ m.model_code or '' }}" data-party="{{ m.party or '' }}"
               data-pcbx="{{ m.pcb_len|gfmt }}" data-pcby="{{ m.pcb_w|gfmt }}"
               data-panelx="{{ m.panel_len|gfmt }}" data-panely="{{ m.panel_w|gfmt }}"
               data-cutx="{{ m.cutting_len|gfmt }}" data-cuty="{{ m.cutting_w|gfmt }}"
@@ -263,8 +263,12 @@ document.getElementById('prodSel').addEventListener('change', function(){
   document.getElementById('pdThick').textContent = selM.thick || '—';
   var px0 = selM.cutx || selM.panelx, py0 = selM.cuty || selM.panely;
   var sideTxt = '';
-  if (px0 > 0 && py0 > 0 && selM.sl > 0 && selM.sw > 0) {
-    sideTxt = '📐 CUT LIST STYLE — X: <b>L-' + px0 + '(' + selM.sl + ')×' + selM.xq + '</b> · Y: <b>W-' + py0 + '(' + selM.sw + ')×' + selM.yq + '</b> = <b>' + ((selM.xq||0)*(selM.yq||0)) + ' panels/sheet</b>';
+  var C0 = calcPps();
+  if (C0.pps > 0 && px0 > 0 && py0 > 0 && selM.sl > 0 && selM.sw > 0) {
+    if (C0.best === 'mixed')
+      sideTxt = '📐 CUT LIST STYLE — MIXED (BEST): <b>' + C0.mN + ' row × ' + C0.perN + '</b> (L-' + px0 + ') + <b>' + C0.mM + ' row × ' + C0.perR + '</b> (W-' + py0 + ') = <b>' + C0.pps + ' panels/sheet</b>';
+    else
+      sideTxt = '📐 CUT LIST STYLE — X: <b>L-' + px0 + '(' + selM.sl + ')×' + C0.xq + '</b> · Y: <b>W-' + py0 + '(' + selM.sw + ')×' + C0.yq + '</b>' + (C0.best === 'rotated' ? ' <b>(ROTATED)</b>' : '') + ' = <b>' + C0.pps + ' panels/sheet</b>';
   } else if (selM.pps) {
     sideTxt = '📐 <b>' + selM.pps + ' panels/sheet</b>';
   }
@@ -283,6 +287,23 @@ document.getElementById('prodSel').addEventListener('change', function(){
   syncSummary();
 });
 
+/* ---- 🧾 MAKE ORDER (v2.69): FINISHED PRODUCT list ke button se aaye to (?model=ID)
+   product + party TURANT select — poora order form bhara hua milta hai ---- */
+(function(){
+  try {
+    if (typeof location === 'undefined' || !location.search) return;
+    var mid = new URLSearchParams(location.search).get('model');
+    if (!mid) return;
+    var ps = document.getElementById('prodSel');
+    ps.value = mid;
+    if (ps.value !== mid) return;  /* id match nahi hui — kuch mat karo */
+    var party = ps.options[ps.selectedIndex].getAttribute('data-party');
+    if (party) document.getElementById('jcParty').value = party;
+    try { ps.scrollIntoView({ block: 'center' }); } catch (e) {}
+    ps.dispatchEvent(new Event('change'));
+  } catch (e) { /* koi bhi anomaly — order form normal hi rahe */ }
+})();
+
 /* ---- material select → stock hint ---- */
 document.getElementById('jcMat').addEventListener('change', function(){
   var o = this.options[this.selectedIndex];
@@ -291,28 +312,50 @@ document.getElementById('jcMat').addEventListener('change', function(){
   syncSummary();
 });
 
-/* ---- CUT LIST style: panel + kerf se har side kitne panels ---- */
+/* ---- CUT LIST style BEST LAYOUT (v2.67): NORMAL + ROTATED + MIXED rows — cutlist page
+   jaisa hi (jisse panels/sheet number dono jagah SAME aaye — 24 vs 26 wala mismatch khatam) ---- */
 function calcPps(){
   var px = selM.cutx || selM.panelx, py = selM.cuty || selM.panely;
   var sl = parseFloat(document.getElementById('jcSL').value) || 0;
   var sw = parseFloat(document.getElementById('jcSW').value) || 0;
   var kx = selM.kfx || 0, ky = selM.kfy || 0;
-  var xq = 0, yq = 0;
-  if (px > 0 && sl > 0) xq = Math.floor((sl + kx) / (px + kx));
-  if (py > 0 && sw > 0) yq = Math.floor((sw + ky) / (py + ky));
-  if (!xq) xq = selM.xq || 0;
-  if (!yq) yq = selM.yq || 0;
-  var pps = xq * yq;
+  if (!(px > 0 && py > 0 && sl > 0 && sw > 0)) {
+    var _xq = selM.xq || 0, _yq = selM.yq || 0;
+    return {px: px, py: py, sl: sl, sw: sw, kx: kx, ky: ky, xq: _xq, yq: _yq,
+            pps: selM.pps || (_xq * _yq), best: 'normal', perN: 0, perR: 0, mN: 0, mM: 0};
+  }
+  function fx(ul){ return Math.floor((sl + kx) / (ul + kx)); }
+  function fy(uw){ return Math.floor((sw + ky) / (uw + ky)); }
+  var nx = fx(px), ny = fy(py), normal = nx * ny;
+  var rx = fx(py), ry = fy(px), rotated = rx * ry;
+  var perN = nx, perR = rx, hN = py + ky, hR = px + ky;
+  var maxN = hN > 0 ? Math.floor((sw + ky) / hN) : 0;
+  var maxM = hR > 0 ? Math.floor((sw + ky) / hR) : 0;
+  var mixed = 0, mN = 0, mM = 0;
+  for (var n = 0; n <= maxN; n++)
+    for (var m = 0; m <= maxM; m++) {
+      if (n === 0 && m === 0) continue;
+      var hh = n * hN + m * hR - ky;
+      if (hh <= sw + 1e-9) {
+        var p = n * perN + m * perR;
+        if (p > mixed) { mixed = p; mN = n; mM = m; }
+      }
+    }
+  var best, pps, xq, yq;
+  if (mixed > normal && mixed > rotated) { best = 'mixed'; pps = mixed; xq = perN; yq = mN + mM; }
+  else if (rotated > normal) { best = 'rotated'; pps = rotated; xq = rx; yq = ry; }
+  else { best = 'normal'; pps = normal; xq = nx; yq = ny; }
   if (!pps) pps = selM.pps || 0;
-  return {px: px, py: py, sl: sl, sw: sw, kx: kx, ky: ky, xq: xq, yq: yq, pps: pps};
+  return {px: px, py: py, sl: sl, sw: sw, kx: kx, ky: ky, xq: xq, yq: yq, pps: pps,
+          best: best, perN: perN, perR: perR, mN: mN, mM: mM};
 }
 
-/* ---- SHEET VISUAL: sheet par X×Y panel grid (cut list style) ---- */
+/* ---- SHEET VISUAL: best layout (normal / rotated / mixed rows) cut list style ---- */
 function drawSheetVis(){
   var el = document.getElementById('sheetVis');
   if (!el) return;
   var C = calcPps();
-  if (!(C.px > 0 && C.py > 0 && C.sl > 0 && C.sw > 0 && C.xq > 0 && C.yq > 0)) {
+  if (!(C.px > 0 && C.py > 0 && C.sl > 0 && C.sw > 0 && C.pps > 0)) {
     el.innerHTML = '<div class="muted small">Pehle product select karo + sheet size bharo — grid yahan dikhega.</div>';
     return;
   }
@@ -324,14 +367,35 @@ function drawSheetVis(){
   var kxs = C.kx * scale, kys = C.ky * scale;
   var s = '<svg viewBox="0 0 ' + W + ' ' + H + '" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;display:block">';
   s += '<rect x="' + x0.toFixed(1) + '" y="' + y0.toFixed(1) + '" width="' + S.toFixed(1) + '" height="' + T.toFixed(1) + '" fill="#fffdf5" stroke="#b3ac99" stroke-width="2"/>';
-  var a, b;
-  for (a = 0; a < C.xq; a++)
-    for (b = 0; b < C.yq; b++) {
-      var cx = x0 + a * (px + kxs), cy = y0 + b * (py + kys);
-      s += '<rect x="' + (cx + kxs/2).toFixed(1) + '" y="' + (cy + kys/2).toFixed(1) + '" width="' + px.toFixed(1) + '" height="' + py.toFixed(1) + '" fill="#dbeafe" stroke="#2563eb" stroke-width="1.4" rx="2"/>';
-      s += '<text x="' + (cx + kxs/2 + px/2).toFixed(1) + '" y="' + (cy + kys/2 + py/2 + 3).toFixed(1) + '" text-anchor="middle" font-size="' + Math.max(7, Math.min(11, py/4)).toFixed(1) + '" fill="#1d4ed8" font-family="Segoe UI,Arial">' + a + '×' + b + '</text>';
+  function cell(cx, cy, w, h, lbl, fill, stroke){
+    s += '<rect x="' + (cx + kxs/2).toFixed(1) + '" y="' + (cy + kys/2).toFixed(1) + '" width="' + w.toFixed(1) + '" height="' + h.toFixed(1) + '" fill="' + fill + '" stroke="' + stroke + '" stroke-width="1.4" rx="2"/>';
+    if (lbl) s += '<text x="' + (cx + kxs/2 + w/2).toFixed(1) + '" y="' + (cy + kys/2 + h/2 + 3).toFixed(1) + '" text-anchor="middle" font-size="' + Math.max(7, Math.min(11, h/4)).toFixed(1) + '" fill="' + stroke + '" font-family="Segoe UI,Arial">' + lbl + '</text>';
+  }
+  var capTxt = '';
+  var a, b, i, rn;
+  if (C.best === 'mixed') {
+    var y = y0, num = 1;
+    for (rn = 0; rn < C.mN; rn++) {
+      for (i = 0; i < C.perN; i++) { cell(x0 + i * (px + kxs), y, px, py, String(num), '#dbeafe', '#1d4ed8'); num++; }
+      y += py + kys;
     }
-  s += '<text x="' + (x0 + S/2).toFixed(1) + '" y="' + (y0 - 6).toFixed(1) + '" text-anchor="middle" font-size="11" font-weight="700" fill="#2563eb" font-family="Segoe UI,Arial">SHEET ' + C.sl + '×' + C.sw + ' mm — ' + C.xq + '×' + C.yq + ' = ' + C.pps + ' PANELS</text>';
+    for (rn = 0; rn < C.mM; rn++) {
+      for (i = 0; i < C.perR; i++) { cell(x0 + i * (py + kxs), y, py, px, String(num), '#ede9fe', '#7c3aed'); num++; }
+      y += px + kys;
+    }
+    capTxt = 'SHEET ' + C.sl + '\u00d7' + C.sw + ' mm \u2014 MIXED ' + C.mN + '\u00d7' + C.perN + ' + ' + C.mM + '\u00d7' + C.perR + ' = ' + C.pps + ' PANELS';
+  } else if (C.best === 'rotated') {
+    for (a = 0; a < C.xq; a++)
+      for (b = 0; b < C.yq; b++)
+        cell(x0 + a * (py + kxs), y0 + b * (px + kys), py, px, a + '\u00d7' + b, '#ede9fe', '#7c3aed');
+    capTxt = 'SHEET ' + C.sl + '\u00d7' + C.sw + ' mm \u2014 ROTATED ' + C.xq + '\u00d7' + C.yq + ' = ' + C.pps + ' PANELS';
+  } else {
+    for (a = 0; a < C.xq; a++)
+      for (b = 0; b < C.yq; b++)
+        cell(x0 + a * (px + kxs), y0 + b * (py + kys), px, py, a + '\u00d7' + b, '#dbeafe', '#1d4ed8');
+    capTxt = 'SHEET ' + C.sl + '\u00d7' + C.sw + ' mm \u2014 ' + C.xq + '\u00d7' + C.yq + ' = ' + C.pps + ' PANELS';
+  }
+  s += '<text x="' + (x0 + S/2).toFixed(1) + '" y="' + (y0 - 6).toFixed(1) + '" text-anchor="middle" font-size="11" font-weight="700" fill="#2563eb" font-family="Segoe UI,Arial">' + capTxt + '</text>';
   s += '</svg>';
   el.innerHTML = s;
 }
@@ -348,7 +412,10 @@ function recalc(){
   var cutsEl = document.getElementById('caCuts');
   if (C.px > 0 && C.py > 0 && C.sl > 0 && C.sw > 0 && (C.xq > 0 || C.yq > 0)) {
     var cncTxt = (selM.cnx > 0 || selM.cny > 0) ? (' · <span class="muted">CNC margin X/Y: ' + selM.cnx + '/' + selM.cny + 'mm</span>') : '';
-    cutsEl.innerHTML = '✂ CUT LIST — X: <b>L-' + C.px + '(' + C.sl + ')×' + C.xq + '</b> · Y: <b>W-' + C.py + '(' + C.sw + ')×' + C.yq + '</b> → 1 SHEET ME <b style="color:#166534">' + C.pps + ' PANELS</b>' + cncTxt;
+    if (C.best === 'mixed')
+      cutsEl.innerHTML = '✂ CUT LIST — MIXED (BEST): <b>' + C.mN + ' row × ' + C.perN + '</b> (L-' + C.px + ') + <b>' + C.mM + ' row × ' + C.perR + '</b> (W-' + C.py + ') → 1 SHEET ME <b style="color:#166534">' + C.pps + ' PANELS</b>' + cncTxt;
+    else
+      cutsEl.innerHTML = '✂ CUT LIST — X: <b>L-' + C.px + '(' + C.sl + ')×' + C.xq + '</b> · Y: <b>W-' + C.py + '(' + C.sw + ')×' + C.yq + '</b>' + (C.best === 'rotated' ? ' <b>(ROTATED)</b>' : '') + ' → 1 SHEET ME <b style="color:#166534">' + C.pps + ' PANELS</b>' + cncTxt;
   } else if (C.pps > 0) {
     cutsEl.innerHTML = '✂ 1 SHEET ME <b style="color:#166534">' + C.pps + ' PANELS</b>';
   } else {
@@ -368,7 +435,9 @@ function recalc(){
   }
   if (C.pps > 0) {
     capPps.textContent = C.pps + ' PANELS';
-    if (subPps) subPps.innerHTML = C.xq + ' × ' + C.yq + ' (sheet ' + C.sl + '×' + C.sw + ')';
+    if (subPps) subPps.innerHTML = (C.best === 'mixed')
+      ? (C.mN + '×' + C.perN + ' + ' + C.mM + '×' + C.perR + ' (sheet ' + C.sl + '×' + C.sw + ')')
+      : (C.xq + ' × ' + C.yq + (C.best === 'rotated' ? ' rotated' : '') + ' (sheet ' + C.sl + '×' + C.sw + ')');
   } else {
     capPps.textContent = '—'; if (subPps) subPps.innerHTML = '';
   }
@@ -398,7 +467,10 @@ function recalc(){
   if (chainEl) {
     var lines = [];
     if (qty > 0 && p > 0) lines.push('1️⃣ Qty <b>' + qty + '</b> ÷ <b>' + p + '</b> PCS/panel = <b>' + panels + ' panels</b>');
-    if (C.pps > 0) lines.push('2️⃣ Sheet ' + (C.sl || '?') + '×' + (C.sw || '?') + ' → <b>' + C.xq + '×' + C.yq + '</b> = <b>' + C.pps + ' panels/sheet</b>');
+    if (C.pps > 0) {
+      var lay2 = (C.best === 'mixed') ? ('MIXED: ' + C.mN + ' row × ' + C.perN + ' + ' + C.mM + ' row × ' + C.perR) : (C.xq + '×' + C.yq + (C.best === 'rotated' ? ' (rotated)' : ''));
+      lines.push('2️⃣ Sheet ' + (C.sl || '?') + '×' + (C.sw || '?') + ' → <b>' + lay2 + '</b> = <b>' + C.pps + ' panels/sheet</b>');
+    }
     if (panels > 0 && C.pps > 0) lines.push('3️⃣ <b>' + panels + ' panels</b> ÷ <b>' + C.pps + '</b> = <b>' + sheets + ' sheet(s)</b>');
     if (sheets > 0 && pcsSheet > 0) lines.push('4️⃣ <b>' + sheets + ' sheet(s)</b> × <b>' + C.pps + ' panels</b> × <b>' + p + ' pcs</b> = <b style="color:#1d4ed8">' + (sheets * pcsSheet) + ' TOTAL PCB</b>');
     chainEl.innerHTML = lines.length ? lines.join('<br>') : 'Qty + product select karo — chain yahan dikhegi.';

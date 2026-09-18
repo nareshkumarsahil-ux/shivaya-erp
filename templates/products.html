@@ -335,6 +335,7 @@ function pmThickRate(){
           </td>
           <td class="small muted">{{ m.created_on }}</td>
           <td class="t-right" style="white-space:nowrap">
+            <a class="btn btn-xs" style="background:#2563eb;color:#fff" href="/jobcard/new?model={{ m.id }}" title="Isi model ka ORDER banao — jobcard khulega, product + party pre-selected">🧾 MAKE ORDER</a>
             <button type="button" class="btn btn-xs" style="background:#16a34a;color:#fff" onclick="toggleProduce({{ m.id }})">🏭 Produce</button>
             <a class="btn btn-outline btn-xs" href="/products?edit={{ m.id }}">✏️ Edit</a>
             <a class="btn btn-outline btn-xs" href="/cutlist?model={{ m.id }}">📂 Load</a>
@@ -573,6 +574,82 @@ function rcCancel(id, rate){
   var sc = table.closest('.panel-body');
   if (sc) sc.addEventListener('scroll', sync, {passive: true});
   sync();
+})();
+</script>
+
+<style>
+  /* v2.67 \u2014 EK hi scrollbar: table ki apni (bottom) wali chhupi */
+  .no-nativescroll{scrollbar-width:none}
+  .no-nativescroll::-webkit-scrollbar{display:none;height:0}
+</style>
+<script>
+/* 📌 v2.68 FINISHED PRODUCT EDGE SCROLLBAR (FIXED) \u2014 bar screen ke NICHLE EDGE par
+   chipki rehti hai jab tak wide table nazar me hai (jahan aap dekh rahe ho WAHI par).
+   Sirf TABLE ko right-left karti hai (page kabhi nahi). 2-tarafa sync + wheel support.
+   Table viewport se bahar → bar khud chhup jati hai. Ek samay me sirf EK bar. */
+(function(){
+  var bar = null, sp = null, conts = [], active = null, lock = 0;
+  function ensureBar(){
+    if (bar) return;
+    bar = document.createElement('div');
+    bar.id = 'fgEdgeScroll';
+    bar.title = 'Horizontal scrollbar \u2014 screen ke edge par fixed (table ke niche tak jaane ki zaroorat nahi)';
+    bar.style.cssText = 'position:fixed;right:0;bottom:2px;height:16px;overflow-x:auto;overflow-y:hidden;z-index:96;background:#e8eef6;border-top:1.5px solid #94a3b8;display:none';
+    sp = document.createElement('div');
+    sp.style.height = '1px';
+    bar.appendChild(sp);
+    document.body.appendChild(bar);
+    bar.addEventListener('scroll', function(){
+      if (Date.now() < lock || !active) return;
+      lock = Date.now() + 60;
+      active.scrollLeft = bar.scrollLeft;
+    });
+    bar.addEventListener('wheel', function(e){
+      if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) { e.preventDefault(); if (active) active.scrollLeft += e.deltaY; }
+    }, {passive:false});
+  }
+  function scan(){
+    var divs = document.querySelectorAll('div');
+    for (var i = 0; i < divs.length; i++){
+      var cont = divs[i];
+      if (cont.hasAttribute('data-topdone')) continue;
+      if (!cont.querySelector('table')){ continue; }
+      var s = getComputedStyle(cont);
+      cont.setAttribute('data-topdone', '1');
+      if (s.overflowX !== 'auto' && s.overflowX !== 'scroll') continue;
+      cont.classList.add('no-nativescroll');
+      conts.push(cont);
+    }
+  }
+  function refresh(){
+    ensureBar(); scan();
+    var mid = window.innerHeight / 2, best = null, bestD = 1e9;
+    for (var i = 0; i < conts.length; i++){
+      var c = conts[i];
+      if (!document.contains(c)) continue;
+      if (c.scrollWidth <= c.clientWidth + 2) continue;
+      var r = c.getBoundingClientRect();
+      if (r.height < 40 || r.bottom < 60 || r.top > window.innerHeight - 30) continue;
+      var d = Math.abs((r.top + r.bottom) / 2 - mid);
+      if (d < bestD){ bestD = d; best = c; }
+    }
+    if (!best){ bar.style.display = 'none'; active = null; return; }
+    active = best;
+    var r2 = active.getBoundingClientRect();
+    var left = Math.max(0, r2.left), width = Math.min(r2.width, window.innerWidth - left);
+    bar.style.left = left + 'px';
+    bar.style.width = width + 'px';
+    var ds = document.getElementById('docHScroll');
+    bar.style.bottom = (ds && ds.style.display === 'block') ? '18px' : '2px';
+    bar.style.display = 'block';
+    var w = active.scrollWidth + 'px';
+    if (sp.style.width !== w) sp.style.width = w;
+    if (Date.now() > lock && Math.abs(bar.scrollLeft - active.scrollLeft) > 1) bar.scrollLeft = active.scrollLeft;
+  }
+  window.addEventListener('scroll', refresh, {passive:true});
+  window.addEventListener('resize', refresh);
+  setInterval(refresh, 500);
+  refresh();
 })();
 </script>
 
