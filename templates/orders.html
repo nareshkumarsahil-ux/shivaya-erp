@@ -42,12 +42,12 @@
     </div>
     <div class="kanban-body">
       {% for o in cols[cidx] %}
-      <!-- v2.74: ORDER CARD click = JOB ORDER PREVIEW (edit ka button preview ke andar) -->
-      <a class="kcard" {% if current_user_role == 'admin' %}href="/jobcard/{{ o.id }}" title="Click — JOB ORDER PREVIEW khulega — edit ka button preview me hai"{% else %}href="/operator"{% endif %}>
+      <!-- v2.72: ORDER CARD click = ADVANCE JOB CARD (edit mode) \u2014 purana preview ab sirf "Job Card" button se -->
+      <a class="kcard" {% if current_user_role == 'admin' %}href="/jobcard/new?edit={{ o.id }}" title="Click \u2014 ADVANCE JOB CARD me khulega (edit karke SAVE karo)"{% else %}href="/operator"{% endif %}>
         <div class="kcard-top">
           <b class="mono">Order {{ o.order_no }}</b>
           {% if o.priority=='urgent' %}<span class="badge b-urgent">URGENT</span>{% endif %}
-          {% if current_user_role == 'admin' %}<span class="badge b-blue" style="margin-left:auto;font-size:9px">👁 PREVIEW</span>{% endif %}
+          {% if current_user_role == 'admin' %}<span class="badge b-blue" style="margin-left:auto;font-size:9px">✏️ EDIT</span>{% endif %}
         </div>
         <div class="kparty">{{ o.party }}</div>
         <div class="kproduct">{{ o.product }}</div>
