@@ -299,6 +299,36 @@ document.getElementById('prodSel').addEventListener('change', function(){
   try {
     var ps = document.getElementById('prodSel');
     ps.value = '{{ edit_model_id }}';
+    if (!ps.value) {
+      /* v2.73 \u2014 CUT LIST se bane card ka model dropdown me nahi: phir bhi ORDER ka
+         data dikhao (party/qty/sheet/board) + details card, aur SAVE par server order
+         ke purane jobcard se details utha lega (virtual model) */
+      document.getElementById('jcParty').value = {{ (edit_order.party or '')|tojson }};
+      var _q = document.getElementById('jcQty');
+      if (_q && {{ edit_order.qty or 0 }} > 0) _q.value = '{{ edit_order.qty }}';
+      var _sl = document.getElementById('jcSL'), _sw = document.getElementById('jcSW');
+      if (_sl) _sl.value = '{{ (edit_jc.sheet_len or 0)|gfmt }}';
+      if (_sw) _sw.value = '{{ (edit_jc.sheet_w or 0)|gfmt }}';
+      var _pd = document.getElementById('prodDetails');
+      if (_pd) _pd.style.display = 'block';
+      var _dp = document.getElementById('pdPanel');
+      if (_dp && {{ (edit_jc.panel_x or 0)|round(2) }} > 0) _dp.textContent = {{ ((edit_jc.panel_x or 0)|gfmt) ~ ' \u00d7 ' ~ ((edit_jc.panel_y or 0)|gfmt) ~ ' mm'|tojson }};
+      var _dpcb = document.getElementById('pdPcb');
+      if (_dpcb && {{ (edit_jc.actual_pcb_x or 0)|round(2) }} > 0) _dpcb.textContent = {{ ((edit_jc.actual_pcb_x or 0)|gfmt) ~ ' \u00d7 ' ~ ((edit_jc.actual_pcb_y or 0)|gfmt) ~ ' mm'|tojson }};
+      var _dps = document.getElementById('pdPps');
+      if (_dps) _dps.textContent = {{ (edit_jc.panels_per_sheet or 0)|tojson }};
+      var _dpcs = document.getElementById('pdPcs');
+      if (_dpcs) _dpcs.textContent = {{ (edit_jc.pcs_panel or 0)|tojson }};
+      var _info = document.getElementById('prodDetails');
+      if (_info) {
+        var _nt = document.createElement('div');
+        _nt.className = 'muted small';
+        _nt.style.marginTop = '6px';
+        _nt.textContent = 'Is order ka FINISHED PRODUCT dropdown me nahi hai (CUT LIST se bana tha) \u2014 order ki apni details upar dikh rahi hai. SAVE karte waqt wahi details wapas lag jayengi.';
+        _info.appendChild(_nt);
+      }
+      return;
+    }
     if (ps.value) {
       document.getElementById('jcParty').value = {{ (edit_order.party or '')|tojson }};
       var _q = document.getElementById('jcQty');

@@ -6,7 +6,7 @@
 <!-- ================= HEADER ACTIONS ================= -->
 {% if not jc.party_model %}
 <div class="no-print" style="margin-bottom:10px;padding:10px 14px;border:1.5px solid #f59e0b;border-radius:10px;background:#fffbeb;color:#92400e;font-weight:700;font-size:13px">
-  ⚠ Ye job card <b>MODEL ke bina</b> bana tha — isliye saari sizing blank/0 hai. Upar <b>ORDER DETAILS</b> section kholo aur <b>PARTY MODEL (Finished Product)</b> select karo → PCB size, panel, PCS/panel, sheet sab <b>auto bhar jayega</b>, phir <b>Save</b> dabao.
+  ⚠ Ye job card <b>MODEL ke bina</b> bana tha (CUT LIST se) — neeche order ki apni details chal rahi hain. ✏️ <b>EDIT JOB CARD</b> dabao — sab details <b>pre-filled</b> milengi, SAVE par <b>yahi order</b> update hota hai.
 </div>
 {% endif %}
 <div class="jc-headbar no-print">
@@ -39,6 +39,40 @@
     </form>
     {% endif %}
   </div>
+</div>
+
+<!-- ================= v2.74 ADVANCE JOB ORDER PREVIEW (hatke) ================= -->
+<div class="jcHero no-print">
+  <div class="jcHero-top">
+    <div style="min-width:0">
+      <div class="jcHero-kick">🔷 ADVANCE JOB ORDER · <span class="mono">{{ order.order_no }}</span>{% if jc.odate %} · {{ jc.odate[:10] }}{% endif %}</div>
+      <div class="jcHero-party">{{ order.party }}</div>
+      <div class="jcHero-model">📐 <b>{{ jc.party_model or 'CUT LIST — bina model' }}</b>{% if jc.model %} <span class="jcHero-chipmono">{{ jc.model }}</span>{% endif %}</div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:8px;align-items:flex-end;flex-shrink:0">
+      <a class="jcHero-edit" href="/jobcard/new?edit={{ order.id }}" title="Edit page par purana data pre-filled milega — SAVE par yahi order update hoga">✏️ EDIT JOB CARD</a>
+      <button class="jcHero-print" type="button" onclick="printJobcard()">🖨️ PRINT</button>
+    </div>
+  </div>
+  <div class="jcHero-stats">
+    <div class="jcTile"><span class="jcTile-n">{{ order.qty }}</span><span class="jcTile-l">QTY (PCS)</span></div>
+    <div class="jcTile"><span class="jcTile-n">{{ jc.pcs_panel or '—' }}</span><span class="jcTile-l">PCS / PANEL</span></div>
+    <div class="jcTile"><span class="jcTile-n">{{ jc.panels_per_sheet or '—' }}</span><span class="jcTile-l">PANELS / SHEET</span></div>
+    <div class="jcTile"><span class="jcTile-n">{{ jc.sheets or '—' }}</span><span class="jcTile-l">SHEETS</span></div>
+    <div class="jcTile"><span class="jcTile-s">{% if jc.sheet_len %}{{ jc.sheet_len|gfmt }} × {{ jc.sheet_w|gfmt }}{% else %}—{% endif %}</span><span class="jcTile-l">SHEET (MM)</span></div>
+    <div class="jcTile"><span class="jcTile-s">{% if jc.actual_pcb_x %}{{ jc.actual_pcb_x|gfmt }} × {{ jc.actual_pcb_y|gfmt }}{% else %}—{% endif %}</span><span class="jcTile-l">PCB (MM)</span></div>
+    <div class="jcTile"><span class="jcTile-s">{% if jc.x_size %}{{ jc.x_size|gfmt }} × {{ jc.y_size|gfmt }}{% else %}—{% endif %}</span><span class="jcTile-l">PANEL (MM)</span></div>
+    <div class="jcTile"><span class="jcTile-s">{{ jc.board_side or '—' }}</span><span class="jcTile-l">BOARD SIDE</span></div>
+    <div class="jcTile"><span class="jcTile-s">{{ jc.sheet_material or '—' }}</span><span class="jcTile-l">MATERIAL</span></div>
+    <div class="jcTile"><span class="jcTile-s">{{ jc.exp_delivery or '—' }}</span><span class="jcTile-l">DELIVERY</span></div>
+  </div>
+  {% if viz_panel_svg or viz_sheet_svg %}
+  <div class="jcHero-viz">
+    {% if viz_panel_svg %}<div class="jcViz">{{ viz_panel_svg|safe }}</div>{% endif %}
+    {% if viz_sheet_svg %}<div class="jcViz">{{ viz_sheet_svg|safe }}</div>{% endif %}
+    <div class="jcViz-note">🔲 CUTTING LAYOUT — sheet me kaise katega (andaza — actual cutting CUT LIST se)</div>
+  </div>
+  {% endif %}
 </div>
 
 <!-- ================= EDIT SECTIONS ================= -->
@@ -611,6 +645,31 @@ function delProcRow(ev, oid, pid, name){
 .ps-bottom .ps-cell:last-child{border-right:none}
 .ps-sign{border:1px solid #c9c4b8;border-radius:8px;padding:8px 12px}
 .ps-sign-line{min-height:34px;border-bottom:1.5px dashed #9a9a9a;margin-top:6px;font-size:13px;font-weight:600}
+
+/* ---------- v2.74 ADVANCE preview hero ---------- */
+.jcHero{background:linear-gradient(135deg,#0f1b33 0%,#1e293b 55%,#0f766e 140%);border-radius:16px;padding:18px 20px;color:#fff;box-shadow:0 10px 30px -12px rgba(15,23,42,.55);margin-bottom:16px}
+.jcHero-top{display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap}
+.jcHero-kick{font-size:11px;letter-spacing:.14em;font-weight:800;color:#fbbf24;text-transform:uppercase}
+.jcHero-party{font-size:26px;font-weight:900;letter-spacing:-.02em;margin-top:4px}
+.jcHero-model{margin-top:6px;font-size:14px;color:#cbd5e1}
+.jcHero-chipmono{background:rgba(255,255,255,.12);border-radius:6px;padding:2px 8px;font-family:monospace}
+.jcHero-edit{display:inline-block;background:#f59e0b;color:#111827;font-weight:900;font-size:14px;padding:12px 18px;border-radius:10px;text-decoration:none;box-shadow:0 6px 16px -6px rgba(245,158,11,.7)}
+.jcHero-edit:hover{filter:brightness(1.08)}
+.jcHero-print{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.3);color:#fff;font-weight:700;padding:10px 14px;border-radius:10px;cursor:pointer}
+.jcHero-print:hover{background:rgba(255,255,255,.2)}
+.jcHero-stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(126px,1fr));gap:10px;margin-top:16px}
+.jcTile{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.14);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:2px}
+.jcTile-n{font-size:24px;font-weight:900;color:#fde68a;line-height:1.1}
+.jcTile-s{font-size:14px;font-weight:800;color:#fff;line-height:1.25;word-break:break-word}
+.jcTile-l{font-size:9.5px;letter-spacing:.1em;color:#94a3b8;font-weight:700}
+.jcHero-viz{display:flex;gap:14px;margin-top:14px;flex-wrap:wrap;align-items:flex-end}
+.jcViz{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.14);border-radius:12px;padding:8px;flex:0 0 292px;max-width:100%}
+.jcViz svg{width:100%;height:auto;display:block}
+.vizP rect{fill:#fbbf24;stroke:#92400e;stroke-width:1}
+.vizS rect{fill:#38bdf8;stroke:#075985;stroke-width:1}
+.vizLbl{font-size:11px;font-weight:700;fill:#e2e8f0;font-family:'Segoe UI',Arial,sans-serif}
+.jcViz-note{font-size:11px;color:#94a3b8;font-weight:700;flex-basis:100%}
+@media print{.jcHero{display:none!important}}
 
 /* ---------- print rules ---------- */
 @page { size: A4 portrait; margin: 10mm; }
