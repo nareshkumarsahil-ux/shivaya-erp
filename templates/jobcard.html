@@ -213,7 +213,10 @@
           <option value="partial" {{'selected' if jc.payment_status=='partial'}}>Partial</option>
         </select>
       </div>
-      <div class="field" style="margin-top:16px"><button class="btn" type="submit">💾 Save Job Card</button></div>
+      <div class="field" style="margin-top:16px" id="jcSaveRow">
+        <a class="btn" style="background:#2563eb;color:#fff" href="/jobcard/new?edit={{ order.id }}" title="Isi order ko ADVANCE JOB CARD me kholo — edit karke SAVE karo">✏️ EDIT JOB CARD</a>
+        <span class="muted small" style="margin-left:8px">JOB ORDER PREVIEW hai (read-only) — edit karne ke liye EDIT JOB CARD dabao, ADVANCE page par edit karke SAVE kar do.</span>
+      </div>
       <p class="muted small" style="margin-top:8px">💡 <b>RATE CALCULATION SINGLE PCB SIZE PAR</b> — PCB ACTUAL SIZE (X×Y) se area = rate/sq.inch ↔ PCB PRICE. <b>Gang panel aur CNC margin rate me count NAHI hota</b> (wo sirf cutting/sheet calc ke liye hai). <b id="jc_total_price" style="color:#b45309"></b></p>
       <p class="small" style="margin-top:4px;background:#fffbeb;border:1px solid #fde68a;border-radius:6px;padding:6px 8px"><span id="jc_last_price">{% if last_price %}📜 <b>LAST PRICE:</b> ₹{{ last_price.price|inr0 }}{% if last_price.rs_pcb %} · {{ last_price.rs_pcb|gfmt }}/sq.inch{% endif %} · {{ last_price.ddate }} · {{ last_price.party }} · <span class="mono">{{ last_price.order_no }}</span>{% endif %}</span></p>
       <p class="muted small">💡 Save karne par order list (kanban) bhi update hota hai.</p>
@@ -566,7 +569,7 @@ function delProcRow(ev, oid, pid, name){
     <div class="field"><label>SIGNATURE OF HANDOVER</label><input name="handover_sign" id="jc_handover_sign" value="{{ jc.handover_sign }}"></div>
   </div></div>
 </div>
-<div style="text-align:right" class="no-print"><button class="btn" type="submit">💾 Save Job Card</button></div>
+<!-- v2.71: Save Job Card button HATA (JOB ORDER = preview; edit sirf ADVANCE JOB CARD se) -->
 </form>
 
 <!-- ================= PRINT PREVIEW ================= -->
@@ -1404,4 +1407,19 @@ document.getElementById('jcForm').addEventListener('input', function(){
 .jcmenu-list > *{width:100%;text-align:left;margin:0!important}
 @media print{.jctabs,.jcmenu{display:none!important}}
 </style>
+<script>
+/* v2.71 — JOB ORDER = PREVIEW (read-only). Edit sirf "EDIT JOB CARD" button se:
+   ADVANCE JOB CARD page khulta hai (?edit=), wahan edit karke SAVE karo.
+   Details form ke saare fields disabled (Save button template se hi hata diya). */
+(function(){
+  var f = document.getElementById('jcForm');
+  if (!f) return;
+  f.setAttribute('onsubmit', 'return false');
+  var els = f.querySelectorAll('input, select, textarea');
+  for (var i = 0; i < els.length; i++) els[i].setAttribute('disabled', 'disabled');
+  var btns = f.querySelectorAll('button[type="submit"]');
+  for (var j = 0; j < btns.length; j++) btns[j].style.display = 'none';
+})();
+</script>
+
 {% endblock %}

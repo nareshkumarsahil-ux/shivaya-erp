@@ -1,9 +1,10 @@
 {% extends "base.html" %}
-{% block title %}New Job Card{% endblock %}
-{% block page_title %}🆕 New Job Card — Advanced{% endblock %}
+{% block title %}{{ 'Edit Job Card ' ~ edit_order.order_no if edit_id else 'New Job Card' }}{% endblock %}
+{% block page_title %}{% if edit_id %}✏️ EDIT JOB CARD {{ edit_order.order_no }} — Advanced{% else %}🆕 New Job Card — Advanced{% endif %}{% endblock %}
 {% block content %}
 
 <form method="post" action="/jobcard/new" id="jcForm">
+  <input type="hidden" name="edit_id" value="{{ edit_id or '' }}">
 <div class="grid2">
   <div>
     <!-- ============ STEP 1 : BASIC ============ -->
@@ -216,8 +217,13 @@
           <tr><td class="muted">MATERIAL</td><td class="t-right"><b id="smMat">—</b></td></tr>
           <tr><td class="muted">THICKNESS</td><td class="t-right"><b id="smThick">—</b></td></tr>
         </table>
+        {% if edit_id %}
+        <button class="btn" type="submit" style="width:100%;margin-top:12px;font-size:16px;font-weight:800;padding:12px;background:#2563eb;color:#fff">💾 SAVE JOB CARD ({{ edit_order.order_no }})</button>
+        <p class="muted small" style="margin-top:8px">SAVE karte hi wahi order UPDATE hoga (naya order nahi banega) — Job Card khul jayega.</p>
+{% else %}
         <button class="btn" type="submit" style="width:100%;margin-top:12px;font-size:16px;font-weight:800;padding:12px;background:#16a34a;color:#fff">🚀 CREATE JOB CARD</button>
         <p class="muted small" style="margin-top:8px">Create karte hi Job Card khul jayega — wahan processes, dispatch, print sab manage hoga.</p>
+{% endif %}
       </div>
     </div>
   </div>
@@ -286,6 +292,31 @@ document.getElementById('prodSel').addEventListener('change', function(){
   recalc();
   syncSummary();
 });
+
+/* ---- ✏️ EDIT JOB CARD (v2.71): ?edit=ID — purana order ka data TURANT bharo ---- */
+{% if edit_id %}
+(function(){
+  try {
+    var ps = document.getElementById('prodSel');
+    ps.value = '{{ edit_model_id }}';
+    if (ps.value) {
+      document.getElementById('jcParty').value = {{ (edit_order.party or '')|tojson }};
+      var _q = document.getElementById('jcQty');
+      if (_q && {{ edit_order.qty or 0 }} > 0) _q.value = '{{ edit_order.qty }}';
+      var _sl = document.getElementById('jcSL'), _sw = document.getElementById('jcSW');
+      if (_sl) _sl.value = '{{ (edit_jc.sheet_len or 0)|gfmt }}';
+      if (_sw) _sw.value = '{{ (edit_jc.sheet_w or 0)|gfmt }}';
+      var _bd = document.getElementById('jcBoardType');
+      if (_bd) {
+        for (var _i = 0; _i < _bd.options.length; _i++)
+          if (_bd.options[_i].value === {{ (edit_jc.board_type or '')|tojson }}) { _bd.value = _bd.options[_i].value; break; }
+      }
+      try { ps.scrollIntoView({ block: 'center' }); } catch (e) {}
+      ps.dispatchEvent(new Event('change'));
+    }
+  } catch (e) { /* anomaly par normal form */ }
+})();
+{% endif %}
 
 /* ---- 🧾 MAKE ORDER (v2.69): FINISHED PRODUCT list ke button se aaye to (?model=ID)
    product + party TURANT select — poora order form bhara hua milta hai ---- */

@@ -1529,10 +1529,15 @@ def cutlist():
                     unit_label = "PCS/unit" if result["gang_active"] else "PCS/panel"
                     info = (f"{result['pcs_unit']} {unit_label} \u00b7 {result['panels_per_sheet']} panels/sheet "
                             f"({result['sheet_len']:g}\u00d7{result['sheet_w']:g}) \u00b7 {result['best']}")
+                    # v2.70 \u2014 BLANK GUARD: cut list me qty/panels 0 aa gaye to purani sahi values
+                    # overwrite NAHI hoti (pehle apply ke baad order sab BLANK ho jata tha)
+                    _qty = result["total_pcs"] if (result["total_pcs"] or 0) > 0 else (order["qty"] or 0)
+                    _qpan = result["total_panels"] if (result["total_panels"] or 0) > 0 else (order["qty_panel"] or 0)
+                    _qpcs = result["pcs_panel"] if (result["pcs_panel"] or 0) > 0 else (order["pcs_panel"] or 0)
                     db.execute("UPDATE orders SET cutlist_info=?, qty=?, product=?, qty_panel=?, pcs_panel=? WHERE id=?",
-                               (info, result["total_pcs"],
+                               (info, _qty,
                                 f"{order['product']} \u00b7 Panel {result['panel_len']:g}\u00d7{result['panel_w']:g}mm",
-                                result["total_panels"], result["pcs_panel"], order_id))
+                                _qpan, _qpcs, order_id))
                     # JOB CARD bhi save karo — cut list ki saari details (sheet/panel/pcs/price) jobcard table me
                     cut_x = result["cutting_len"] if result["gang_active"] else result["panel_len"]
                     cut_y = result["cutting_w"] if result["gang_active"] else result["panel_w"]
@@ -1558,6 +1563,8 @@ def cutlist():
                             rs_pcb = None
                     db.execute("INSERT OR IGNORE INTO jobcard (order_id) VALUES (?)", (order_id,))
                     sets, vals = [], []
+                    # v2.70 \u2014 sirf non-zero values likho (0 aaye to purani value rakho)
+                    _jc_cur = db.query("SELECT * FROM jobcard WHERE order_id=?", (order_id,), one=True)
                     for col, val in (("actual_pcb_x", result["pcb_len"]), ("actual_pcb_y", result["pcb_w"]),
                                      ("x_size", cut_x), ("x_qty", result["grid_x"]),
                                      ("y_size", cut_y), ("y_qty", result["grid_y"]),
@@ -1566,6 +1573,10 @@ def cutlist():
                                      ("sheet_len", result["sheet_len"]), ("sheet_w", result["sheet_w"]),
                                      ("panels_per_sheet", result["panels_per_sheet"]), ("sheets", result["sheets"]),
                                      ("qty_panel", result["total_panels"]), ("pcs_panel", result["pcs_panel"])):
+                        if (val is None or (isinstance(val, (int, float)) and val <= 0)) and _jc_cur is not None:
+                            _prev = _jc_cur[col]
+                            if _prev is not None and _prev != 0:
+                                continue  # purani sahi value rakhi \u2014 blank nahi karenge
                         sets.append(f"{col}=?")
                         vals.append(val)
                     if price is not None:
@@ -1582,8 +1593,10 @@ def cutlist():
                         _record_price(base, "", price, rs_pcb, order_id,
                                       order["order_no"], order["party"],
                                       _today_ist().isoformat(), _model_thickness(base))
+                    _qtxt = f"Qty set to {result['total_pcs']} pcs" if (result["total_pcs"] or 0) > 0 \
+                        else f"Qty purani rakhi ({order['qty'] or 0} pcs) \u2014 cut list me sheets 0 thi"
                     flash(f"Layout applied to {order['order_no']} ({order['party']}). "
-                          f"Qty set to {result['total_pcs']} pcs — Job Card bhi update ho gaya "
+                          f"{_qtxt} \u2014 Job Card update ho gaya "
                           f"(sheet, panels/sheet, qty panel, pcs/panel, price).", "success")
                 else:
                     flash("Select a valid job order.", "error")
@@ -3993,6 +4006,20 @@ def jobcard_new():
     inv_items = db.query("SELECT * FROM inventory ORDER BY CASE WHEN stock<=min_stock THEN 0 ELSE 1 END, category, name")
     thicknesses = [r["thickness"] for r in db.query(
         "SELECT DISTINCT thickness FROM thickness_rates WHERE thickness!='' ORDER BY thickness")]
+    # v2.71 EDIT MODE: /jobcard/new?edit=ID \u2014 wahi ADVANCE page purane order ke data ke saath
+    edit_id = 0
+    edit_order = edit_jc = None
+    edit_model_id = 0
+    _eid = request.args.get("edit")
+    if _eid and _eid.isdigit():
+        edit_order = db.query("SELECT * FROM orders WHERE id=?", (int(_eid),), one=True)
+        if edit_order:
+            edit_jc = db.query("SELECT * FROM jobcard WHERE order_id=?", (int(_eid),), one=True)
+            if edit_jc:
+                edit_id = int(_eid)
+                if edit_jc["party_model"]:
+                    _em = db.query("SELECT id FROM product_models WHERE name=?", (edit_jc["party_model"],), one=True)
+                    edit_model_id = _em["id"] if _em else 0
     if request.method == "POST":
         f = request.form
         party = f.get("party", "").strip()
@@ -4025,11 +4052,42 @@ def jobcard_new():
             float(pmodel["sheet_w"] or 0) if pmodel else 0)
         kfx = float(pmodel["kerf_x"] or 0) if pmodel else 0
         kfy = float(pmodel["kerf_y"] or 0) if pmodel else 0
-        x_qty = (math.floor((sheet_len + kfx) / (px0 + kfx))
-                 if px0 > 0 and sheet_len > 0 else (int(pmodel["x_qty"] or 0) if pmodel else 0))
-        y_qty = (math.floor((sheet_w + kfy) / (py0 + kfy))
-                 if py0 > 0 and sheet_w > 0 else (int(pmodel["y_qty"] or 0) if pmodel else 0))
-        panels_per_sheet = (x_qty * y_qty) or (int(pmodel["panels_sheet"] or 0) if pmodel else 0)
+        # v2.71 BEST LAYOUT (cutlist jaisa): NORMAL vs ROTATED vs MIXED rows \u2014
+        # jis se saved panels/sheet = wizard screen wala number (24 vs 26 mismatch khatam)
+        def _fl_div(a, b):
+            return int(math.floor(a / b)) if b > 0 else 0
+        nx_ = _fl_div(sheet_len + kfx, px0 + kfx) if px0 > 0 else 0
+        ny_ = _fl_div(sheet_w + kfy, py0 + kfy) if py0 > 0 else 0
+        normal_ = nx_ * ny_
+        rx_ = _fl_div(sheet_w + kfx, py0 + kfx) if py0 > 0 else 0
+        ry_ = _fl_div(sheet_len + kfy, px0 + kfy) if px0 > 0 else 0
+        rotated_ = rx_ * ry_
+        perN_, perR_ = nx_, rx_
+        hN_, hR_ = py0 + kfy, px0 + kfy
+        maxN_ = _fl_div(sheet_w + kfy, hN_)
+        maxM_ = _fl_div(sheet_len + kfx, hR_)
+        mixed_ = mN_ = mM_ = 0
+        for _n in range(maxN_ + 1):
+            for _m in range(maxM_ + 1):
+                if _n == 0 and _m == 0:
+                    continue
+                _hh = _n * hN_ + _m * hR_ - kfy
+                if _hh <= sheet_w + 1e-9:
+                    _p = _n * perN_ + _m * perR_
+                    if _p > mixed_:
+                        mixed_, mN_, mM_ = _p, _n, _m
+        if mixed_ > normal_ and mixed_ > rotated_:
+            x_qty = perN_
+            y_qty = mN_ + mM_
+            panels_per_sheet = mixed_
+        elif rotated_ > normal_:
+            x_qty, y_qty = rx_, ry_
+            panels_per_sheet = rotated_
+        else:
+            x_qty, y_qty = nx_, ny_
+            panels_per_sheet = normal_
+        if not panels_per_sheet:
+            panels_per_sheet = int(pmodel["panels_sheet"] or 0) if pmodel else 0
         qty_panel = math.ceil(qty_pcs / pcs_panel) if pcs_panel and qty_pcs else 0
         sheets = math.ceil(qty_panel / panels_per_sheet) if panels_per_sheet and qty_panel else 0
         price = float(f.get("value", 0) or 0) or (float(pmodel["pcb_price"] or 0) if pmodel else 0)
@@ -4048,6 +4106,49 @@ def jobcard_new():
             board_material = ("METAL CORE PCB (META)" if any(
                 w in sheet_material.upper() for w in ("METAL", "ALUMIN", "ALU"))
                 else "FR4/CEM-1/FR1/XPC/OTHER")
+        # ---- v2.71 EDIT MODE: naya order banane ke bajaye EXISTING order + jobcard UPDATE ----
+        edit_id = 0
+        _e = None
+        if (f.get("edit_id") or "").isdigit() and int(f.get("edit_id")) > 0:
+            _e = db.query("SELECT * FROM orders WHERE id=?", (int(f["edit_id"]),), one=True)
+            if _e:
+                edit_id = _e["id"]
+        if edit_id:
+            _ej = db.query("SELECT * FROM jobcard WHERE order_id=?", (edit_id,), one=True)
+            _pri = priority if f.get("priority") else (_e["priority"] or "normal")
+            _del = delivery_date if delivery_date else (_e["delivery_date"] or "")
+            _btype = board_type if f.get("board_type") else (_e["board"] or "Single Side")
+            _bside = ("SINGLE SIDE" if "SINGLE" in _btype.upper() else
+                      ("DOUBLE SIDE" if "DOUBLE" in _btype.upper() else _btype.upper()))
+            _smat = sheet_material if sheet_material else ((_ej["sheet_material"] if _ej else "") or "")
+            _thk = thickness if thickness else ((_ej["sheet_thickness"] if _ej else "") or (pmodel["sheet_thickness"] or ""))
+            _instr = instructions if instructions else ((_ej["instructions"] if _ej else "") or "")
+            _bmat = ("METAL CORE PCB (META)" if any(w in _smat.upper() for w in ("METAL", "ALUMIN", "ALU"))
+                     else ("FR4/CEM-1/FR1/XPC/OTHER" if _smat else (_ej["board_material"] if _ej else "")))
+            vgr = ""
+            if (pmodel["pcb_len"] or 0) > 0 and (pmodel["pcb_w"] or 0) > 0:
+                vgr = f"{float(pmodel['pcb_len']):g}\u00d7{float(pmodel['pcb_w']):g}"
+            db.execute("UPDATE orders SET party=?, board=?, product=?, qty=?, value=?, priority=?, "
+                       "delivery_date=?, qty_panel=?, pcs_panel=? WHERE id=?",
+                       (party, _btype, product_str, qty_pcs, round(price * qty_pcs, 2), _pri, _del,
+                        qty_panel, pcs_panel, edit_id))
+            db.execute("INSERT OR IGNORE INTO jobcard (order_id) VALUES (?)", (edit_id,))
+            db.execute(
+                "UPDATE jobcard SET party_model=?, model=?, price=?, rs_pcb=?, total_qty=?, "
+                "actual_pcb_x=?, actual_pcb_y=?, x_size=?, y_size=?, x_qty=?, y_qty=?, "
+                "cnc_margin_x=?, cnc_margin_y=?, pcb_gap=?, panel_x=?, panel_y=?, panels_per_sheet=?, "
+                "sheets=?, pcs_panel=?, qty_panel=?, sheet_len=?, sheet_w=?, board_type=?, board_side=?, "
+                "board_material=?, sheet_material=?, sheet_thickness=?, instructions=?, v_grooving=?, "
+                "exp_delivery=? WHERE order_id=?",
+                (party_model, model_code, price, rs_pcb, qty_pcs,
+                 pmodel["pcb_len"] or 0, pmodel["pcb_w"] or 0, px0, py0, x_qty, y_qty,
+                 pmodel["cnc_margin_x"] or 0, pmodel["cnc_margin_y"] or 0, _fl(f.get("pcb_gap")),
+                 px0, py0, panels_per_sheet, sheets, pcs_panel, qty_panel, sheet_len, sheet_w,
+                 _btype, _bside, _bmat, _smat, _thk, _instr, vgr, _del, edit_id))
+            flash(f"Job card {_e['order_no']} SAVE ho gaya (ADVANCE JOB CARD se edit) \u2014 "
+                  f"qty {qty_pcs} pcs, {panels_per_sheet} panels/sheet.", "success")
+            return redirect_with_token(url_for("jobcard", order_id=edit_id))
+
         count = db.query("SELECT COUNT(*) c FROM orders", one=True)["c"]
         new_id = db.execute(
             "INSERT INTO orders (order_no, party, board, product, qty, value, current_process, "
@@ -4090,7 +4191,9 @@ def jobcard_new():
         return redirect_with_token(url_for("jobcard", order_id=new_id))
     return render_template("jobcard_new.html", active="orders", parties=parties, models=models,
                            inv_items=inv_items, thicknesses=thicknesses,
-                           today=_today_ist().isoformat())
+                           today=_today_ist().isoformat(),
+                           edit_id=edit_id, edit_order=edit_order, edit_jc=edit_jc,
+                           edit_model_id=edit_model_id)
 
 
 @app.route("/jobcard/<int:order_id>")
