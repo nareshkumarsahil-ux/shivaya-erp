@@ -4362,9 +4362,12 @@ def _jc_autofill(order_id):
     if _z("qty_panel") and (o["qty_panel"] or 0) > 0:
         sets.append("qty_panel=?")
         vals.append(o["qty_panel"])
-    if _z("sheets") and (jc["panels_per_sheet"] or 0) > 0 and (jc["qty_panel"] or 0) > 0:
-        sets.append("sheets=?")
-        vals.append(math.ceil(jc["qty_panel"] / jc["panels_per_sheet"]))
+    # v2.80b: sheets STALE bhi ho to re-sync (qty badalne par 58 vs 116 jaisa mismatch nahi rahega)
+    if (jc["panels_per_sheet"] or 0) > 0 and (jc["qty_panel"] or 0) > 0:
+        _want_sheets80 = math.ceil(jc["qty_panel"] / jc["panels_per_sheet"])
+        if (jc["sheets"] or 0) != _want_sheets80:
+            sets.append("sheets=?")
+            vals.append(_want_sheets80)
     if not (jc["board_side"] or "").strip() and (o["board"] or "").strip():
         sets.append("board_side=?")
         vals.append(o["board"].strip().upper())
@@ -4465,6 +4468,34 @@ def jobcard(order_id):
         return ('<svg viewBox="0 0 292 176" class="' + cls + '" role="img">' + "".join(parts)
                 + '<text x="146" y="172" text-anchor="middle" class="vizLbl">' + lbl + '</text></svg>')
 
+    # v2.80 \u2014 MIXED layout breakdown: saved sizing se best-layout recompute karo
+    # (cutlist jaisa hi engine) \u2014 mixed nikla to X/Y/PCB-in-sheet cells me split dikhega
+    mix79 = None
+    try:
+        if (jc["actual_pcb_x"] or 0) > 0 and (jc["actual_pcb_y"] or 0) > 0 \
+                and (jc["sheet_len"] or 0) > 0 and (jc["sheet_w"] or 0) > 0:
+            # PANEL ko hi unit maano: pcb_len/w = PANEL size (x_size/cutting), grid 1x1.
+            # (x_qty/y_qty = sheet me panels across/rows hote hai, PCB-grid nahi)
+            _px80 = (jc["x_size"] or jc["panel_x"] or 0)
+            _py80 = (jc["y_size"] or jc["panel_y"] or 0)
+            _f80 = {"use": "1", "pcb_len": str(_px80), "pcb_w": str(_py80),
+                    "pcbs_x": "1", "pcbs_y": "1",
+                    "gap_x": "0", "gap_y": "0",
+                    "border_l": "0", "border_r": "0", "border_t": "0", "border_b": "0",
+                    "gang_x": "1", "gang_y": "1",
+                    "sheet_len": str(jc["sheet_len"]), "sheet_w": str(jc["sheet_w"]),
+                    "kerf_x": str(jc.get("kerf_x") or 0), "kerf_y": str(jc.get("kerf_y") or 0),
+                    "sheets": "1", "panel_len": "0", "panel_w": "0"}
+            _r80 = compute_layout(_f80)
+            if _r80 and _r80.get("best") == "mixed" and (_r80.get("mixed_n") or 0) > 0 \
+                    and (_r80.get("mixed_m") or 0) > 0:
+                mix79 = {"xn": _r80["mixed_n"], "xp": _r80["per_normal"],
+                         "yn": _r80["mixed_m"], "yp": _r80["per_rot"],
+                         "xt": _r80["mixed_n"] * (_r80["per_normal"] or 0),
+                         "yt": _r80["mixed_m"] * (_r80["per_rot"] or 0),
+                         "total": _r80["panels_per_sheet"] or 0}
+    except Exception:
+        mix79 = None
     viz_panel_svg = viz_sheet_svg = ""
     _v_xq, _v_yq = int(jc["x_qty"] or 0), int(jc["y_qty"] or 0)
     _v_pcs = jc["pcs_panel"] or (_v_xq * _v_yq)
@@ -4489,7 +4520,7 @@ def jobcard(order_id):
                            inv_items=inv_items, inv_names=inv_names,
                            bom_rows=bom_rows, bmodel=bmodel, last_price=last_price, lp_map=lp_map,
                            issues=issues, issue_total=issue_total, worker_names=worker_names,
-                           viz_panel_svg=viz_panel_svg, viz_sheet_svg=viz_sheet_svg,
+                           viz_panel_svg=viz_panel_svg, viz_sheet_svg=viz_sheet_svg, mix79=mix79,
                            pm_extra=(jc["party_model"] not in pm_values and jc["party_model"] != ""),
                            md_extra=(jc["model"] not in md_values and jc["model"] != ""),
                            party_extra=(order["party"] not in party_names and bool(order["party"])))
