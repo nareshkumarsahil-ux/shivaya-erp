@@ -1223,11 +1223,11 @@ def svg_sheet_layout_preview(r):
     """SHEET LAYOUT PREVIEW — poori sheet me cutting panels fit, NUMBERED + DIMENSION labels:
     har panel par width (top) aur height (left rotated), sheet length neeche, width right,
     qty ×N — cutting optimization software jaisa."""
-    W, H, pad = 470, 412, 30
+    W, H, pad = 500, 448, 30
     sl, sw = r["sheet_len"], r["sheet_w"]
-    scale = min((W - pad - 46) / sl, (H - pad - 44) / sw)
+    scale = min((W - pad - 76) / sl, (H - pad - 64) / sw)
     S, T = sl * scale, sw * scale
-    x0, y0 = pad + (W - pad - 46 - S) / 2, pad + (H - pad - 44 - T) / 2
+    x0, y0 = pad + (W - pad - 76 - S) / 2, pad + (H - pad - 64 - T) / 2
     gx, gy = r["gang_x"], r["gang_y"]
     kx, ky = r["kerf_x"] * scale, r["kerf_y"] * scale
     s = [f'<svg viewBox="0 0 {W} {H}" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;display:block">']
@@ -1313,11 +1313,11 @@ def svg_sheet_layout_preview(r):
     _svg_sheet_dims(s, x0, y0, S, T, sl, sw, r.get("sheets") or 0)
     # v2.62 \u2014 USE + WASTE dim labels (bottom = length axis, right = width axis)
     if used_x > 0 and waste_x > 0.05:
-        s.append(f'<text x="{x0 + S / 2:.1f}" y="400" text-anchor="middle" font-size="9.5" font-weight="700" fill="#475569" font-family="Segoe UI,Arial">USE {used_x:.2f} + <tspan fill="#dc2626">WASTE {waste_x:.2f}</tspan> = {sl:.2f} mm</text>')
+        s.append(f'<text x="{x0 + S / 2:.1f}" y="{y0 + T + 40:.1f}" text-anchor="middle" font-size="9.5" font-weight="700" fill="#475569" font-family="Segoe UI,Arial">USE {used_x:.2f} + <tspan fill="#dc2626">WASTE {waste_x:.2f}</tspan> = {sl:.2f} mm</text>')
     if used_y > 0 and waste_y > 0.05 and T > 120:
-        _rx, _ry = x0 + S + 33, y0 + T / 2
+        _rx, _ry = x0 + S + 43, y0 + T / 2
         s.append(f'<text x="{_rx:.1f}" y="{_ry:.1f}" transform="rotate(90 {_rx:.1f} {_ry:.1f})" text-anchor="middle" font-size="9" font-weight="700" fill="#475569" font-family="Segoe UI,Arial">USE {used_y:.2f} \u00b7 <tspan fill="#dc2626">WASTE {waste_y:.2f}</tspan></text>')
-    s.append(f'<text x="{W/2:.0f}" y="{H - 6:.0f}" text-anchor="middle" font-size="11.5" fill="#475569" font-family="Segoe UI,Arial">{cap}</text>')
+    s.append(f'<text x="{W/2:.0f}" y="{H - 6:.0f}" text-anchor="middle" font-size="11" fill="#475569" font-family="Segoe UI,Arial">{cap}</text>')
     s.append('</svg>')
     return "".join(s)
 
