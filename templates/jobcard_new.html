@@ -72,6 +72,20 @@
             <input type="date" name="delivery_date" id="jcDelivery" value="">
           </div>
         </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:2px">
+          <div class="field" style="flex:1;min-width:140px">
+            <label>JOB CARD DATE</label>
+            <input type="date" name="odate" value="{% if edit_id %}{{ (edit_jc.odate or '')[:10] }}{% else %}{{ today }}{% endif %}">
+          </div>
+          <div class="field" style="flex:1;min-width:150px">
+            <label>ORDER VIA</label>
+            <input name="order_via" placeholder="WhatsApp / Phone / Email" value="{% if edit_id %}{{ edit_jc.order_via or '' }}{% endif %}">
+          </div>
+          <div class="field" style="flex:1;min-width:150px">
+            <label>CREATED BY</label>
+            <input name="created_by" placeholder="Naam" value="{% if edit_id %}{{ edit_jc.created_by or '' }}{% endif %}">
+          </div>
+        </div>
       </div>
     </div>
 
@@ -154,6 +168,14 @@
             <label>PCB GAP (MM)</label>
             <input type="number" step="0.1" name="pcb_gap" id="jcGap" placeholder="0 = no gap" title="PCB ke beech gap — 0 rakho to sab chipke">
           </div>
+          <div class="field" style="flex:1;min-width:120px">
+            <label>CNC MARGIN X (MM)</label>
+            <input type="number" step="0.1" name="cnc_margin_x" placeholder="0" value="{% if edit_id %}{{ edit_jc.cnc_margin_x or '' }}{% endif %}">
+          </div>
+          <div class="field" style="flex:1;min-width:120px">
+            <label>CNC MARGIN Y (MM)</label>
+            <input type="number" step="0.1" name="cnc_margin_y" placeholder="0" value="{% if edit_id %}{{ edit_jc.cnc_margin_y or '' }}{% endif %}">
+          </div>
         </div>
         <div id="caCuts" style="margin-top:8px;padding:8px 12px;border:1.5px dashed #94a3b8;border-radius:8px;background:#f8fafc;font-size:13px;font-weight:700;color:#334155"></div>
         <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:10px;align-items:flex-start">
@@ -212,6 +234,25 @@
               {% endfor %}
             </select>
             <div id="matStock" class="muted small" style="margin-top:4px"></div>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:2px">
+          <div class="field" style="flex:1;min-width:140px">
+            <label>COPPER</label>
+            <input name="copper_finish" list="copperList79" placeholder="e.g. OSP / HASL" value="{% if edit_id %}{{ edit_jc.copper_finish or '' }}{% endif %}">
+            <datalist id="copperList79"><option value="OSP"><option value="HASL"><option value="IMMERSION GOLD"><option value="CARBON"></datalist>
+          </div>
+          <div class="field" style="flex:1;min-width:140px">
+            <label>LEGEND PRINTING</label>
+            <input name="legend_printing" placeholder="e.g. WHITE / BLACK" value="{% if edit_id %}{{ edit_jc.legend_printing or '' }}{% endif %}">
+          </div>
+          <div class="field" style="flex:1;min-width:140px">
+            <label>MASKING</label>
+            <input name="masking" placeholder="e.g. GREEN / BLUE / RED" value="{% if edit_id %}{{ edit_jc.masking or '' }}{% endif %}">
+          </div>
+          <div class="field" style="flex:1;min-width:140px">
+            <label>CHECKED BY</label>
+            <input name="checked_by" placeholder="Naam" value="{% if edit_id %}{{ edit_jc.checked_by or '' }}{% endif %}">
           </div>
         </div>
       </div>
