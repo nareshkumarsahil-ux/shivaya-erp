@@ -5,6 +5,40 @@
 
 <form method="post" action="/jobcard/new" id="jcForm">
   <input type="hidden" name="edit_id" value="{{ edit_id or '' }}">
+{% if edit_id %}
+<div style="border:1.5px solid #cbd5e1;border-radius:12px;padding:12px 14px;margin-bottom:14px;background:#fff">
+  <div style="font-size:12.5px;font-weight:800;color:#334155;margin-bottom:8px">📁 SAVED JOB CARD {{ edit_order.order_no }} — <span style="font-weight:600;color:#64748b">ye data preview/print me jaata hai — neeche sirf jo change karna hai wo badlo, SAVE karo</span></div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px">
+        <div style="border:1px solid #e2e8f0;border-radius:8px;padding:5px 9px;background:#f8fafc"><div style="font-size:9px;color:#64748b;font-weight:700;letter-spacing:.5px">PARTY</div><div style="font-size:13.5px;font-weight:800;color:#0f172a">{{ edit_order.party|dash }}</div></div>
+        <div style="border:1px solid #e2e8f0;border-radius:8px;padding:5px 9px;background:#f8fafc"><div style="font-size:9px;color:#64748b;font-weight:700;letter-spacing:.5px">FINISHED PRODUCT</div><div style="font-size:13.5px;font-weight:800;color:#0f172a">{{ edit_jc.party_model|dash }}</div></div>
+        <div style="border:1px solid #e2e8f0;border-radius:8px;padding:5px 9px;background:#f8fafc"><div style="font-size:9px;color:#64748b;font-weight:700;letter-spacing:.5px">MODEL</div><div style="font-size:13.5px;font-weight:800;color:#0f172a">{{ edit_jc.model|dash }}</div></div>
+        <div style="border:1px solid #e2e8f0;border-radius:8px;padding:5px 9px;background:#f8fafc"><div style="font-size:9px;color:#64748b;font-weight:700;letter-spacing:.5px">QTY (PCS)</div><div style="font-size:13.5px;font-weight:800;color:#0f172a">{{ edit_order.qty }}</div></div>
+        <div style="border:1px solid #e2e8f0;border-radius:8px;padding:5px 9px;background:#f8fafc"><div style="font-size:9px;color:#64748b;font-weight:700;letter-spacing:.5px">QTY OF PANEL</div><div style="font-size:13.5px;font-weight:800;color:#0f172a">{{ edit_jc.qty_panel or '—' }}</div></div>
+        <div style="border:1px solid #e2e8f0;border-radius:8px;padding:5px 9px;background:#f8fafc"><div style="font-size:9px;color:#64748b;font-weight:700;letter-spacing:.5px">PCS / PANEL</div><div style="font-size:13.5px;font-weight:800;color:#0f172a">{{ edit_jc.pcs_panel or '—' }}</div></div>
+        <div style="border:1px solid #e2e8f0;border-radius:8px;padding:5px 9px;background:#f8fafc"><div style="font-size:9px;color:#64748b;font-weight:700;letter-spacing:.5px">PANELS / SHEET</div><div style="font-size:13.5px;font-weight:800;color:#0f172a">{{ edit_jc.panels_per_sheet or '—' }}</div></div>
+        <div style="border:1px solid #e2e8f0;border-radius:8px;padding:5px 9px;background:#f8fafc"><div style="font-size:9px;color:#64748b;font-weight:700;letter-spacing:.5px">NO. OF SHEETS</div><div style="font-size:13.5px;font-weight:800;color:#0f172a">{{ edit_jc.sheets or '—' }}</div></div>
+        <div style="border:1px solid #e2e8f0;border-radius:8px;padding:5px 9px;background:#f8fafc"><div style="font-size:9px;color:#64748b;font-weight:700;letter-spacing:.5px">SHEET SIZE</div><div style="font-size:13.5px;font-weight:800;color:#0f172a">{% if edit_jc.sheet_len %}{{ edit_jc.sheet_len|gfmt }} × {{ edit_jc.sheet_w|gfmt }} mm{% else %}—{% endif %}</div></div>
+        <div style="border:1px solid #e2e8f0;border-radius:8px;padding:5px 9px;background:#f8fafc"><div style="font-size:9px;color:#64748b;font-weight:700;letter-spacing:.5px">PCB SIZE</div><div style="font-size:13.5px;font-weight:800;color:#0f172a">{% if edit_jc.actual_pcb_x %}{{ edit_jc.actual_pcb_x|gfmt }} × {{ edit_jc.actual_pcb_y|gfmt }} mm{% else %}—{% endif %}</div></div>
+        <div style="border:1px solid #e2e8f0;border-radius:8px;padding:5px 9px;background:#f8fafc"><div style="font-size:9px;color:#64748b;font-weight:700;letter-spacing:.5px">PANEL SIZE</div><div style="font-size:13.5px;font-weight:800;color:#0f172a">{% if edit_jc.x_size or edit_jc.panel_x %}{{ (edit_jc.x_size or edit_jc.panel_x)|gfmt }} × {{ (edit_jc.y_size or edit_jc.panel_y)|gfmt }} mm{% else %}—{% endif %}</div></div>
+        <div style="border:1px solid #e2e8f0;border-radius:8px;padding:5px 9px;background:#f8fafc"><div style="font-size:9px;color:#64748b;font-weight:700;letter-spacing:.5px">X CUTTING</div><div style="font-size:13.5px;font-weight:800;color:#0f172a">{% if edit_jc.x_size %}L-{{ edit_jc.x_size|gfmt }}({{ edit_jc.sheet_len|gfmt }})×{{ edit_jc.x_qty }}{% else %}—{% endif %}</div></div>
+        <div style="border:1px solid #e2e8f0;border-radius:8px;padding:5px 9px;background:#f8fafc"><div style="font-size:9px;color:#64748b;font-weight:700;letter-spacing:.5px">Y CUTTING</div><div style="font-size:13.5px;font-weight:800;color:#0f172a">{% if edit_jc.y_size %}W-{{ edit_jc.y_size|gfmt }}({{ edit_jc.sheet_w|gfmt }})×{{ edit_jc.y_qty }}{% else %}—{% endif %}</div></div>
+        <div style="border:1px solid #e2e8f0;border-radius:8px;padding:5px 9px;background:#f8fafc"><div style="font-size:9px;color:#64748b;font-weight:700;letter-spacing:.5px">CNC MARGIN</div><div style="font-size:13.5px;font-weight:800;color:#0f172a">{{ (edit_jc.cnc_margin_x|gfmt) }}×{{ (edit_jc.cnc_margin_y|gfmt) }} mm</div></div>
+        <div style="border:1px solid #e2e8f0;border-radius:8px;padding:5px 9px;background:#f8fafc"><div style="font-size:9px;color:#64748b;font-weight:700;letter-spacing:.5px">MATERIAL</div><div style="font-size:13.5px;font-weight:800;color:#0f172a">{% if edit_jc.sheet_material %}{{ edit_jc.sheet_material }}{% if edit_jc.sheet_thickness %} ({{ edit_jc.sheet_thickness }}){% endif %}{% else %}—{% endif %}</div></div>
+        <div style="border:1px solid #e2e8f0;border-radius:8px;padding:5px 9px;background:#f8fafc"><div style="font-size:9px;color:#64748b;font-weight:700;letter-spacing:.5px">BOARD SIDE</div><div style="font-size:13.5px;font-weight:800;color:#0f172a">{% if edit_jc.board_side %}{{ edit_jc.board_side }}{% elif 'Single' in (edit_order.board or '')|upper %}SINGLE SIDE{% else %}—{% endif %}</div></div>
+        <div style="border:1px solid #e2e8f0;border-radius:8px;padding:5px 9px;background:#f8fafc"><div style="font-size:9px;color:#64748b;font-weight:700;letter-spacing:.5px">PRICE</div><div style="font-size:13.5px;font-weight:800;color:#0f172a">{% if edit_jc.price %}₹{{ edit_jc.price|inr0 }}{% else %}—{% endif %}</div></div>
+        <div style="border:1px solid #e2e8f0;border-radius:8px;padding:5px 9px;background:#f8fafc"><div style="font-size:9px;color:#64748b;font-weight:700;letter-spacing:.5px">RATE/SQ.INCH</div><div style="font-size:13.5px;font-weight:800;color:#0f172a">{% if edit_jc.rs_pcb %}{{ edit_jc.rs_pcb|gfmt }}{% else %}—{% endif %}</div></div>
+        <div style="border:1px solid #e2e8f0;border-radius:8px;padding:5px 9px;background:#f8fafc"><div style="font-size:9px;color:#64748b;font-weight:700;letter-spacing:.5px">COPPER</div><div style="font-size:13.5px;font-weight:800;color:#0f172a">{{ edit_jc.copper_finish|dash }}</div></div>
+        <div style="border:1px solid #e2e8f0;border-radius:8px;padding:5px 9px;background:#f8fafc"><div style="font-size:9px;color:#64748b;font-weight:700;letter-spacing:.5px">LEGEND</div><div style="font-size:13.5px;font-weight:800;color:#0f172a">{{ edit_jc.legend_printing|dash }}</div></div>
+        <div style="border:1px solid #e2e8f0;border-radius:8px;padding:5px 9px;background:#f8fafc"><div style="font-size:9px;color:#64748b;font-weight:700;letter-spacing:.5px">MASKING</div><div style="font-size:13.5px;font-weight:800;color:#0f172a">{{ edit_jc.masking|dash }}</div></div>
+        <div style="border:1px solid #e2e8f0;border-radius:8px;padding:5px 9px;background:#f8fafc"><div style="font-size:9px;color:#64748b;font-weight:700;letter-spacing:.5px">TYPE</div><div style="font-size:13.5px;font-weight:800;color:#0f172a">{{ edit_jc.pcb_type|dash }}</div></div>
+        <div style="border:1px solid #e2e8f0;border-radius:8px;padding:5px 9px;background:#f8fafc"><div style="font-size:9px;color:#64748b;font-weight:700;letter-spacing:.5px">ORDER VIA</div><div style="font-size:13.5px;font-weight:800;color:#0f172a">{{ edit_jc.order_via|dash }}</div></div>
+        <div style="border:1px solid #e2e8f0;border-radius:8px;padding:5px 9px;background:#f8fafc"><div style="font-size:9px;color:#64748b;font-weight:700;letter-spacing:.5px">CREATED BY</div><div style="font-size:13.5px;font-weight:800;color:#0f172a">{{ edit_jc.created_by|dash }}</div></div>
+        <div style="border:1px solid #e2e8f0;border-radius:8px;padding:5px 9px;background:#f8fafc"><div style="font-size:9px;color:#64748b;font-weight:700;letter-spacing:.5px">PRIORITY</div><div style="font-size:13.5px;font-weight:800;color:#0f172a">{{ edit_order.priority|upper }}</div></div>
+        <div style="border:1px solid #e2e8f0;border-radius:8px;padding:5px 9px;background:#f8fafc"><div style="font-size:9px;color:#64748b;font-weight:700;letter-spacing:.5px">DELIVERY</div><div style="font-size:13.5px;font-weight:800;color:#0f172a">{% if edit_jc.exp_delivery %}{{ edit_jc.exp_delivery }}{% elif edit_order.delivery_date %}{{ edit_order.delivery_date }}{% else %}—{% endif %}</div></div>
+  </div>
+</div>
+{% endif %}
+
 <div class="grid2">
   <div>
     <!-- ============ STEP 1 : BASIC ============ -->
@@ -166,7 +200,7 @@
 
     <!-- ============ STEP 4 : MATERIAL ============ -->
     <div class="panel">
-      <div class="panel-head"><h3><span class="badge b-blue">4</span> SHEET MATERIAL + THICKNESS</h3></div>
+      <div class="panel-head"><h3><span class="badge b-blue">4</span> SHEET MATERIAL</h3></div>
       <div class="panel-body">
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <div class="field" style="flex:1;min-width:220px">
@@ -178,13 +212,6 @@
               {% endfor %}
             </select>
             <div id="matStock" class="muted small" style="margin-top:4px"></div>
-          </div>
-          <div class="field" style="flex:1;min-width:160px">
-            <label>THICKNESS</label>
-            <select name="sheet_thickness" id="jcThick">
-              <option value="">— Select —</option>
-              {% for t in thicknesses %}<option value="{{ t }}">{{ t }}</option>{% endfor %}
-            </select>
           </div>
         </div>
       </div>
@@ -215,7 +242,6 @@
           <tr><td class="muted">SHEETS</td><td class="t-right"><b id="smSheets">—</b></td></tr>
           <tr><td class="muted">TOTAL PCB</td><td class="t-right"><b id="smTotalPcb" style="color:#1d4ed8">—</b></td></tr>
           <tr><td class="muted">MATERIAL</td><td class="t-right"><b id="smMat">—</b></td></tr>
-          <tr><td class="muted">THICKNESS</td><td class="t-right"><b id="smThick">—</b></td></tr>
         </table>
         {% if edit_id %}
         <button class="btn" type="submit" style="width:100%;margin-top:12px;font-size:16px;font-weight:800;padding:12px;background:#2563eb;color:#fff">💾 SAVE JOB CARD ({{ edit_order.order_no }})</button>
@@ -283,7 +309,7 @@ document.getElementById('prodSel').addEventListener('change', function(){
   document.getElementById('pdSide').innerHTML = sideTxt;
   /* thickness dropdown → model wali select karo (missing ho to add) */
   var tsel = document.getElementById('jcThick');
-  if (selM.thick) {
+  if (selM.thick && tsel) {
     var found = false;
     for (var i = 0; i < tsel.options.length; i++) if (tsel.options[i].value === selM.thick) { found = true; break; }
     if (!found) { var no = document.createElement('option'); no.value = selM.thick; no.textContent = selM.thick; tsel.appendChild(no); }
@@ -562,12 +588,10 @@ function syncSummary(){
     ? (sh * C.pps * p) + ' PCS' : '—';
   var m = document.getElementById('jcMat');
   document.getElementById('smMat').textContent = m.value || '—';
-  document.getElementById('smThick').textContent = document.getElementById('jcThick').value || '—';
 }
 ['jcParty','jcBoardType','jcPriority','jcDelivery'].forEach(function(id){
   document.getElementById(id).addEventListener('input', syncSummary);
   document.getElementById(id).addEventListener('change', syncSummary);
 });
-document.getElementById('jcThick').addEventListener('change', syncSummary);
 </script>
 {% endblock %}
