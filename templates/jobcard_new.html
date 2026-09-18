@@ -312,9 +312,9 @@ document.getElementById('prodSel').addEventListener('change', function(){
       var _pd = document.getElementById('prodDetails');
       if (_pd) _pd.style.display = 'block';
       var _dp = document.getElementById('pdPanel');
-      if (_dp && {{ (edit_jc.panel_x or 0)|round(2) }} > 0) _dp.textContent = {{ ((edit_jc.panel_x or 0)|gfmt) ~ ' \u00d7 ' ~ ((edit_jc.panel_y or 0)|gfmt) ~ ' mm'|tojson }};
+      if (_dp && {{ (edit_jc.panel_x or 0)|round(2) }} > 0) _dp.textContent = {{ (((edit_jc.panel_x or 0)|gfmt) ~ ' × ' ~ ((edit_jc.panel_y or 0)|gfmt) ~ ' mm')|tojson }};
       var _dpcb = document.getElementById('pdPcb');
-      if (_dpcb && {{ (edit_jc.actual_pcb_x or 0)|round(2) }} > 0) _dpcb.textContent = {{ ((edit_jc.actual_pcb_x or 0)|gfmt) ~ ' \u00d7 ' ~ ((edit_jc.actual_pcb_y or 0)|gfmt) ~ ' mm'|tojson }};
+      if (_dpcb && {{ (edit_jc.actual_pcb_x or 0)|round(2) }} > 0) _dpcb.textContent = {{ (((edit_jc.actual_pcb_x or 0)|gfmt) ~ ' × ' ~ ((edit_jc.actual_pcb_y or 0)|gfmt) ~ ' mm')|tojson }};
       var _dps = document.getElementById('pdPps');
       if (_dps) _dps.textContent = {{ (edit_jc.panels_per_sheet or 0)|tojson }};
       var _dpcs = document.getElementById('pdPcs');
