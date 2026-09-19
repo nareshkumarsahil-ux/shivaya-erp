@@ -639,87 +639,7 @@ function computeLive(){
   mark(om, bm, best === 'mixed');
 
   /* --- SVG previews --- */
-/* ---- v2.86 PRINT / PDF ---- sirf 3 previews (PANEL / GANG PANEL / PANEL IN SHEET) ---- */
-(function(){
-  var st = document.createElement('style');
-  st.textContent = '#prevPrintSheet{display:none}' +
-    'body.prevshow{overflow:hidden}' +
-    'body.prevshow #prevPrintSheet{display:block!important;position:fixed;top:0;left:0;right:0;bottom:0;z-index:99999;background:#fff;overflow:auto;padding:12px}' +
-    '#prevPrintSheet .pp-tools{position:sticky;top:0;background:#fff;border-bottom:2px solid #192338;padding:8px 6px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;z-index:2}' +
-    '@media print{' +
-    'body.prevprint .sidebar,body.prevprint .topbar,body.prevprint .content>*:not(#prevPrintSheet){display:none!important}' +
-    'body.prevprint #prevPrintSheet{display:block!important}' +
-    'body.prevshow .sidebar,body.prevshow .topbar,body.prevshow .content>*:not(#prevPrintSheet){display:none!important}' +
-    'body.prevshow #prevPrintSheet{display:block!important;position:static;padding:0}' +
-    '#prevPrintSheet .pp-tools{display:none!important}' +
-    '#prevPrintSheet .pp-block{page-break-after:always;padding:10px 0}' +
-    '#prevPrintSheet .pp-h{font:800 15px Segoe UI,Arial;margin-bottom:8px;color:#192338}}';
-  document.head.appendChild(st);
-})();
-/* ---- v2.88 PRINT / PDF — har preview ka apna button + SAB (3 pages).
-   Robust tarika: naya clean window (koi CSS conflict nahi, blank print nahi).
-   Popup block ho to purana in-page print fallback. ---- */
-function _collectSvg(id){
-  var el = document.getElementById(id);
-  return (el && el.querySelector('svg')) ? el.innerHTML : '';
-}
-function _showOverlay(body){
-  var sh = document.getElementById('prevPrintSheet');
-  if (!sh) { alert('Print sheet nahi mila \u2014 page reload karke try karo.'); return; }
-  sh.innerHTML = '<div class="pp-tools">' +
-    '<button type="button" onclick="_doPrint()" style="background:#192338;color:#fff;border:0;padding:8px 16px;border-radius:8px;font-weight:800;cursor:pointer;font-size:13px">🖨️ PRINT / SAVE PDF</button>' +
-    '<button type="button" onclick="_closePrev()" style="background:#e2e8f0;color:#192338;border:0;padding:8px 16px;border-radius:8px;font-weight:800;cursor:pointer;font-size:13px">\u2715 BAND KARO</button>' +
-    '<span style="color:#64748b;font-size:11.5px;font-weight:600">Print dialog na dikhe to Ctrl+P (Mac: Cmd+P) dabao \u2014 print/PDF me sirf previews hi aayenge</span></div>' +
-    '<div style="text-align:center;font:800 16px Segoe UI,Arial;color:#192338;border-bottom:3px solid #192338;padding-bottom:8px;margin:10px 0 12px">SHIVAYA CIRCUIT PVT. LTD. \u2014 CUT LIST PREVIEW</div>' + body;
-  document.body.classList.add('prevshow');
-}
-function _doPrint(){
-  document.body.classList.add('prevprint');
-  try { window.print(); } catch(e) {}
-}
-function _closePrev(){
-  document.body.classList.remove('prevshow');
-  document.body.classList.remove('prevprint');
-  var sh = document.getElementById('prevPrintSheet');
-  if (sh) sh.innerHTML = '';
-}
-function _printDocs(list){
-  var body = '';
-  for (var i = 0; i < list.length; i++){
-    if (!list[i][0]) continue;
-    body += '<div class="pp-block"><div class="pp-h">' + (list.length > 1 ? (i+1) + '. ' : '') + list[i][1] + '</div>' + list[i][0] + '</div>';
-  }
-  if (!body) { alert('Pehle values bharke CALCULATE dabao \u2014 previews banenge tab print honge.'); return; }
-  var w = null;
-  try { w = window.open('', '_blank'); } catch(e) { w = null; }
-  if (w && w.document) {
-    var d = w.document;
-    d.open();
-    d.write('<html><head><title>SHIVAYA CIRCUIT PVT. LTD. \u2014 CUT LIST PREVIEW</title>' +
-      '<style>@page{size:A4 landscape;margin:8mm}' +
-      'body{font-family:"Segoe UI",Arial,sans-serif;margin:0;padding:10px;color:#192338;background:#fff}' +
-      '.hd{text-align:center;font:800 15px "Segoe UI",Arial;border-bottom:3px solid #192338;padding-bottom:6px;margin-bottom:10px}' +
-      '.pp-block{page-break-after:' + (list.length > 1 ? 'always' : 'auto') + ';padding:6px 0}' +
-      '.pp-h{font:800 14px "Segoe UI",Arial;margin-bottom:6px}' +
-      'svg{max-width:100%;height:auto}</style></head><body>' +
-      '<div class="hd">SHIVAYA CIRCUIT PVT. LTD. \u2014 CUT LIST PREVIEW</div>' + body +
-      '</body></html>');
-    d.close();
-    try {
-      setTimeout(function(){ try { w.focus(); w.print(); } catch(e) {} }, 300);
-    } catch(e) {}
-  } else {
-    _showOverlay(body);   /* popup block ho to overlay — Ctrl+P/PRINT button wahi print karta hai */
-  }
-}
-function printPreviews(){
-  _printDocs([[_collectSvg('svgPanel'), 'PANEL PREVIEW \u2014 1 PANEL + INDIVIDUAL PCB'],
-              [_collectSvg('svgGangPanel'), 'GANG PANEL PREVIEW (MULTIPLIER)'],
-              [_collectSvg('svgSheetLayout'), 'PANEL IN SHEET \u2014 CUTTING LAYOUT']]);
-}
-function printPanelPreview(){ _printDocs([[_collectSvg('svgPanel'), 'PANEL PREVIEW \u2014 1 PANEL + INDIVIDUAL PCB']]); }
-function printGangPreview(){ _printDocs([[_collectSvg('svgGangPanel'), 'GANG PANEL PREVIEW (MULTIPLIER)']]); }
-function printSheetPreview(){ _printDocs([[_collectSvg('svgSheetLayout'), 'PANEL IN SHEET \u2014 CUTTING LAYOUT']]); }
+
   document.getElementById('svgPanel').innerHTML = svgPanel(pcbL, pcbW, px, py, gapXs, gapYs, bl, br, bt, bb, pL, pW, pcsPanel, gx, gy, kx, ky, pgXs, pgYs);
   var sheetHead = document.getElementById('sheetPreviewHead');
   if (sheetHead) sheetHead.innerHTML = (best === 'mixed')
@@ -1103,6 +1023,99 @@ function calcClPrice(){
   });
 })();
 calcClPrice();
+
+/* ============ v2.90 PRINT / PDF \u2014 TOP-LEVEL. v2.86-89 me ye functions computeLive() ke andar fas gaye the (brace depth 1) \u2014 onclick ko global chahiye, isliye har click chupchaap fail = ASLI BUG ============ */
+/* ---- v2.86 PRINT / PDF ---- sirf 3 previews (PANEL / GANG PANEL / PANEL IN SHEET) ---- */
+(function(){
+  var st = document.createElement('style');
+  st.textContent = '#prevPrintSheet{display:none}' +
+    'body.prevshow{overflow:hidden}' +
+    'body.prevshow #prevPrintSheet{display:block!important;position:fixed;top:0;left:0;right:0;bottom:0;z-index:99999;background:#fff;overflow:auto;padding:12px}' +
+    '#prevPrintSheet .pp-tools{position:sticky;top:0;background:#fff;border-bottom:2px solid #192338;padding:8px 6px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;z-index:2}' +
+    '@media print{' +
+    'body.prevprint .sidebar,body.prevprint .topbar,body.prevprint .content>*:not(#prevPrintSheet){display:none!important}' +
+    'body.prevprint #prevPrintSheet{display:block!important}' +
+    'body.prevshow .sidebar,body.prevshow .topbar,body.prevshow .content>*:not(#prevPrintSheet){display:none!important}' +
+    'body.prevshow #prevPrintSheet{display:block!important;position:static;padding:0}' +
+    '#prevPrintSheet .pp-tools{display:none!important}' +
+    '#prevPrintSheet .pp-block{page-break-after:always;padding:10px 0}' +
+    '#prevPrintSheet .pp-h{font:800 15px Segoe UI,Arial;margin-bottom:8px;color:#192338}}';
+  document.head.appendChild(st);
+})();
+/* ---- v2.88 PRINT / PDF — har preview ka apna button + SAB (3 pages).
+   Robust tarika: naya clean window (koi CSS conflict nahi, blank print nahi).
+   Popup block ho to purana in-page print fallback. ---- */
+function _collectSvg(id){
+  var el = document.getElementById(id);
+  return (el && el.querySelector('svg')) ? el.innerHTML : '';
+}
+function _showOverlay(body){
+  var sh = document.getElementById('prevPrintSheet');
+  if (!sh) { alert('Print sheet nahi mila \u2014 page reload karke try karo.'); return; }
+  sh.innerHTML = '<div class="pp-tools">' +
+    '<button type="button" onclick="_doPrint()" style="background:#192338;color:#fff;border:0;padding:8px 16px;border-radius:8px;font-weight:800;cursor:pointer;font-size:13px">🖨️ PRINT / SAVE PDF</button>' +
+    '<button type="button" onclick="_closePrev()" style="background:#e2e8f0;color:#192338;border:0;padding:8px 16px;border-radius:8px;font-weight:800;cursor:pointer;font-size:13px">\u2715 BAND KARO</button>' +
+    '<span style="color:#64748b;font-size:11.5px;font-weight:600">Print dialog na dikhe to Ctrl+P (Mac: Cmd+P) dabao \u2014 print/PDF me sirf previews hi aayenge</span></div>' +
+    '<div style="text-align:center;font:800 16px Segoe UI,Arial;color:#192338;border-bottom:3px solid #192338;padding-bottom:8px;margin:10px 0 12px">SHIVAYA CIRCUIT PVT. LTD. \u2014 CUT LIST PREVIEW</div>' + body;
+  document.body.classList.add('prevshow');
+}
+function _doPrint(){
+  document.body.classList.add('prevprint');
+  try { window.print(); } catch(e) {}
+}
+function _closePrev(){
+  document.body.classList.remove('prevshow');
+  document.body.classList.remove('prevprint');
+  var sh = document.getElementById('prevPrintSheet');
+  if (sh) sh.innerHTML = '';
+}
+function _printDocs(list){
+  var body = '';
+  for (var i = 0; i < list.length; i++){
+    if (!list[i][0]) continue;
+    body += '<div class="pp-block"><div class="pp-h">' + (list.length > 1 ? (i+1) + '. ' : '') + list[i][1] + '</div>' + list[i][0] + '</div>';
+  }
+  if (!body) {
+    _showOverlay('<div style="text-align:center;padding:46px 10px"><div style="font:800 19px Segoe UI,Arial;color:#b91c1c">KOI PREVIEW NAHI MILA</div><div style="margin-top:10px;font:600 14px Segoe UI,Arial;color:#334155">Pehle values bharke CALCULATE dabao \u2014 previews ban jayenge, phir PRINT/PDF chal jayega.</div></div>');
+    return;
+  }
+  var popupDone = false, w = null;
+  try {
+    w = window.open('', '_blank');
+    if (!(w && w.document)) w = null;
+  } catch(e) { w = null; }
+  if (w) try {
+    var d = w.document;
+    d.open();
+    d.write('<html><head><title>SHIVAYA CIRCUIT PVT. LTD. \u2014 CUT LIST PREVIEW</title>' +
+      '<style>@page{size:A4 landscape;margin:8mm}' +
+      'body{font-family:"Segoe UI",Arial,sans-serif;margin:0;padding:10px;color:#192338;background:#fff}' +
+      '.hd{text-align:center;font:800 15px "Segoe UI",Arial;border-bottom:3px solid #192338;padding-bottom:6px;margin-bottom:10px}' +
+      '.pp-block{page-break-after:' + (list.length > 1 ? 'always' : 'auto') + ';padding:6px 0}' +
+      '.pp-h{font:800 14px "Segoe UI",Arial;margin-bottom:6px}' +
+      'svg{max-width:100%;height:auto}</style></head><body>' +
+      '<div class="hd">SHIVAYA CIRCUIT PVT. LTD. \u2014 CUT LIST PREVIEW</div>' + body +
+      '</body></html>');
+    d.close();
+    popupDone = true;
+    setTimeout(function(){ try { w.focus(); w.print(); } catch(e) {} }, 300);
+  } catch(e2) { popupDone = false; }
+  if (!popupDone) {
+    _showOverlay(body);   /* popup block/fail -> overlay: PRINT button ya Ctrl+P wahi print karta hai */
+  }
+}
+function printPreviews(){
+  _printDocs([[_collectSvg('svgPanel'), 'PANEL PREVIEW \u2014 1 PANEL + INDIVIDUAL PCB'],
+              [_collectSvg('svgGangPanel'), 'GANG PANEL PREVIEW (MULTIPLIER)'],
+              [_collectSvg('svgSheetLayout'), 'PANEL IN SHEET \u2014 CUTTING LAYOUT']]);
+}
+function printPanelPreview(){ _printDocs([[_collectSvg('svgPanel'), 'PANEL PREVIEW \u2014 1 PANEL + INDIVIDUAL PCB']]); }
+function printGangPreview(){ _printDocs([[_collectSvg('svgGangPanel'), 'GANG PANEL PREVIEW (MULTIPLIER)']]); }
+function printSheetPreview(){ _printDocs([[_collectSvg('svgSheetLayout'), 'PANEL IN SHEET \u2014 CUTTING LAYOUT']]); }
+window.printPreviews = printPreviews;
+window.printPanelPreview = printPanelPreview;
+window.printGangPreview = printGangPreview;
+window.printSheetPreview = printSheetPreview;
 </script>
 <div id="prevPrintSheet"></div>
 {% endblock %}
