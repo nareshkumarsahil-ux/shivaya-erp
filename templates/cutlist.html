@@ -1061,9 +1061,15 @@ calcClPrice();
     'body.prevshow .sidebar,body.prevshow .topbar,body.prevshow .content>*:not(#prevPrintSheet){display:none!important}' +
     'body.prevshow #prevPrintSheet{display:block!important;position:static;padding:0}' +
     '#prevPrintSheet .pp-tools{display:none!important}' +
-    '#prevPrintSheet .pp-block{page-break-after:always;padding:10px 0}' +
-    '#prevPrintSheet .pp-tag{font:800 11px Segoe UI,Arial;letter-spacing:.5px;color:#64748b;margin:2px 0 8px}' +
-    '.pp-sec .panel{max-width:1000px;margin:0 auto}}';
+    '#prevPrintSheet .pp-block{page-break-after:always;padding:0;height:168mm;overflow:hidden}' +
+    '#prevPrintSheet .pp-tag{font:800 10px Segoe UI,Arial;letter-spacing:.5px;color:#64748b;margin:0 0 4px;text-align:center}' +
+    '.pp-sec .panel{max-width:100%!important;margin:0 auto!important;padding:4px 8px}' +
+    '.pp-sec .panel-head{padding:2px 6px}' +
+    '.pp-sec .panel-head h3{font-size:13px!important;margin:0}' +
+    '.pp-sec .panel-body{padding:6px 10px!important}' +
+    '.pp-sec .gstat .glbl{font-size:8px!important}.pp-sec .gstat .gnum{font-size:12px!important}' +
+    '#prevPrintSheet .pp-sec [id^="svg"]{max-width:100%!important;margin:3px auto 0!important}' +
+    '#prevPrintSheet .pp-sec svg{width:100%!important;height:auto!important;max-height:112mm!important;display:block;margin:0 auto}}';
   document.head.appendChild(st);
 })();
 /* POORA SECTION clone: heading + stats boxes + note + legend + svg (buttons hata ke) */
@@ -1076,7 +1082,7 @@ function _collectSection(sel){
   for (var i = 0; i < btns.length; i++) btns[i].remove();
   clone.style.display = 'block';
   clone.style.margin = '0 auto';
-  clone.style.maxWidth = '1000px';
+  clone.style.maxWidth = '100%';   /* v2.94: poori chaudai \u2014 screen + print dono */
   return '<div class="pp-sec">' + clone.outerHTML + '</div>';
 }
 function _showOverlay(body){
@@ -1086,8 +1092,8 @@ function _showOverlay(body){
     '<button type="button" onclick="_doPrint()" style="background:#192338;color:#fff;border:0;padding:8px 16px;border-radius:8px;font-weight:800;cursor:pointer;font-size:13px">🖨️ PRINT / SAVE PDF</button>' +
     '<button type="button" onclick="_closePrev()" style="background:#e2e8f0;color:#192338;border:0;padding:8px 16px;border-radius:8px;font-weight:800;cursor:pointer;font-size:13px">\u2715 BAND KARO</button>' +
     '<span style="color:#64748b;font-size:11.5px;font-weight:600">Print dialog na dikhe to Ctrl+P (Mac: Cmd+P) dabao \u2014 print/PDF me sirf previews hi aayenge (A4 landscape)</span></div>' +
-    '<div style="text-align:center;font:800 16px Segoe UI,Arial;color:#192338;border-bottom:3px solid #192338;padding-bottom:8px;margin:10px 0 12px">SHIVAYA CIRCUIT PVT. LTD. \u2014 CUT LIST PREVIEW' +
-    '<div style="font:600 10.5px Segoe UI,Arial;color:#64748b;margin-top:3px">PCB SIZE: TOP = LENGTH (X) \u00b7 LEFT = WIDTH (Y) \u00b7 PRINT: A4 LANDSCAPE</div></div>' + body;
+    '<div style="text-align:center;font:800 14px Segoe UI,Arial;color:#192338;border-bottom:2px solid #192338;padding-bottom:4px;margin:0 0 8px">SHIVAYA CIRCUIT PVT. LTD. \u2014 CUT LIST PREVIEW' +
+    '<div style="font:600 9.5px Segoe UI,Arial;color:#64748b;margin-top:2px">PCB SIZE: TOP = LENGTH (X) \u00b7 LEFT = WIDTH (Y) \u00b7 PRINT: A4 LANDSCAPE \u00b7 1 PREVIEW = 1 PAGE</div></div>' + body;
   document.body.classList.add('prevshow');
 }
 function _doPrint(){
