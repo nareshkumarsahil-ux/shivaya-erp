@@ -669,8 +669,10 @@ function svgPanel(pcbL, pcbW, px, py, gapXs, gapYs, bl, br, bt, bb, pL, pW, pcsP
   }
   if ((_sumArr(gapXs) > 0 || _sumArr(gapYs) > 0) && Q > 24)
     s += '<text x="' + (x0 + P/2).toFixed(1) + '" y="' + (y0 + Q - 10).toFixed(1) + '" text-anchor="middle" font-size="10" fill="#b45309" font-family="Segoe UI,Arial">gap X:' + fmtNum(_sumArr(gapXs)) + ' / Y:' + fmtNum(_sumArr(gapYs)) + ' mm</text>';
-  var lbl = 'Panel ' + fmtNum(pL) + '\u00d7' + fmtNum(pW) + ' mm \u00b7 ' + pcsPanel + ' PCBs (' + px + '\u00d7' + py + ') = ' + pcsPanel + ' PCS';
-  s += '<text x="' + (W/2) + '" y="' + (H-6) + '" text-anchor="middle" font-size="12.5" fill="#8a8f98" font-family="Segoe UI,Arial">' + lbl + '</text>';
+  var lbl = 'PANEL: ' + fmtNum(pL) + '\u00d7' + fmtNum(pW) + ' mm \u00b7 PCB: ' + fmtNum(pcbL) + '\u00d7' + fmtNum(pcbW) + ' mm \u00b7 ' + pcsPanel + ' PCBs (' + px + '\u00d7' + py + ')';
+  s += '<text x="' + (W/2) + '" y="' + (H-19) + '" text-anchor="middle" font-size="12" fill="#8a8f98" font-family="Segoe UI,Arial">' + lbl + '</text>';
+  var lbl2 = 'BORDER: L ' + fmtNum(bl) + ' / R ' + fmtNum(br) + ' / T ' + fmtNum(bt) + ' / B ' + fmtNum(bb) + ' mm';
+  s += '<text x="' + (W/2) + '" y="' + (H-5) + '" text-anchor="middle" font-size="11" fill="#b45309" font-weight="700" font-family="Segoe UI,Arial">' + lbl2 + '</text>';
   s += '</svg>';
   return s;
 }

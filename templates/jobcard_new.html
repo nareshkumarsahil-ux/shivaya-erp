@@ -32,6 +32,7 @@
         <div style="border:1px solid #e2e8f0;border-radius:8px;padding:5px 9px;background:#f8fafc"><div style="font-size:9px;color:#64748b;font-weight:700;letter-spacing:.5px">MASKING</div><div style="font-size:13.5px;font-weight:800;color:#0f172a">{{ edit_jc.masking|dash }}</div></div>
         <div style="border:1px solid #e2e8f0;border-radius:8px;padding:5px 9px;background:#f8fafc"><div style="font-size:9px;color:#64748b;font-weight:700;letter-spacing:.5px">TYPE</div><div style="font-size:13.5px;font-weight:800;color:#0f172a">{{ edit_jc.pcb_type|dash }}</div></div>
         <div style="border:1px solid #e2e8f0;border-radius:8px;padding:5px 9px;background:#f8fafc"><div style="font-size:9px;color:#64748b;font-weight:700;letter-spacing:.5px">ORDER VIA</div><div style="font-size:13.5px;font-weight:800;color:#0f172a">{{ edit_jc.order_via|dash }}</div></div>
+        <div style="border:1px solid #e2e8f0;border-radius:8px;padding:5px 9px;background:#f8fafc"><div style="font-size:9px;color:#64748b;font-weight:700;letter-spacing:.5px">PARTY PO NO</div><div style="font-size:13.5px;font-weight:800;color:#0f172a">{{ edit_jc.po_no|dash }}</div></div>
         <div style="border:1px solid #e2e8f0;border-radius:8px;padding:5px 9px;background:#f8fafc"><div style="font-size:9px;color:#64748b;font-weight:700;letter-spacing:.5px">CREATED BY</div><div style="font-size:13.5px;font-weight:800;color:#0f172a">{{ edit_jc.created_by|dash }}</div></div>
         <div style="border:1px solid #e2e8f0;border-radius:8px;padding:5px 9px;background:#f8fafc"><div style="font-size:9px;color:#64748b;font-weight:700;letter-spacing:.5px">PRIORITY</div><div style="font-size:13.5px;font-weight:800;color:#0f172a">{{ edit_order.priority|upper }}</div></div>
         <div style="border:1px solid #e2e8f0;border-radius:8px;padding:5px 9px;background:#f8fafc"><div style="font-size:9px;color:#64748b;font-weight:700;letter-spacing:.5px">DELIVERY</div><div style="font-size:13.5px;font-weight:800;color:#0f172a">{% if edit_jc.exp_delivery %}{{ edit_jc.exp_delivery }}{% elif edit_order.delivery_date %}{{ edit_order.delivery_date }}{% else %}—{% endif %}</div></div>
@@ -80,6 +81,10 @@
           <div class="field" style="flex:1;min-width:150px">
             <label>ORDER VIA</label>
             <input name="order_via" placeholder="WhatsApp / Phone / Email" value="{% if edit_id %}{{ edit_jc.order_via or '' }}{% endif %}">
+          </div>
+          <div class="field" style="flex:1;min-width:140px">
+            <label>PARTY PO NO</label>
+            <input name="po_no" id="jc_po_no" placeholder="PO number" value="{% if edit_id %}{{ edit_jc.po_no or '' }}{% endif %}">
           </div>
           <div class="field" style="flex:1;min-width:150px">
             <label>CREATED BY</label>

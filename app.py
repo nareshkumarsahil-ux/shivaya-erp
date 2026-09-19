@@ -4178,6 +4178,7 @@ def jobcard_new():
         _mas79f = f.get("masking", "").strip()
         _cnx79f = f.get("cnc_margin_x", "").strip()
         _cny79f = f.get("cnc_margin_y", "").strip()
+        _po82 = f.get("po_no", "").strip()
         # board_material auto-map (process flow ke liye): METAL naam me -> METAL CORE
         board_material = ""
         if sheet_material:
@@ -4206,6 +4207,7 @@ def jobcard_new():
             _leg79 = _leg79f if _leg79f else ((_ej["legend_printing"] if _ej else "") or "")
             _mas79 = _mas79f if _mas79f else ((_ej["masking"] if _ej else "") or "")
             _od79 = _odate79 if _odate79 else (((_ej["odate"] or "")[:10] if _ej else "") or "")
+            _po82k = _po82 if _po82 else ((_ej["po_no"] if _ej else "") or "")
             _mmx79 = (float(_cnx79f) if _cnx79f else (((_ej["cnc_margin_x"] if _ej else 0) or 0) or (pmodel["cnc_margin_x"] or 0)))
             _mmy79 = (float(_cny79f) if _cny79f else (((_ej["cnc_margin_y"] if _ej else 0) or 0) or (pmodel["cnc_margin_y"] or 0)))
             _btype = board_type if f.get("board_type") else (_e["board"] or "Single Side")
@@ -4231,13 +4233,13 @@ def jobcard_new():
                 "sheets=?, pcs_panel=?, qty_panel=?, sheet_len=?, sheet_w=?, board_type=?, board_side=?, "
                 "board_material=?, sheet_material=?, sheet_thickness=?, instructions=?, v_grooving=?, "
                 "exp_delivery=?, odate=?, order_via=?, created_by=?, checked_by=?, copper_finish=?, "
-                "legend_printing=?, masking=? WHERE order_id=?",
+                "legend_printing=?, masking=?, po_no=? WHERE order_id=?",
                 (party_model, model_code, price, rs_pcb, qty_pcs,
                  pmodel["pcb_len"] or 0, pmodel["pcb_w"] or 0, px0, py0, x_qty, y_qty,
                  _mmx79, _mmy79, _fl(f.get("pcb_gap")),
                  px0, py0, panels_per_sheet, sheets, pcs_panel, qty_panel, sheet_len, sheet_w,
                  _btype, _bside, _bmat, _smat, _thk, _instr, vgr, _del,
-                 _od79, _ov79, _cb79, _ck79, _cop79, _leg79, _mas79, edit_id))
+                 _od79, _ov79, _cb79, _ck79, _cop79, _leg79, _mas79, _po82k, edit_id))
             flash(f"Job card {_e['order_no']} SAVE ho gaya (ADVANCE JOB CARD se edit) \u2014 "
                   f"qty {qty_pcs} pcs, {panels_per_sheet} panels/sheet.", "success")
             return redirect_with_token(url_for("jobcard", order_id=edit_id))
@@ -4263,8 +4265,8 @@ def jobcard_new():
                 "cnc_margin_x, cnc_margin_y, pcb_gap, panel_x, panel_y, panels_per_sheet, sheets, pcs_panel, "
                 "qty_panel, sheet_len, sheet_w, board_type, board_side, board_material, sheet_material, "
                 "sheet_thickness, instructions, v_grooving, order_via, created_by, checked_by, "
-                "copper_finish, legend_printing, masking) "
-                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                "copper_finish, legend_printing, masking, po_no) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (new_id, party_model, model_code, (_odate79 or _now_dt()), delivery_date, price, rs_pcb, qty_pcs,
                  pmodel["pcb_len"] or 0, pmodel["pcb_w"] or 0, px, py,
                  x_qty, y_qty,
@@ -4274,16 +4276,16 @@ def jobcard_new():
                  sheet_len, sheet_w,
                  board_type, board_side, board_material, sheet_material,
                  thickness if thickness else (pmodel["sheet_thickness"] or ""),
-                 instructions, vgr, _ov79f, _cb79f, _ck79f, _cop79f, _leg79f, _mas79f))
+                 instructions, vgr, _ov79f, _cb79f, _ck79f, _cop79f, _leg79f, _mas79f, _po82))
         else:
             db.execute(
                 "INSERT OR IGNORE INTO jobcard (order_id, party_model, odate, exp_delivery, price, "
                 "total_qty, qty_panel, pcs_panel, sheets, board_type, board_side, sheet_material, "
                 "sheet_thickness, instructions, order_via, created_by, checked_by, copper_finish, "
-                "legend_printing, masking) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                "legend_printing, masking, po_no) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (new_id, "", (_odate79 or today), delivery_date, price, qty_pcs, qty_panel, pcs_panel, sheets,
                  board_type, board_side, sheet_material, thickness, instructions,
-                 _ov79f, _cb79f, _ck79f, _cop79f, _leg79f, _mas79f))
+                 _ov79f, _cb79f, _ck79f, _cop79f, _leg79f, _mas79f, _po82))
         flash(f"Job card #{count + 1} create ho gaya ✅ — saari details MODEL se auto bhari hai, verify kar lo.", "success")
         return redirect_with_token(url_for("jobcard", order_id=new_id))
     return render_template("jobcard_new.html", active="orders", parties=parties, models=models,
@@ -4371,6 +4373,9 @@ def _jc_autofill(order_id):
     if not (jc["board_side"] or "").strip() and (o["board"] or "").strip():
         sets.append("board_side=?")
         vals.append(o["board"].strip().upper())
+    if not (jc["odate"] or "").strip() and (o["created_on"] or "")[:10]:
+        sets.append("odate=?")
+        vals.append(o["created_on"][:10])  # v2.82: DATE blank na rahe
     if not (jc["exp_delivery"] or "").strip() and (o["delivery_date"] or "").strip():
         sets.append("exp_delivery=?")
         vals.append(o["delivery_date"])

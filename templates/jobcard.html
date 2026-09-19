@@ -100,6 +100,7 @@
 
     <div class="ps-cell"><span class="ps-lbl">PARTY</span><span class="ps-val" id="pr_party">{{ order.party|dash }}</span></div>
     <div class="ps-cell"><span class="ps-lbl">ORDER VIA</span><span class="ps-val" id="pr_order_via">{{ jc.order_via|dash }}{% if jc.odate %} ({{ jc.odate }}){% endif %}</span></div>
+    <div class="ps-cell"><span class="ps-lbl">PARTY PO NO.</span><span class="ps-val" id="pr_po_no">{% if jc.po_no %}{{ jc.po_no }}{% else %}—{% endif %}</span></div>
     <div class="ps-cell"><span class="ps-lbl">DELIVERY</span><span class="ps-val" id="pr_exp_delivery">{{ jc.exp_delivery|dash }}</span></div>
     <div class="ps-cell"><span class="ps-lbl">CREATED BY</span><span class="ps-val" id="pr_created_by">{{ jc.created_by|dash }}</span></div>
 

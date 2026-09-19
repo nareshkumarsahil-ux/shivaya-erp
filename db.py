@@ -841,6 +841,9 @@ def migrate(conn):
     for _col, _dfl in (("tax_percent", "REAL DEFAULT 0"), ("note", "TEXT DEFAULT ''")):
         if bcols and _col not in bcols:
             conn.execute(f"ALTER TABLE billing ADD COLUMN {_col} {_dfl}")
+    jcols = [r[1] for r in conn.execute("PRAGMA table_info(jobcard)")]
+    if jcols and "po_no" not in jcols:
+        conn.execute("ALTER TABLE jobcard ADD COLUMN po_no TEXT DEFAULT ''")
     pcols = [r[1] for r in conn.execute("PRAGMA table_info(product_models)")]
     if pcols and "model_code" not in pcols:
         conn.execute("ALTER TABLE product_models ADD COLUMN model_code TEXT DEFAULT ''")
