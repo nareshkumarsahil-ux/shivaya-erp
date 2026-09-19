@@ -645,10 +645,10 @@ function computeLive(){
 function svgPanel(pcbL, pcbW, px, py, gapXs, gapYs, bl, br, bt, bb, pL, pW, pcsPanel, gx, gy, kx, ky, pgXs, pgYs){
   /* PREVIEW #1 — PANEL: sirf EK panel + individual PCBs (borders + per-boundary gaps).
      Multiplier copies GANG PANEL PREVIEW (#2) me — sheet fit #3 me. */
-  var W = 430, H = 300, pad = 26;
-  var scale = Math.min((W - 2*pad) / pL, (H - 2*pad) / pW);
+  var W = 440, H = 322, pad = 26;
+  var scale = Math.min((W - 2*pad - 16) / pL, (H - 2*pad - 22) / pW);
   var P = pL * scale, Q = pW * scale;
-  var x0 = pad + (W - 2*pad - P) / 2, y0 = pad + (H - 2*pad - Q) / 2;
+  var x0 = pad + (W - 2*pad - 16 - P) / 2, y0 = pad + (H - 2*pad - 22 - Q) / 2;
   var cw = pcbL * scale, ch = pcbW * scale;
   var bx = bl * scale, by = bt * scale;
   var s = '<svg viewBox="0 0 ' + W + ' ' + H + '" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;display:block">';
@@ -669,6 +669,18 @@ function svgPanel(pcbL, pcbW, px, py, gapXs, gapYs, bl, br, bt, bb, pL, pW, pcsP
   }
   if ((_sumArr(gapXs) > 0 || _sumArr(gapYs) > 0) && Q > 24)
     s += '<text x="' + (x0 + P/2).toFixed(1) + '" y="' + (y0 + Q - 10).toFixed(1) + '" text-anchor="middle" font-size="10" fill="#b45309" font-family="Segoe UI,Arial">gap X:' + fmtNum(_sumArr(gapXs)) + ' / Y:' + fmtNum(_sumArr(gapYs)) + ' mm</text>';
+  /* v2.83 \u2014 PANEL DIMENSION side me (neeche = length, right = rotated width) */
+  var dmc = '#475569';
+  var dy = y0 + Q + 14;
+  s += '<line x1="' + x0.toFixed(1) + '" y1="' + dy.toFixed(1) + '" x2="' + (x0+P).toFixed(1) + '" y2="' + dy.toFixed(1) + '" stroke="' + dmc + '" stroke-width="1"/>';
+  s += '<line x1="' + x0.toFixed(1) + '" y1="' + (dy-3).toFixed(1) + '" x2="' + x0.toFixed(1) + '" y2="' + (dy+3).toFixed(1) + '" stroke="' + dmc + '" stroke-width="1"/>';
+  s += '<line x1="' + (x0+P).toFixed(1) + '" y1="' + (dy-3).toFixed(1) + '" x2="' + (x0+P).toFixed(1) + '" y2="' + (dy+3).toFixed(1) + '" stroke="' + dmc + '" stroke-width="1"/>';
+  s += '<text x="' + (x0+P/2).toFixed(1) + '" y="' + (dy+12).toFixed(1) + '" text-anchor="middle" font-size="11" fill="#334155" font-weight="700" font-family="Segoe UI,Arial">' + fmtNum(pL) + ' mm</text>';
+  var dx = x0 + P + 13;
+  s += '<line x1="' + dx.toFixed(1) + '" y1="' + y0.toFixed(1) + '" x2="' + dx.toFixed(1) + '" y2="' + (y0+Q).toFixed(1) + '" stroke="' + dmc + '" stroke-width="1"/>';
+  s += '<line x1="' + (dx-3).toFixed(1) + '" y1="' + y0.toFixed(1) + '" x2="' + (dx+3).toFixed(1) + '" y2="' + y0.toFixed(1) + '" stroke="' + dmc + '" stroke-width="1"/>';
+  s += '<line x1="' + (dx-3).toFixed(1) + '" y1="' + (y0+Q).toFixed(1) + '" x2="' + (dx+3).toFixed(1) + '" y2="' + (y0+Q).toFixed(1) + '" stroke="' + dmc + '" stroke-width="1"/>';
+  s += '<text x="' + (dx+10).toFixed(1) + '" y="' + (y0+Q/2).toFixed(1) + '" text-anchor="middle" font-size="11" fill="#334155" font-weight="700" font-family="Segoe UI,Arial" transform="rotate(90 ' + (dx+10).toFixed(1) + ' ' + (y0+Q/2).toFixed(1) + ')">' + fmtNum(pW) + ' mm</text>';
   var lbl = 'PANEL: ' + fmtNum(pL) + '\u00d7' + fmtNum(pW) + ' mm \u00b7 PCB: ' + fmtNum(pcbL) + '\u00d7' + fmtNum(pcbW) + ' mm \u00b7 ' + pcsPanel + ' PCBs (' + px + '\u00d7' + py + ')';
   s += '<text x="' + (W/2) + '" y="' + (H-19) + '" text-anchor="middle" font-size="12" fill="#8a8f98" font-family="Segoe UI,Arial">' + lbl + '</text>';
   var lbl2 = 'BORDER: L ' + fmtNum(bl) + ' / R ' + fmtNum(br) + ' / T ' + fmtNum(bt) + ' / B ' + fmtNum(bb) + ' mm';

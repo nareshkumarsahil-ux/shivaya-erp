@@ -30,6 +30,7 @@
         <div style="border:1px solid #e2e8f0;border-radius:8px;padding:5px 9px;background:#f8fafc"><div style="font-size:9px;color:#64748b;font-weight:700;letter-spacing:.5px">COPPER</div><div style="font-size:13.5px;font-weight:800;color:#0f172a">{{ edit_jc.copper_finish|dash }}</div></div>
         <div style="border:1px solid #e2e8f0;border-radius:8px;padding:5px 9px;background:#f8fafc"><div style="font-size:9px;color:#64748b;font-weight:700;letter-spacing:.5px">LEGEND</div><div style="font-size:13.5px;font-weight:800;color:#0f172a">{{ edit_jc.legend_printing|dash }}</div></div>
         <div style="border:1px solid #e2e8f0;border-radius:8px;padding:5px 9px;background:#f8fafc"><div style="font-size:9px;color:#64748b;font-weight:700;letter-spacing:.5px">MASKING</div><div style="font-size:13.5px;font-weight:800;color:#0f172a">{{ edit_jc.masking|dash }}</div></div>
+        <div style="border:1px solid #e2e8f0;border-radius:8px;padding:5px 9px;background:#f8fafc"><div style="font-size:9px;color:#64748b;font-weight:700;letter-spacing:.5px">FINISH</div><div style="font-size:13.5px;font-weight:800;color:#0f172a">{{ edit_jc.finish|dash }}</div></div>
         <div style="border:1px solid #e2e8f0;border-radius:8px;padding:5px 9px;background:#f8fafc"><div style="font-size:9px;color:#64748b;font-weight:700;letter-spacing:.5px">TYPE</div><div style="font-size:13.5px;font-weight:800;color:#0f172a">{{ edit_jc.pcb_type|dash }}</div></div>
         <div style="border:1px solid #e2e8f0;border-radius:8px;padding:5px 9px;background:#f8fafc"><div style="font-size:9px;color:#64748b;font-weight:700;letter-spacing:.5px">ORDER VIA</div><div style="font-size:13.5px;font-weight:800;color:#0f172a">{{ edit_jc.order_via|dash }}</div></div>
         <div style="border:1px solid #e2e8f0;border-radius:8px;padding:5px 9px;background:#f8fafc"><div style="font-size:9px;color:#64748b;font-weight:700;letter-spacing:.5px">PARTY PO NO</div><div style="font-size:13.5px;font-weight:800;color:#0f172a">{{ edit_jc.po_no|dash }}</div></div>
@@ -260,6 +261,16 @@
             <input name="checked_by" placeholder="Naam" value="{% if edit_id %}{{ edit_jc.checked_by or '' }}{% endif %}">
           </div>
         </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:2px">
+          <div class="field" style="flex:1;min-width:150px">
+            <label>TYPE</label>
+            <input name="pcb_type" placeholder="e.g. FR4 / CEM-3 / ALUMINIUM" value="{% if edit_id %}{{ edit_jc.pcb_type or '' }}{% endif %}">
+          </div>
+          <div class="field" style="flex:1;min-width:150px">
+            <label>FINISH</label>
+            <input name="finish" placeholder="e.g. LEAD FREE / HAL" value="{% if edit_id %}{{ edit_jc.finish or '' }}{% endif %}">
+          </div>
+        </div>
       </div>
     </div>
 
@@ -415,6 +426,10 @@ document.getElementById('prodSel').addEventListener('change', function(){
       }
       try { ps.scrollIntoView({ block: 'center' }); } catch (e) {}
       ps.dispatchEvent(new Event('change'));
+      /* v2.84 \u2014 SAVED sheet size wapas (model change isse overwrite kar deta tha) */
+      var _sl2 = document.getElementById('jcSL'), _sw2 = document.getElementById('jcSW');
+      if (_sl2 && {{ (edit_jc.sheet_len or 0)|round(2) }} > 0) { _sl2.value = '{{ (edit_jc.sheet_len or 0)|gfmt }}'; _sl2.dispatchEvent(new Event('input')); }
+      if (_sw2 && {{ (edit_jc.sheet_w or 0)|round(2) }} > 0) { _sw2.value = '{{ (edit_jc.sheet_w or 0)|gfmt }}'; _sw2.dispatchEvent(new Event('input')); }
     }
   } catch (e) { /* anomaly par normal form */ }
 })();
