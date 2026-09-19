@@ -190,12 +190,13 @@
       <div class="stat"><div class="top"><span class="lbl">Layout Type</span></div><div class="num" id="statLayout" style="font-size:14px">—</div></div>
     </div>
 
-    <div class="panel">
+    <div class="panel" id="panelPreviewBox">
       <div class="panel-head"><h3>🔲 PANEL PREVIEW — 1 PANEL + INDIVIDUAL PCB</h3>
         <button type="button" class="btn btn-outline btn-xs" style="margin-left:auto" onclick="printPanelPreview()">🖨️ PRINT / PDF</button><button type="button" class="btn btn-outline btn-xs" onclick="printPreviews()">🖨️ SAB (3 PAGE)</button>
         <span class="muted small" style="display:inline-flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:2px">
           <span style="display:inline-flex;gap:4px;align-items:center"><span style="width:11px;height:11px;background:#dbeafe;border:1.5px solid #2563eb;border-radius:2px;display:inline-block"></span>Panel</span>
           <span style="display:inline-flex;gap:4px;align-items:center"><span style="width:11px;height:11px;background:#fbbf24;border:1.5px solid #f59e0b;border-radius:2px;display:inline-block"></span>PCB</span>
+            <span style="font-weight:800;color:#92400e">PCB DIMS: TOP = LENGTH (X) · LEFT = WIDTH (Y)</span>
         </span>
       </div>
       <div class="panel-body" style="padding:10px">
@@ -218,6 +219,7 @@
             <span style="display:inline-flex;gap:4px;align-items:center"><span style="width:12px;height:12px;background:#ede9fe;border:3px solid #7c3aed;border-radius:2px;display:inline-block"></span><b style="color:#7c3aed">GANG PANEL</b> (thick violet)</span>
             <span style="display:inline-flex;gap:4px;align-items:center"><span style="width:12px;height:12px;background:#dbeafe;border:1.5px solid #2563eb;border-radius:2px;display:inline-block"></span>Panel</span>
             <span style="display:inline-flex;gap:4px;align-items:center"><span style="width:12px;height:12px;background:#fbbf24;border:1.5px solid #f59e0b;border-radius:2px;display:inline-block"></span>PCB</span>
+            <span style="font-weight:800;color:#92400e">PCB DIMS: TOP = LENGTH (X) · LEFT = WIDTH (Y)</span>
           </span>
           <div id="svgGangPanel" style="margin-top:8px;max-width:470px;margin-left:auto;margin-right:auto">{{ svg_gang_panel|safe }}{% if not svg_gang_panel %}<div class="muted small" style="padding:18px;text-align:center">Value bharke ⚙️ CALCULATE dabao — preview yahan banega</div>{% endif %}</div>
         </div>
@@ -292,16 +294,18 @@ function fmtNum(v){
 function num(id){ var v = parseFloat(document.getElementById(id).value); return isNaN(v) ? 0 : v; }
 /* v2.91 — PCB cell ke andar uski DIMENSION (mm): fit ho to seedha, lamba-patla ho to rotated, bahut chhota ho to skip */
 function _pcbDim(cx, cy, w, h, dl, dw){
-  var lbl = (Math.round(dl * 100) / 100) + "×" + (Math.round(dw * 100) / 100);
-  var fs = Math.min(9, h * 0.4, w * 0.22);
+  /* v2.93 — PCB dims edge-style (sheet-layout jaisa): TOP = LENGTH, LEFT = WIDTH (rotated) */
+  var lt = String(Math.round(dl * 100) / 100), lw = String(Math.round(dw * 100) / 100);
+  var fs = Math.min(8, h * 0.3, w * 0.18);
   if (fs < 5.5) return '';
-  var need = lbl.length * fs * 0.58;
-  var base = 'text-anchor="middle" font-size="' + fs.toFixed(1) + '" font-weight="600" fill="#92400e" font-family="Segoe UI,Arial" style="paint-order:stroke" stroke="#ffffff" stroke-width="1.4"';
-  if (need <= w - 3)
-    return '<text x="' + cx.toFixed(1) + '" y="' + (cy + fs * 0.35).toFixed(1) + '" ' + base + '>' + lbl + '</text>';
-  if (w < h && need <= h - 3 && w >= fs * 1.4)
-    return '<text x="' + cx.toFixed(1) + '" y="' + (cy + fs * 0.35).toFixed(1) + '" transform="rotate(-90 ' + cx.toFixed(1) + ' ' + cy.toFixed(1) + ')" ' + base + '>' + lbl + '</text>';
-  return '';
+  var base = 'text-anchor="middle" font-size="' + fs.toFixed(1) + '" font-weight="700" fill="#92400e" font-family="Segoe UI,Arial" style="paint-order:stroke" stroke="#ffffff" stroke-width="1.6"';
+  var out = '';
+  if (lt.length * fs * 0.6 <= w - 6 && h >= 13)
+    out += '<text x="' + cx.toFixed(1) + '" y="' + (cy - h / 2 + fs + 2).toFixed(1) + '" ' + base + '>' + lt + '</text>';
+  var lx = cx - w / 2 + fs * 0.7;
+  if (lw.length * fs * 0.6 <= h - 6 && w >= 12)
+    out += '<text x="' + lx.toFixed(1) + '" y="' + cy.toFixed(1) + '" transform="rotate(-90 ' + lx.toFixed(1) + ' ' + cy.toFixed(1) + ')" ' + base + '>' + lw + '</text>';
+  return out;
 }
 function intNum(id){ return Math.round(num(id)); }
 
@@ -1039,8 +1043,10 @@ function calcClPrice(){
 })();
 calcClPrice();
 
-/* ============ v2.90 PRINT / PDF \u2014 TOP-LEVEL. v2.86-89 me ye functions computeLive() ke andar fas gaye the (brace depth 1) \u2014 onclick ko global chahiye, isliye har click chupchaap fail = ASLI BUG ============ */
-/* ---- v2.86 PRINT / PDF ---- sirf 3 previews (PANEL / GANG PANEL / PANEL IN SHEET) ---- */
+/* ============ v2.93 PRINT / PDF — POORA SECTION print hota hai (heading + stats + note + legend + svg)
+   bilkul screen jaisa. Overlay-first (koi popup nahi · har jagah chalta hai) + A4 landscape.
+   [FIX-HISTORY: v2.86-89 print fns computeLive() ke andar the = onclick global nahi milta = ASLI BUG;
+   v2.92 tak print me sirf SVG jata tha — ab poora section] ============ */
 (function(){
   var st = document.createElement('style');
   st.textContent = '#prevPrintSheet{display:none}' +
@@ -1048,21 +1054,30 @@ calcClPrice();
     'body.prevshow #prevPrintSheet{display:block!important;position:fixed;top:0;left:0;right:0;bottom:0;z-index:99999;background:#fff;overflow:auto;padding:12px}' +
     '#prevPrintSheet .pp-tools{position:sticky;top:0;background:#fff;border-bottom:2px solid #192338;padding:8px 6px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;z-index:2}' +
     '@media print{' +
+    '@page{size:A4 landscape;margin:10mm}' +
+    '#prevPrintSheet svg{max-width:100%;height:auto}' +
     'body.prevprint .sidebar,body.prevprint .topbar,body.prevprint .content>*:not(#prevPrintSheet){display:none!important}' +
     'body.prevprint #prevPrintSheet{display:block!important}' +
     'body.prevshow .sidebar,body.prevshow .topbar,body.prevshow .content>*:not(#prevPrintSheet){display:none!important}' +
     'body.prevshow #prevPrintSheet{display:block!important;position:static;padding:0}' +
     '#prevPrintSheet .pp-tools{display:none!important}' +
     '#prevPrintSheet .pp-block{page-break-after:always;padding:10px 0}' +
-    '#prevPrintSheet .pp-h{font:800 15px Segoe UI,Arial;margin-bottom:8px;color:#192338}}';
+    '#prevPrintSheet .pp-tag{font:800 11px Segoe UI,Arial;letter-spacing:.5px;color:#64748b;margin:2px 0 8px}' +
+    '.pp-sec .panel{max-width:1000px;margin:0 auto}}';
   document.head.appendChild(st);
 })();
-/* ---- v2.88 PRINT / PDF — har preview ka apna button + SAB (3 pages).
-   Robust tarika: naya clean window (koi CSS conflict nahi, blank print nahi).
-   Popup block ho to purana in-page print fallback. ---- */
-function _collectSvg(id){
-  var el = document.getElementById(id);
-  return (el && el.querySelector('svg')) ? el.innerHTML : '';
+/* POORA SECTION clone: heading + stats boxes + note + legend + svg (buttons hata ke) */
+function _collectSection(sel){
+  var el = document.getElementById(sel);
+  if (!el) return '';
+  var clone = el.cloneNode(true);
+  if (!clone.querySelector('svg')) return '';
+  var btns = clone.querySelectorAll('button');
+  for (var i = 0; i < btns.length; i++) btns[i].remove();
+  clone.style.display = 'block';
+  clone.style.margin = '0 auto';
+  clone.style.maxWidth = '1000px';
+  return '<div class="pp-sec">' + clone.outerHTML + '</div>';
 }
 function _showOverlay(body){
   var sh = document.getElementById('prevPrintSheet');
@@ -1070,8 +1085,9 @@ function _showOverlay(body){
   sh.innerHTML = '<div class="pp-tools">' +
     '<button type="button" onclick="_doPrint()" style="background:#192338;color:#fff;border:0;padding:8px 16px;border-radius:8px;font-weight:800;cursor:pointer;font-size:13px">🖨️ PRINT / SAVE PDF</button>' +
     '<button type="button" onclick="_closePrev()" style="background:#e2e8f0;color:#192338;border:0;padding:8px 16px;border-radius:8px;font-weight:800;cursor:pointer;font-size:13px">\u2715 BAND KARO</button>' +
-    '<span style="color:#64748b;font-size:11.5px;font-weight:600">Print dialog na dikhe to Ctrl+P (Mac: Cmd+P) dabao \u2014 print/PDF me sirf previews hi aayenge</span></div>' +
-    '<div style="text-align:center;font:800 16px Segoe UI,Arial;color:#192338;border-bottom:3px solid #192338;padding-bottom:8px;margin:10px 0 12px">SHIVAYA CIRCUIT PVT. LTD. \u2014 CUT LIST PREVIEW</div>' + body;
+    '<span style="color:#64748b;font-size:11.5px;font-weight:600">Print dialog na dikhe to Ctrl+P (Mac: Cmd+P) dabao \u2014 print/PDF me sirf previews hi aayenge (A4 landscape)</span></div>' +
+    '<div style="text-align:center;font:800 16px Segoe UI,Arial;color:#192338;border-bottom:3px solid #192338;padding-bottom:8px;margin:10px 0 12px">SHIVAYA CIRCUIT PVT. LTD. \u2014 CUT LIST PREVIEW' +
+    '<div style="font:600 10.5px Segoe UI,Arial;color:#64748b;margin-top:3px">PCB SIZE: TOP = LENGTH (X) \u00b7 LEFT = WIDTH (Y) \u00b7 PRINT: A4 LANDSCAPE</div></div>' + body;
   document.body.classList.add('prevshow');
 }
 function _doPrint(){
@@ -1088,45 +1104,22 @@ function _printDocs(list){
   var body = '';
   for (var i = 0; i < list.length; i++){
     if (!list[i][0]) continue;
-    body += '<div class="pp-block"><div class="pp-h">' + (list.length > 1 ? (i+1) + '. ' : '') + list[i][1] + '</div>' + list[i][0] + '</div>';
+    body += '<div class="pp-block"><div class="pp-tag">' + (list.length > 1 ? 'PAGE ' + (i+1) + ' \u2014 ' : '') + list[i][1] + '</div>' + list[i][0] + '</div>';
   }
   if (!body) {
     _showOverlay('<div style="text-align:center;padding:46px 10px"><div style="font:800 19px Segoe UI,Arial;color:#b91c1c">KOI PREVIEW NAHI MILA</div><div style="margin-top:10px;font:600 14px Segoe UI,Arial;color:#334155">Pehle values bharke CALCULATE dabao \u2014 previews ban jayenge, phir PRINT/PDF chal jayega.</div></div>');
     return;
   }
-  var popupDone = false, w = null;
-  try {
-    w = window.open('', '_blank');
-    if (!(w && w.document)) w = null;
-  } catch(e) { w = null; }
-  if (w) try {
-    var d = w.document;
-    d.open();
-    d.write('<html><head><title>SHIVAYA CIRCUIT PVT. LTD. \u2014 CUT LIST PREVIEW</title>' +
-      '<style>@page{size:A4 landscape;margin:8mm}' +
-      'body{font-family:"Segoe UI",Arial,sans-serif;margin:0;padding:10px;color:#192338;background:#fff}' +
-      '.hd{text-align:center;font:800 15px "Segoe UI",Arial;border-bottom:3px solid #192338;padding-bottom:6px;margin-bottom:10px}' +
-      '.pp-block{page-break-after:' + (list.length > 1 ? 'always' : 'auto') + ';padding:6px 0}' +
-      '.pp-h{font:800 14px "Segoe UI",Arial;margin-bottom:6px}' +
-      'svg{max-width:100%;height:auto}</style></head><body>' +
-      '<div class="hd">SHIVAYA CIRCUIT PVT. LTD. \u2014 CUT LIST PREVIEW</div>' + body +
-      '</body></html>');
-    d.close();
-    popupDone = true;
-    setTimeout(function(){ try { w.focus(); w.print(); } catch(e) {} }, 300);
-  } catch(e2) { popupDone = false; }
-  if (!popupDone) {
-    _showOverlay(body);   /* popup block/fail -> overlay: PRINT button ya Ctrl+P wahi print karta hai */
-  }
+  _showOverlay(body);   /* overlay me POORA section — PRINT button ya Ctrl+P se A4 landscape print */
 }
 function printPreviews(){
-  _printDocs([[_collectSvg('svgPanel'), 'PANEL PREVIEW \u2014 1 PANEL + INDIVIDUAL PCB'],
-              [_collectSvg('svgGangPanel'), 'GANG PANEL PREVIEW (MULTIPLIER)'],
-              [_collectSvg('svgSheetLayout'), 'PANEL IN SHEET \u2014 CUTTING LAYOUT']]);
+  _printDocs([[_collectSection('panelPreviewBox'), 'PANEL PREVIEW'],
+              [_collectSection('gangPanel'), 'GANG PANEL PREVIEW'],
+              [_collectSection('sheetLayoutPanel'), 'PANEL IN SHEET']]);
 }
-function printPanelPreview(){ _printDocs([[_collectSvg('svgPanel'), 'PANEL PREVIEW \u2014 1 PANEL + INDIVIDUAL PCB']]); }
-function printGangPreview(){ _printDocs([[_collectSvg('svgGangPanel'), 'GANG PANEL PREVIEW (MULTIPLIER)']]); }
-function printSheetPreview(){ _printDocs([[_collectSvg('svgSheetLayout'), 'PANEL IN SHEET \u2014 CUTTING LAYOUT']]); }
+function printPanelPreview(){ _printDocs([[_collectSection('panelPreviewBox'), 'PANEL PREVIEW']]); }
+function printGangPreview(){ _printDocs([[_collectSection('gangPanel'), 'GANG PANEL PREVIEW']]); }
+function printSheetPreview(){ _printDocs([[_collectSection('sheetLayoutPanel'), 'PANEL IN SHEET']]); }
 window.printPreviews = printPreviews;
 window.printPanelPreview = printPanelPreview;
 window.printGangPreview = printGangPreview;

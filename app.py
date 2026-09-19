@@ -1133,19 +1133,18 @@ def _svg_dim_h(s, cx, cy, mm):
 
 
 def _pcb_dim_text(s, cx, cy, w, h, dl, dw):
-    """v2.91 — PCB cell ke andar uski dimension (mm): fit ho to seedha, lamba-patla rotated, chhota skip."""
-    label = f"{dl:g}×{dw:g}"
-    fs = min(9.0, h * 0.4, w * 0.22)
+    """v2.93 — PCB dims edge-style (sheet-layout jaisa): TOP = LENGTH, LEFT = WIDTH (rotated)."""
+    lt, lw_ = f"{dl:g}", f"{dw:g}"
+    fs = min(8.0, h * 0.3, w * 0.18)
     if fs < 5.5:
         return
-    need = len(label) * fs * 0.58
-    base = (f'text-anchor="middle" font-size="{fs:.1f}" font-weight="600" fill="#92400e" '
-            f'font-family="Segoe UI,Arial" style="paint-order:stroke" stroke="#ffffff" stroke-width="1.4"')
-    if need <= w - 3:
-        s.append(f'<text x="{cx:.1f}" y="{cy + fs * 0.35:.1f}" {base}>{label}</text>')
-    elif w < h and need <= h - 3 and w >= fs * 1.4:
-        s.append(f'<text x="{cx:.1f}" y="{cy + fs * 0.35:.1f}" transform="rotate(-90 {cx:.1f} {cy:.1f})" {base}>{label}</text>')
-
+    base = (f'text-anchor="middle" font-size="{fs:.1f}" font-weight="700" fill="#92400e" '
+            f'font-family="Segoe UI,Arial" style="paint-order:stroke" stroke="#ffffff" stroke-width="1.6"')
+    if len(lt) * fs * 0.6 <= w - 6 and h >= 13:
+        s.append(f'<text x="{cx:.1f}" y="{cy - h / 2 + fs + 2:.1f}" {base}>{lt}</text>')
+    if len(lw_) * fs * 0.6 <= h - 6 and w >= 12:
+        lx = cx - w / 2 + fs * 0.7
+        s.append(f'<text x="{lx:.1f}" y="{cy:.1f}" transform="rotate(-90 {lx:.1f} {cy:.1f})" {base}>{lw_}</text>')
 
 def _svg_sheet_dims(s, x0, y0, S, T, sl, sw, qty):
     """Sheet ke dimensions — neeche length (tick line), right par rotated width, qty ×N."""
