@@ -1048,6 +1048,7 @@ def svg_panel_preview(r):
             oy = by
             for j in range(r["pcbs_y"]):
                 s.append(f'<rect x="{x0 + ox:.1f}" y="{y0 + oy:.1f}" width="{cw:.1f}" height="{ch:.1f}" fill="#fbbf24" fill-opacity="0.5" stroke="#f59e0b" stroke-width="0.8"/>')
+                _pcb_dim_text(s, x0 + ox + cw / 2, y0 + oy + ch / 2, cw, ch, r["pcb_len"], r["pcb_w"])   # v2.91
                 oy += ch + (gaps_y_s[j] * scale if j < len(gaps_y_s) else gys)
             if i < r["pcbs_x"] - 1:
                 ox += cw + (gaps_x_s[i] * scale if i < len(gaps_x_s) else gxs)
@@ -1131,6 +1132,21 @@ def _svg_dim_h(s, cx, cy, mm):
              f'stroke="#ffffff" stroke-width="2.5">{mm:g}</text>')
 
 
+def _pcb_dim_text(s, cx, cy, w, h, dl, dw):
+    """v2.91 — PCB cell ke andar uski dimension (mm): fit ho to seedha, lamba-patla rotated, chhota skip."""
+    label = f"{dl:g}×{dw:g}"
+    fs = min(9.0, h * 0.4, w * 0.22)
+    if fs < 5.5:
+        return
+    need = len(label) * fs * 0.58
+    base = (f'text-anchor="middle" font-size="{fs:.1f}" font-weight="600" fill="#92400e" '
+            f'font-family="Segoe UI,Arial" style="paint-order:stroke" stroke="#ffffff" stroke-width="1.4"')
+    if need <= w - 3:
+        s.append(f'<text x="{cx:.1f}" y="{cy + fs * 0.35:.1f}" {base}>{label}</text>')
+    elif w < h and need <= h - 3 and w >= fs * 1.4:
+        s.append(f'<text x="{cx:.1f}" y="{cy + fs * 0.35:.1f}" transform="rotate(-90 {cx:.1f} {cy:.1f})" {base}>{label}</text>')
+
+
 def _svg_sheet_dims(s, x0, y0, S, T, sl, sw, qty):
     """Sheet ke dimensions — neeche length (tick line), right par rotated width, qty ×N."""
     c = "#94a3b8"
@@ -1194,6 +1210,7 @@ def svg_gang_panel_preview(r):
                     oy = by
                     for j in range(r["pcbs_y"]):
                         s.append(f'<rect x="{xp + ox:.1f}" y="{yp + oy:.1f}" width="{cw:.1f}" height="{ch:.1f}" fill="#fbbf24" fill-opacity="0.5" stroke="#f59e0b" stroke-width="0.8"/>')
+                        _pcb_dim_text(s, xp + ox + cw / 2, yp + oy + ch / 2, cw, ch, r["pcb_len"], r["pcb_w"])   # v2.91
                         oy += ch + (gaps_y_s[j] * scale if j < len(gaps_y_s) else gys)
                     if i < r["pcbs_x"] - 1:
                         ox += cw + (gaps_x_s[i] * scale if i < len(gaps_x_s) else gxs)

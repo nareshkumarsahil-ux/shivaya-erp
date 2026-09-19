@@ -290,6 +290,19 @@ function fmtNum(v){
   return (Math.round(v * 100) / 100).toFixed(2);
 }
 function num(id){ var v = parseFloat(document.getElementById(id).value); return isNaN(v) ? 0 : v; }
+/* v2.91 — PCB cell ke andar uski DIMENSION (mm): fit ho to seedha, lamba-patla ho to rotated, bahut chhota ho to skip */
+function _pcbDim(cx, cy, w, h, dl, dw){
+  var lbl = (Math.round(dl * 100) / 100) + "×" + (Math.round(dw * 100) / 100);
+  var fs = Math.min(9, h * 0.4, w * 0.22);
+  if (fs < 5.5) return '';
+  var need = lbl.length * fs * 0.58;
+  var base = 'text-anchor="middle" font-size="' + fs.toFixed(1) + '" font-weight="600" fill="#92400e" font-family="Segoe UI,Arial" style="paint-order:stroke" stroke="#ffffff" stroke-width="1.4"';
+  if (need <= w - 3)
+    return '<text x="' + cx.toFixed(1) + '" y="' + (cy + fs * 0.35).toFixed(1) + '" ' + base + '>' + lbl + '</text>';
+  if (w < h && need <= h - 3 && w >= fs * 1.4)
+    return '<text x="' + cx.toFixed(1) + '" y="' + (cy + fs * 0.35).toFixed(1) + '" transform="rotate(-90 ' + cx.toFixed(1) + ' ' + cy.toFixed(1) + ')" ' + base + '>' + lbl + '</text>';
+  return '';
+}
 function intNum(id){ return Math.round(num(id)); }
 
 /* ---- per-boundary gaps: har PCB ke beech apna gap (0/2.4/0 ...) ---- */
@@ -673,6 +686,7 @@ function svgPanel(pcbL, pcbW, px, py, gapXs, gapYs, bl, br, bt, bb, pL, pW, pcsP
       var oy = by;
       for (j = 0; j < py; j++) {
         s += '<rect x="' + (x0 + ox).toFixed(1) + '" y="' + (y0 + oy).toFixed(1) + '" width="' + cw.toFixed(1) + '" height="' + ch.toFixed(1) + '" fill="#fbbf24" fill-opacity="0.5" stroke="#f59e0b" stroke-width="0.8"/>';
+        s += _pcbDim(x0 + ox + cw / 2, y0 + oy + ch / 2, cw, ch, effL, effW);   /* v2.91 PCB DIMENSION */
         oy += ch + ((j < gapYs.length ? gapYs[j] : 0) * scale);
       }
       if (i < px - 1) ox += cw + ((i < gapXs.length ? gapXs[i] : 0) * scale);
@@ -882,6 +896,7 @@ function svgGangPanel(pcbL, pcbW, px, py, gapXs, gapYs, bl, br, bt, bb, pL, pW, 
           var oy = by;
           for (j = 0; j < py; j++) {
             s += '<rect x="' + (xp + ox).toFixed(1) + '" y="' + (yp + oy).toFixed(1) + '" width="' + cw.toFixed(1) + '" height="' + ch.toFixed(1) + '" fill="#fbbf24" fill-opacity="0.5" stroke="#f59e0b" stroke-width="0.8"/>';
+            s += _pcbDim(xp + ox + cw / 2, yp + oy + ch / 2, cw, ch, pcbL, pcbW);   /* v2.91 PCB DIMENSION */
             oy += ch + ((j < gapYs.length ? gapYs[j] : 0) * scale);
           }
           if (i < px - 1) ox += cw + ((i < gapXs.length ? gapXs[i] : 0) * scale);
