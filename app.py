@@ -4168,6 +4168,22 @@ def jobcard_new():
         instructions = f.get("instructions", "").strip()
         delivery_date = f.get("delivery_date", "")
         priority = f.get("priority", "normal")
+        # v2.85 \u2014 agar PURANA cached tab/form se POST aaya (naye fields POST me absent
+        # hai) to un columns ko chhedo hi mat — warna user ki bhari values blank ho jati
+        def _p85(name):
+            return None if name not in f else (f.get(name) or "").strip()
+        _odate79 = _p85("odate") or ""
+        _ov79f = _p85("order_via") or ""
+        _cb79f = _p85("created_by") or ""
+        _ck79f = _p85("checked_by") or ""
+        _cop79f = _p85("copper_finish") or ""
+        _leg79f = _p85("legend_printing") or ""
+        _mas79f = _p85("masking") or ""
+        _po82 = _p85("po_no") or ""
+        _fin84 = _p85("finish") or ""
+        _typ84 = _p85("pcb_type") or ""
+        # purani lines bhi chale rahi hai (new-form path me same values hi hoti hai)
+        _odate79 = _odate79 if _odate79 is not None else ""
         # v2.79 \u2014 preview jaise extra fields ab ADVANCE page se bhi
         _odate79 = f.get("odate", "").strip()
         _ov79f = f.get("order_via", "").strip()
@@ -4179,8 +4195,7 @@ def jobcard_new():
         _cnx79f = f.get("cnc_margin_x", "").strip()
         _cny79f = f.get("cnc_margin_y", "").strip()
         _po82 = f.get("po_no", "").strip()
-        _fin84 = f.get("finish", "").strip()
-        _typ84 = f.get("pcb_type", "").strip()
+
         # board_material auto-map (process flow ke liye): METAL naam me -> METAL CORE
         board_material = ""
         if sheet_material:
@@ -4190,6 +4205,8 @@ def jobcard_new():
         # ---- v2.71 EDIT MODE: naya order banane ke bajaye EXISTING order + jobcard UPDATE ----
         edit_id = _edit_id_post
         _e = db.query("SELECT * FROM orders WHERE id=?", (edit_id,), one=True) if edit_id else None
+        if edit_id and not _e:
+            edit_id = 0  # v2.85: order kahin aur se delete ho gaya (stale tab) \u2014 crash nahi, new save
         if edit_id:
             _ej = db.query("SELECT * FROM jobcard WHERE order_id=?", (edit_id,), one=True)
             _pri = priority if f.get("priority") else (_e["priority"] or "normal")
@@ -4202,16 +4219,21 @@ def jobcard_new():
                 thickness = _ej["sheet_thickness"] or ""
             if not instructions and _ej:
                 instructions = _ej["instructions"] or ""
-            _ov79 = _ov79f if _ov79f else ((_ej["order_via"] if _ej else "") or "")
-            _cb79 = _cb79f if _cb79f else ((_ej["created_by"] if _ej else "") or "")
-            _ck79 = _ck79f if _ck79f else ((_ej["checked_by"] if _ej else "") or "")
-            _cop79 = _cop79f if _cop79f else ((_ej["copper_finish"] if _ej else "") or "")
-            _leg79 = _leg79f if _leg79f else ((_ej["legend_printing"] if _ej else "") or "")
-            _mas79 = _mas79f if _mas79f else ((_ej["masking"] if _ej else "") or "")
-            _od79 = _odate79 if _odate79 else (((_ej["odate"] or "")[:10] if _ej else "") or "")
-            _po82k = _po82 if _po82 else ((_ej["po_no"] if _ej else "") or "")
-            _fin84k = _fin84 if _fin84 else ((_ej["finish"] if _ej else "") or "")
-            _typ84k = _typ84 if _typ84 else ((_ej["pcb_type"] if _ej else "") or "")
+            def _k85(_nv, _name, _old):
+                # absent (purana form) => old; present => value (blank ho to bhi old rakho)
+                if _nv is None and _name not in f:
+                    return _old
+                return _nv if _nv else _old
+            _ov79 = _k85(_ov79f, "order_via", ((_ej["order_via"] if _ej else "") or ""))
+            _cb79 = _k85(_cb79f, "created_by", ((_ej["created_by"] if _ej else "") or ""))
+            _ck79 = _k85(_ck79f, "checked_by", ((_ej["checked_by"] if _ej else "") or ""))
+            _cop79 = _k85(_cop79f, "copper_finish", ((_ej["copper_finish"] if _ej else "") or ""))
+            _leg79 = _k85(_leg79f, "legend_printing", ((_ej["legend_printing"] if _ej else "") or ""))
+            _mas79 = _k85(_mas79f, "masking", ((_ej["masking"] if _ej else "") or ""))
+            _od79 = _k85(_odate79, "odate", (((_ej["odate"] or "")[:10] if _ej else "") or ""))
+            _po82k = _k85(_po82, "po_no", ((_ej["po_no"] if _ej else "") or ""))
+            _fin84k = _k85(_fin84, "finish", ((_ej["finish"] if _ej else "") or ""))
+            _typ84k = _k85(_typ84, "pcb_type", ((_ej["pcb_type"] if _ej else "") or ""))
             _mmx79 = (float(_cnx79f) if _cnx79f else (((_ej["cnc_margin_x"] if _ej else 0) or 0) or (pmodel["cnc_margin_x"] or 0)))
             _mmy79 = (float(_cny79f) if _cny79f else (((_ej["cnc_margin_y"] if _ej else 0) or 0) or (pmodel["cnc_margin_y"] or 0)))
             _btype = board_type if f.get("board_type") else (_e["board"] or "Single Side")
