@@ -1060,16 +1060,21 @@ calcClPrice();
     'body.prevprint #prevPrintSheet{display:block!important}' +
     'body.prevshow .sidebar,body.prevshow .topbar,body.prevshow .content>*:not(#prevPrintSheet){display:none!important}' +
     'body.prevshow #prevPrintSheet{display:block!important;position:static;padding:0}' +
-    '#prevPrintSheet .pp-tools{display:none!important}' +
-    '#prevPrintSheet .pp-block{page-break-after:always;padding:0;height:168mm;overflow:hidden}' +
-    '#prevPrintSheet .pp-tag{font:800 10px Segoe UI,Arial;letter-spacing:.5px;color:#64748b;margin:0 0 4px;text-align:center}' +
-    '.pp-sec .panel{max-width:100%!important;margin:0 auto!important;padding:4px 8px}' +
-    '.pp-sec .panel-head{padding:2px 6px}' +
-    '.pp-sec .panel-head h3{font-size:13px!important;margin:0}' +
-    '.pp-sec .panel-body{padding:6px 10px!important}' +
+    '#prevPrintSheet .pp-tools,#prevPrintSheet .pp-screen{display:none!important}' +
+    '#prevPrintSheet .pp-block{page-break-after:always;padding:0;height:170mm;overflow:hidden;display:flex;flex-direction:column}' +
+    '#prevPrintSheet .pp-top{border-bottom:2.5px solid #192338;padding-bottom:2mm;margin-bottom:2.5mm;text-align:center}' +
+    '#prevPrintSheet .pp-co{font:800 13.5px Segoe UI,Arial;letter-spacing:1.5px;color:#192338}' +
+    '#prevPrintSheet .pp-title{font:700 10.5px Segoe UI,Arial;color:#334155;margin-top:1mm}' +
+    '#prevPrintSheet .pp-meta{font:600 8.5px Segoe UI,Arial;color:#94a3b8;margin-top:.5mm}' +
+    '.pp-sec .panel{max-width:100%!important;margin:0 auto!important;padding:3mm 5mm!important;border:1.5px solid #192338;border-radius:8px;box-shadow:none}' +
+    '.pp-sec .panel-head{padding:0 0 1.5mm!important;border-bottom:1px solid #cbd5e1}' +
+    '.pp-sec .panel-head h3{font-size:12.5px!important;margin:0}' +
+    '.pp-sec .panel-head button{display:none!important}' +
+    '.pp-sec .panel-body{padding:2mm 3mm!important}' +
+    '.pp-sec .gstat{padding:2mm 3mm!important}' +
     '.pp-sec .gstat .glbl{font-size:8px!important}.pp-sec .gstat .gnum{font-size:12px!important}' +
-    '#prevPrintSheet .pp-sec [id^="svg"]{max-width:100%!important;margin:3px auto 0!important}' +
-    '#prevPrintSheet .pp-sec svg{width:100%!important;height:auto!important;max-height:112mm!important;display:block;margin:0 auto}}';
+    '#prevPrintSheet .pp-sec [id^="svg"]{max-width:100%!important;margin:2mm auto 0!important}' +
+    '#prevPrintSheet .pp-sec svg{width:auto!important;max-width:100%!important;height:auto!important;max-height:122mm!important;display:block;margin:0 auto}}';
   document.head.appendChild(st);
 })();
 /* POORA SECTION clone: heading + stats boxes + note + legend + svg (buttons hata ke) */
@@ -1092,8 +1097,8 @@ function _showOverlay(body){
     '<button type="button" onclick="_doPrint()" style="background:#192338;color:#fff;border:0;padding:8px 16px;border-radius:8px;font-weight:800;cursor:pointer;font-size:13px">🖨️ PRINT / SAVE PDF</button>' +
     '<button type="button" onclick="_closePrev()" style="background:#e2e8f0;color:#192338;border:0;padding:8px 16px;border-radius:8px;font-weight:800;cursor:pointer;font-size:13px">\u2715 BAND KARO</button>' +
     '<span style="color:#64748b;font-size:11.5px;font-weight:600">Print dialog na dikhe to Ctrl+P (Mac: Cmd+P) dabao \u2014 print/PDF me sirf previews hi aayenge (A4 landscape)</span></div>' +
-    '<div style="text-align:center;font:800 14px Segoe UI,Arial;color:#192338;border-bottom:2px solid #192338;padding-bottom:4px;margin:0 0 8px">SHIVAYA CIRCUIT PVT. LTD. \u2014 CUT LIST PREVIEW' +
-    '<div style="font:600 9.5px Segoe UI,Arial;color:#64748b;margin-top:2px">PCB SIZE: TOP = LENGTH (X) \u00b7 LEFT = WIDTH (Y) \u00b7 PRINT: A4 LANDSCAPE \u00b7 1 PREVIEW = 1 PAGE</div></div>' + body;
+    '<div class="pp-screen" style="text-align:center;font:800 14px Segoe UI,Arial;color:#192338;border-bottom:2px solid #192338;padding-bottom:4px;margin:0 0 8px">SHIVAYA CIRCUIT PVT. LTD. \u2014 CUT LIST PREVIEW' +
+    '<div style="font:600 9.5px Segoe UI,Arial;color:#64748b;margin-top:2px">PCB SIZE: TOP = LENGTH (X) \u00b7 LEFT = WIDTH (Y) \u00b7 1 PREVIEW = 1 FULL A4 PAGE</div></div>' + body;
   document.body.classList.add('prevshow');
 }
 function _doPrint(){
@@ -1107,10 +1112,16 @@ function _closePrev(){
   if (sh) sh.innerHTML = '';
 }
 function _printDocs(list){
-  var body = '';
+  var body = '', tot = 0, n = 0;
+  for (var i = 0; i < list.length; i++) if (list[i][0]) tot++;
   for (var i = 0; i < list.length; i++){
     if (!list[i][0]) continue;
-    body += '<div class="pp-block"><div class="pp-tag">' + (list.length > 1 ? 'PAGE ' + (i+1) + ' \u2014 ' : '') + list[i][1] + '</div>' + list[i][0] + '</div>';
+    n++;
+    body += '<div class="pp-block"><div class="pp-top">' +
+      '<div class="pp-co">SHIVAYA CIRCUIT PVT. LTD.</div>' +
+      '<div class="pp-title">' + list[i][1] + '</div>' +
+      '<div class="pp-meta">PCB: TOP = LENGTH (X) · LEFT = WIDTH (Y) · A4 LANDSCAPE' + (tot > 1 ? ' · PAGE ' + n + '/' + tot : '') + '</div>' +
+      '</div>' + list[i][0] + '</div>';
   }
   if (!body) {
     _showOverlay('<div style="text-align:center;padding:46px 10px"><div style="font:800 19px Segoe UI,Arial;color:#b91c1c">KOI PREVIEW NAHI MILA</div><div style="margin-top:10px;font:600 14px Segoe UI,Arial;color:#334155">Pehle values bharke CALCULATE dabao \u2014 previews ban jayenge, phir PRINT/PDF chal jayega.</div></div>');
