@@ -192,7 +192,7 @@
 
     <div class="panel">
       <div class="panel-head"><h3>🔲 PANEL PREVIEW — 1 PANEL + INDIVIDUAL PCB</h3>
-        <button type="button" class="btn btn-outline btn-xs" style="margin-left:auto" onclick="printPreviews()">🖨️ PRINT / PDF</button>
+        <button type="button" class="btn btn-outline btn-xs" style="margin-left:auto" onclick="printPanelPreview()">🖨️ PRINT / PDF</button><button type="button" class="btn btn-outline btn-xs" onclick="printPreviews()">🖨️ SAB (3 PAGE)</button>
         <span class="muted small" style="display:inline-flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:2px">
           <span style="display:inline-flex;gap:4px;align-items:center"><span style="width:11px;height:11px;background:#dbeafe;border:1.5px solid #2563eb;border-radius:2px;display:inline-block"></span>Panel</span>
           <span style="display:inline-flex;gap:4px;align-items:center"><span style="width:11px;height:11px;background:#fbbf24;border:1.5px solid #f59e0b;border-radius:2px;display:inline-block"></span>PCB</span>
@@ -204,7 +204,7 @@
     </div>
 
     <div class="panel" id="gangPanel" style="{{ 'display:block;' if gang_info else 'display:none;' }}border-left:4px solid #16a34a">
-      <div class="panel-head"><h3 id="gangHead">{{ ('🔗 GANG PANEL PREVIEW — ' ~ gang_info.gx ~ '×' ~ gang_info.gy ~ ' MULTIPLIER = ' ~ gang_info.pcs_gang ~ ' PCS') if gang_info else '🔗 GANG PANEL PREVIEW (MULTIPLIER)' }}</h3></div>
+      <div class="panel-head"><h3 id="gangHead">{{ ('🔗 GANG PANEL PREVIEW — ' ~ gang_info.gx ~ '×' ~ gang_info.gy ~ ' MULTIPLIER = ' ~ gang_info.pcs_gang ~ ' PCS') if gang_info else '🔗 GANG PANEL PREVIEW (MULTIPLIER)' }}</h3><button type="button" class="btn btn-outline btn-xs" style="margin-left:auto" onclick="printGangPreview()">🖨️ PRINT / PDF</button></div>
       <div class="panel-body" style="padding:12px 16px">
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px">
           <div class="gstat"><div class="glbl">GANG SIZE (TOTAL)</div><div class="gnum" id="gangSize">{{ '%0.2f × %0.2f'|format(gang_info.gl, gang_info.gw) if gang_info else '—' }} <span class="u">mm</span></div></div>
@@ -225,7 +225,7 @@
     </div>
 
     <div class="panel" id="sheetLayoutPanel" style="border-left:4px solid #6366f1">
-      <div class="panel-head"><h3 id="sheetLayoutHead">📐 {{ 'GANG PANEL' if gang_info else 'PANEL' }} IN SHEET — 1 SHEET ME KITNE {{ 'GANG PANELS' if gang_info else 'PANELS' }}</h3></div>
+      <div class="panel-head"><h3 id="sheetLayoutHead">📐 {{ 'GANG PANEL' if gang_info else 'PANEL' }} IN SHEET — 1 SHEET ME KITNE {{ 'GANG PANELS' if gang_info else 'PANELS' }}</h3><button type="button" class="btn btn-outline btn-xs" style="margin-left:auto" onclick="printSheetPreview()">🖨️ PRINT / PDF</button></div>
       <div class="panel-body" style="padding:12px 16px">
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px">
           <div class="gstat"><div class="glbl">SHEET SIZE</div><div class="gnum" style="font-size:15px"><span id="slSheet">—</span> <span class="u">mm</span></div></div>
@@ -649,21 +649,54 @@ function computeLive(){
     '#prevPrintSheet .pp-h{font:800 15px Segoe UI,Arial;margin-bottom:8px;color:#192338}}';
   document.head.appendChild(st);
 })();
-function printPreviews(){
-  var ids = [['svgPanel', 'PANEL PREVIEW \u2014 1 PANEL + INDIVIDUAL PCB'],
-             ['svgGangPanel', 'GANG PANEL PREVIEW (MULTIPLIER)'],
-             ['svgSheetLayout', 'PANEL IN SHEET \u2014 CUTTING LAYOUT']];
-  var out = '';
-  for (var i = 0; i < ids.length; i++){
-    var el = document.getElementById(ids[i][0]);
-    if (el && el.querySelector('svg')) out += '<div class="pp-block"><div class="pp-h">' + (i+1) + '. ' + ids[i][1] + '</div>' + el.innerHTML + '</div>';
-  }
-  if (!out) { alert('Pehle values bharke CALCULATE dabao \u2014 previews banenge tab print honge.'); return; }
-  var sh = document.getElementById('prevPrintSheet');
-  sh.innerHTML = '<div style="text-align:center;font:800 16px Segoe UI,Arial;color:#192338;border-bottom:3px solid #192338;padding-bottom:8px;margin-bottom:12px">SHIVAYA CIRCUIT PVT. LTD. \u2014 CUT LIST PREVIEWS</div>' + out;
-  document.body.classList.add('prevprint');
-  setTimeout(function(){ window.print(); setTimeout(function(){ document.body.classList.remove('prevprint'); }, 300); }, 60);
+/* ---- v2.88 PRINT / PDF — har preview ka apna button + SAB (3 pages).
+   Robust tarika: naya clean window (koi CSS conflict nahi, blank print nahi).
+   Popup block ho to purana in-page print fallback. ---- */
+function _collectSvg(id){
+  var el = document.getElementById(id);
+  return (el && el.querySelector('svg')) ? el.innerHTML : '';
 }
+function _printDocs(list){
+  var body = '';
+  for (var i = 0; i < list.length; i++){
+    if (!list[i][0]) continue;
+    body += '<div class="pb"><div class="ph">' + (list.length > 1 ? (i+1) + '. ' : '') + list[i][1] + '</div>' + list[i][0] + '</div>';
+  }
+  if (!body) { alert('Pehle values bharke CALCULATE dabao \u2014 previews banenge tab print honge.'); return; }
+  var w = null;
+  try { w = window.open('', '_blank'); } catch(e) { w = null; }
+  if (w && w.document) {
+    var d = w.document;
+    d.open();
+    d.write('<html><head><title>SHIVAYA CIRCUIT PVT. LTD.  \u2014 CUT LIST PREVIEW</title>' +
+      '<style>@page{size:A4 landscape;margin:8mm}' +
+      'body{font-family:"Segoe UI",Arial,sans-serif;margin:0;padding:10px;color:#192338;background:#fff}' +
+      '.hd{text-align:center;font:800 15px "Segoe UI",Arial;border-bottom:3px solid #192338;padding-bottom:6px;margin-bottom:10px}' +
+      '.pb{page-break-after:' + (list.length > 1 ? 'always' : 'auto') + ';padding:6px 0}' +
+      '.ph{font:800 14px "Segoe UI",Arial;margin-bottom:6px}' +
+      'svg{max-width:100%;height:auto}</style></head><body>' +
+      '<div class="hd">SHIVAYA CIRCUIT PVT. LTD. \u2014 CUT LIST PREVIEW</div>' + body +
+      '</body></html>');
+    d.close();
+    try {
+      setTimeout(function(){ try { w.focus(); w.print(); } catch(e) {} }, 300);
+    } catch(e) {}
+  } else {
+    var sh = document.getElementById('prevPrintSheet');
+    if (!sh) { alert('Print popup block hua hai \u2014 browser me popup allow karke dobara try karo.'); return; }
+    sh.innerHTML = '<div style="text-align:center;font:800 16px Segoe UI,Arial;color:#192338;border-bottom:3px solid #192338;padding-bottom:8px;margin-bottom:12px">SHIVAYA CIRCUIT PVT. LTD. \u2014 CUT LIST PREVIEW</div>' + body;
+    document.body.classList.add('prevprint');
+    setTimeout(function(){ window.print(); setTimeout(function(){ document.body.classList.remove('prevprint'); }, 300); }, 60);
+  }
+}
+function printPreviews(){
+  _printDocs([[_collectSvg('svgPanel'), 'PANEL PREVIEW \u2014 1 PANEL + INDIVIDUAL PCB'],
+              [_collectSvg('svgGangPanel'), 'GANG PANEL PREVIEW (MULTIPLIER)'],
+              [_collectSvg('svgSheetLayout'), 'PANEL IN SHEET \u2014 CUTTING LAYOUT']]);
+}
+function printPanelPreview(){ _printDocs([[_collectSvg('svgPanel'), 'PANEL PREVIEW \u2014 1 PANEL + INDIVIDUAL PCB']]); }
+function printGangPreview(){ _printDocs([[_collectSvg('svgGangPanel'), 'GANG PANEL PREVIEW (MULTIPLIER)']]); }
+function printSheetPreview(){ _printDocs([[_collectSvg('svgSheetLayout'), 'PANEL IN SHEET \u2014 CUTTING LAYOUT']]); }
   document.getElementById('svgPanel').innerHTML = svgPanel(pcbL, pcbW, px, py, gapXs, gapYs, bl, br, bt, bb, pL, pW, pcsPanel, gx, gy, kx, ky, pgXs, pgYs);
   var sheetHead = document.getElementById('sheetPreviewHead');
   if (sheetHead) sheetHead.innerHTML = (best === 'mixed')
