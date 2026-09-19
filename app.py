@@ -918,7 +918,12 @@ def compute_layout(p):
         panel_w = pcb_w * pcbs_y + sum(gaps_y) + border_t + border_b
         locked = True
     else:
-        panel_len, panel_w = panel_len_in, panel_w_in
+        # v2.87 — visible field me pehle ka CUTTING size ho to base panel use karo (double-add guard)
+        _bl87, _bw87 = _f(p, "panel_base_len"), _f(p, "panel_base_w")
+        if _bl87 > 0 and _bw87 > 0:
+            panel_len, panel_w = _bl87, _bw87
+        else:
+            panel_len, panel_w = panel_len_in, panel_w_in
         locked = False
 
     pcs_panel = pcbs_x * pcbs_y
@@ -934,21 +939,16 @@ def compute_layout(p):
     # PANEL-TO-PANEL GAPS (per joint): '0,2,0' — sirf jahan gap chahiye
     pgaps_x = _gap_list(p.get("pgaps_x"), gang_x - 1, kerf_x) if gang_x > 1 else []
     pgaps_y = _gap_list(p.get("pgaps_y"), gang_y - 1, kerf_y) if gang_y > 1 else []
+    # v2.87 \u2014 kerf (CNC MARGIN) CUTTING SIZE me ADD hota hai: cutting = panel(+gaps) + 2*margin
+    def _cut_add(_l, _w):
+        return _l + 2 * kerf_x, _w + 2 * kerf_y
     if gang_active:
-        if locked:
-            gang_len = panel_len * gang_x + (sum(pgaps_x) if pgaps_x else 0)
-            gang_w = panel_w * gang_y + (sum(pgaps_y) if pgaps_y else 0)
-        else:
-            base_l, base_w = _f(p, "panel_base_len"), _f(p, "panel_base_w")
-            gang_len, gang_w = panel_len_in, panel_w_in  # visible fields = cutting size
-            if base_l > 0 and base_w > 0:
-                panel_len, panel_w = base_l, base_w
-            else:
-                # single panel derive karo (formula display ke liye)
-                panel_len = (gang_len - kerf_x * (gang_x - 1)) / gang_x if gang_x > 1 else gang_len
-                panel_w = (gang_w - kerf_y * (gang_y - 1)) / gang_y if gang_y > 1 else gang_w
+        # v2.87 — CUTTING SIZE = panels + joints + 2*CNC MARGIN (margin add hota hai)
+        gang_len = panel_len * gang_x + (sum(pgaps_x) if pgaps_x else 0)
+        gang_w = panel_w * gang_y + (sum(pgaps_y) if pgaps_y else 0)
+        gang_len, gang_w = _cut_add(gang_len, gang_w)
     else:
-        gang_len, gang_w = panel_len, panel_w
+        gang_len, gang_w = _cut_add(panel_len, panel_w)
 
     def fits(unit_l, unit_w):
         if unit_l <= 0 or unit_w <= 0:
@@ -1162,8 +1162,8 @@ def svg_gang_panel_preview(r):
     kx, ky = r["kerf_x"], r["kerf_y"]
     pgx = r.get("pgaps_x") or []
     pgy = r.get("pgaps_y") or []
-    gl = pl * gx + (sum(pgx) if pgx else kx * (gx - 1))
-    gw = pw * gy + (sum(pgy) if pgy else ky * (gy - 1))
+    gl = pl * gx + (sum(pgx) if pgx else kx * (gx - 1)) + 2 * kx   # v2.87 + CNC MARGIN
+    gw = pw * gy + (sum(pgy) if pgy else ky * (gy - 1)) + 2 * ky   # v2.87 + CNC MARGIN
     scale = min((W - pad - 46) / gl, (H - pad - 44) / gw)
     S, T = gl * scale, gw * scale
     x0, y0 = pad + (W - pad - 46 - S) / 2, pad + (H - pad - 44 - T) / 2
@@ -1258,8 +1258,8 @@ def svg_sheet_layout_preview(r):
     def _panel_cell(cx, cy, cl, cw, num, fill, stroke, mm_l, mm_w):
         s.append(f'<rect x="{cx:.1f}" y="{cy:.1f}" width="{cl:.1f}" height="{cw:.1f}" fill="{fill}" stroke="{stroke}" stroke-width="2" rx="3"/>')
         if gx > 1 or gy > 1:
-            p = (cl - kx * (gx - 1)) / gx
-            q = (cw - ky * (gy - 1)) / gy
+            p = (cl - 2 * kx - kx * (gx - 1)) / gx   # v2.87: cl me CNC margin included
+            q = (cw - 2 * ky - ky * (gy - 1)) / gy
             for a in range(gx):
                 for b in range(gy):
                     s.append(f'<rect x="{cx + a * (p + kx):.1f}" y="{cy + b * (q + ky):.1f}" width="{p:.1f}" height="{q:.1f}" fill="none" stroke="{stroke}" stroke-width="0.7" opacity="0.55"/>')
@@ -1370,7 +1370,7 @@ def gang_info_for(r):
     layout_html = (f'<b>{lay}</b>'
                    f'<div class="gsize">{gl:.2f} × {gw:.2f} mm</div>')
     note = (f'💡 Panel {r["panel_len"]:.2f}×{r["panel_w"]:.2f} mm ({r["pcs_panel"]} PCS) × {gx}×{gy} '
-            f'multiplier + {r["kerf_x"]:.2f}/{r["kerf_y"]:.2f} mm kerf = CUTTING SIZE {gl:.2f}×{gw:.2f} '
+            f'multiplier + {r["kerf_x"]:.2f}/{r["kerf_y"]:.2f} mm CNC MARGIN = CUTTING SIZE {gl:.2f}×{gw:.2f} '
             f'mm ({pcs_gang} PCS/unit). Sheet {r["sheet_len"]:.2f}×{r["sheet_w"]:.2f} mm me <b>{lay.lower()}</b> fit '
             f'hoti hai — calculation isi ke hisaab se: {gang_count} × {pcs_gang} PCS = '
             f'<b>{pcs_sheet} PCS per sheet</b>.')
@@ -1445,8 +1445,8 @@ def cutlist():
             pm_price = pm_rs = None
             cl_price = (f.get("pcb_price") or "").strip()
             cl_rate = (f.get("per_sq_inch") or "").strip()
-            cl_x = result["cutting_len"] if result["gang_active"] else result["panel_len"]
-            cl_y = result["cutting_w"] if result["gang_active"] else result["panel_w"]
+            cl_x = result["cutting_len"]
+            cl_y = result["cutting_w"]
             pcs_unit = result["pcs_unit"] or result["pcs_panel"]
             sq_in = (cl_x * cl_y) / (25.4 * 25.4) / pcs_unit if cl_x > 0 and cl_y > 0 and pcs_unit > 0 else 0.0
             if cl_price:
@@ -1470,8 +1470,8 @@ def cutlist():
                     model = None
                 if model:
                     name = name or model["name"]
-                    cutting_len = result["cutting_len"] if result["gang_active"] else result["panel_len"]
-                    cutting_w = result["cutting_w"] if result["gang_active"] else result["panel_w"]
+                    cutting_len = result["cutting_len"]
+                    cutting_w = result["cutting_w"]
                     up_price = pm_price if pm_price is not None else (model["pcb_price"] or 0)
                     up_rs = pm_rs if pm_rs is not None else (model["per_sq_inch"] or 0)
                     db.execute(
@@ -1496,8 +1496,8 @@ def cutlist():
                 else:
                     flash("Select a valid finished product.", "error")
             elif name:
-                cutting_len = result["cutting_len"] if result["gang_active"] else result["panel_len"]
-                cutting_w = result["cutting_w"] if result["gang_active"] else result["panel_w"]
+                cutting_len = result["cutting_len"]
+                cutting_w = result["cutting_w"]
                 db.execute(
                     "INSERT INTO product_models (name, pcb_len, pcb_w, pcbs_x, pcbs_y, gap_x, gap_y, border_l, "
                     "border_r, border_t, border_b, gang_x, gang_y, sheet_len, sheet_w, panel_len, panel_w, "
@@ -1539,8 +1539,8 @@ def cutlist():
                                 f"{order['product']} \u00b7 Panel {result['panel_len']:g}\u00d7{result['panel_w']:g}mm",
                                 _qpan, _qpcs, order_id))
                     # JOB CARD bhi save karo — cut list ki saari details (sheet/panel/pcs/price) jobcard table me
-                    cut_x = result["cutting_len"] if result["gang_active"] else result["panel_len"]
-                    cut_y = result["cutting_w"] if result["gang_active"] else result["panel_w"]
+                    cut_x = result["cutting_len"]
+                    cut_y = result["cutting_w"]
                     # PCB PRICE — AREA = CUTTING PANEL ÷ PCS/unit (panel size se; PCB size nahi)
                     price = rs_pcb = None
                     cl_price = (f.get("pcb_price") or "").strip()
@@ -1600,8 +1600,8 @@ def cutlist():
                         _jcm = db.query("SELECT party_model FROM jobcard WHERE order_id=?", (order_id,), one=True)
                         _pname = ((_jcm["party_model"] if _jcm else "") or "").strip()
                     if _pname and not db.query("SELECT id FROM product_models WHERE name=?", (_pname,), one=True):
-                        _cx74 = result["cutting_len"] if result["gang_active"] else result["panel_len"]
-                        _cy74 = result["cutting_w"] if result["gang_active"] else result["panel_w"]
+                        _cx74 = result["cutting_len"]
+                        _cy74 = result["cutting_w"]
                         db.execute(
                             "INSERT INTO product_models (name, pcb_len, pcb_w, pcbs_x, pcbs_y, gap_x, gap_y, border_l, "
                             "border_r, border_t, border_b, gang_x, gang_y, sheet_len, sheet_w, panel_len, panel_w, "
@@ -1663,10 +1663,10 @@ def cutlist():
                     cw = model["cutting_w"] or 0
                     if cl <= 0:
                         cl = (model["panel_len"] or 0) * (model["gang_x"] or 1) + \
-                             (model["kerf_x"] or 0) * ((model["gang_x"] or 1) - 1)
+                             (model["kerf_x"] or 0) * ((model["gang_x"] or 1) - 1) + 2 * (model["kerf_x"] or 0)  # v2.87
                     if cw <= 0:
                         cw = (model["panel_w"] or 0) * (model["gang_y"] or 1) + \
-                             (model["kerf_y"] or 0) * ((model["gang_y"] or 1) - 1)
+                             (model["kerf_y"] or 0) * ((model["gang_y"] or 1) - 1) + 2 * (model["kerf_y"] or 0)  # v2.87
                     fields["panel_len"] = f"{cl:g}"
                     fields["panel_w"] = f"{cw:g}"
                     fields["panel_base_len"] = f"{(model['panel_len'] or 0):g}"
@@ -1781,9 +1781,9 @@ def products():
         _cwid = float(f.get("cutting_w", 0) or 0)
         if _gang_x > 1 or _gang_y > 1:
             if _clen <= 0 and _plen > 0:
-                _clen = _plen * _gang_x + _kx * (_gang_x - 1)
+                _clen = _plen * _gang_x + _kx * (_gang_x - 1) + 2 * _kx   # v2.87 + CNC MARGIN
             if _cwid <= 0 and _pwid > 0:
-                _cwid = _pwid * _gang_y + _ky * (_gang_y - 1)
+                _cwid = _pwid * _gang_y + _ky * (_gang_y - 1) + 2 * _ky   # v2.87 + CNC MARGIN
         # THICKNESS → RATE: per sq.inch khali hai aur thickness rate card me hai to auto price
         _thick = (f.get("sheet_thickness") or "").strip()
         _per_sq = float(f.get("per_sq_inch", 0) or 0)

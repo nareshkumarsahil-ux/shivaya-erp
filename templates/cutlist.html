@@ -94,10 +94,10 @@
       <div class="panel-head"><h3>🔗 PANEL MULTIPLIER (GANG PANEL)</h3></div>
       <div class="panel-body">
         <div style="display:flex;gap:12px">
-          <div class="field" style="flex:1"><label>X Multiplier</label><input type="number" name="gang_x" id="gang_x" value="{{ fields.gang_x }}" min="1"></div>
-          <div class="field" style="flex:1"><label>Y Multiplier</label><input type="number" name="gang_y" id="gang_y" value="{{ fields.gang_y }}" min="1"></div>
+          <div class="field" style="flex:1"><label>X Multiplier</label><input type="number" name="gang_x" id="gang_x" value="{{ fields.get('gang_x') if fields.get('gang_x') not in (None, '') else 1 }}" min="1"></div>
+          <div class="field" style="flex:1"><label>Y Multiplier</label><input type="number" name="gang_y" id="gang_y" value="{{ fields.get('gang_y') if fields.get('gang_y') not in (None, '') else 1 }}" min="1"></div>
         </div>
-        <p class="muted small" style="margin-top:8px">💡 How many panels are gang-cut together, with the panel-to-panel gap below added between them.</p>
+        <p class="muted small" style="margin-top:8px">💡 CNC MARGIN cutting size me ADD hota hai (har side + margin). Multiplier = kitne panels ek saath gang-cut honge.</p>
         <div style="margin-top:10px;background:#f8fafc;border:1px solid var(--border);border-radius:9px;padding:9px 12px">
           <div class="small" style="font-weight:800;color:#334155">🔹 PANEL-TO-PANEL GAP — KAHIN BHI: koi bhi joint me gap rakho ya hatao</div>
           <div id="pgapx_cells" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px"></div>
@@ -105,7 +105,7 @@
           <div class="muted small" style="margin-top:5px">Har joint <b>independent</b> hai: jahan gap chahiye wahan number (2, 5, kuch bhi), jahan nahi wahan <b>0</b>. Koi bhi pattern — beech me, kinare par, do jagah, kahin nahi.</div>
           <div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">
             <button type="button" class="btn btn-outline btn-xs" id="pgapAll0">0 — sab gap HATAO</button>
-            <button type="button" class="btn btn-outline btn-xs" id="pgapAllKerf">↻ sab me PANEL GAP/KERF wali value</button>
+            <button type="button" class="btn btn-outline btn-xs" id="pgapAllKerf">↻ sab me CNC MARGIN wali value</button>
           </div>
           <input type="hidden" name="pgaps_x" id="pgaps_x" value="{{ fields.pgaps_x or '' }}">
           <input type="hidden" name="pgaps_y" id="pgaps_y" value="{{ fields.pgaps_y or '' }}">
@@ -134,12 +134,12 @@
         <input type="hidden" name="panel_base_len" id="panel_base_len" value="{{ fields.panel_base_len or '' }}">
         <input type="hidden" name="panel_base_w" id="panel_base_w" value="{{ fields.panel_base_w or '' }}">
         <label class="small" style="display:flex;align-items:center;gap:6px;margin-bottom:12px;cursor:pointer">
-          <input type="checkbox" name="use" value="1" id="useChk" {{'checked' if fields.use=='1'}} style="accent-color:var(--amber)"> <b>Use</b>
+          <input type="checkbox" name="use" value="1" id="useChk" {{'checked' if fields.get('use')=='1' or fields.get('use') in (None, '', '0') }} style="accent-color:var(--amber)"> <b>Use</b>
           <span class="muted">Panel size is locked — computed from PCB Builder above (includes CNC margin). Untick "Use" to enter panel size manually.</span>
         </label>
         <div style="display:flex;gap:12px;margin-bottom:14px">
-          <div class="field" style="flex:1"><label>PANEL GAP / KERF X (MM)</label><input type="number" step="0.01" name="kerf_x" id="kerf_x" value="{{ fields.kerf_x }}"></div>
-          <div class="field" style="flex:1"><label>PANEL GAP / KERF Y (MM)</label><input type="number" step="0.01" name="kerf_y" id="kerf_y" value="{{ fields.kerf_y }}"></div>
+          <div class="field" style="flex:1"><label>CNC MARGIN X (MM)</label><input type="number" step="0.01" name="kerf_x" id="kerf_x" value="{{ fields.get('kerf_x') if fields.get('kerf_x') not in (None, '') else 2 }}"></div>
+          <div class="field" style="flex:1"><label>CNC MARGIN Y (MM)</label><input type="number" step="0.01" name="kerf_y" id="kerf_y" value="{{ fields.get('kerf_y') if fields.get('kerf_y') not in (None, '') else 2 }}"></div>
           <div class="field" style="flex:1"><label>NO. OF SHEETS</label><input type="number" name="sheets" id="sheets" value="{{ fields.sheets }}" min="1"></div>
         </div>
         <div class="result-line" id="liveSheetLine" style="display:none"></div>
@@ -192,6 +192,7 @@
 
     <div class="panel">
       <div class="panel-head"><h3>🔲 PANEL PREVIEW — 1 PANEL + INDIVIDUAL PCB</h3>
+        <button type="button" class="btn btn-outline btn-xs" style="margin-left:auto" onclick="printPreviews()">🖨️ PRINT / PDF</button>
         <span class="muted small" style="display:inline-flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:2px">
           <span style="display:inline-flex;gap:4px;align-items:center"><span style="width:11px;height:11px;background:#dbeafe;border:1.5px solid #2563eb;border-radius:2px;display:inline-block"></span>Panel</span>
           <span style="display:inline-flex;gap:4px;align-items:center"><span style="width:11px;height:11px;background:#fbbf24;border:1.5px solid #f59e0b;border-radius:2px;display:inline-block"></span>PCB</span>
@@ -446,10 +447,13 @@ function computeLive(){
       unitL = pL * gx + _sumArr(pgXs);
       unitW = pW * gy + _sumArr(pgYs);
     } else {
-      /* visible PANEL fields = CUTTING SIZE (multiplier ke baad ka size) */
-      unitL = manualL; unitW = manualW;
-      pL = (gx > 1) ? (manualL - kx * (gx - 1)) / gx : manualL;
-      pW = (gy > 1) ? (manualW - ky * (gy - 1)) / gy : manualW;
+      /* v2.87 — visible PANEL field = PANEL size; CUTTING = panels + joints + 2×CNC MARGIN
+         (panel_base ho to wahi base — recalc par double-add na ho) */
+      var baseL87 = num('panel_base_len'), baseW87 = num('panel_base_w');
+      if (baseL87 > 0 && baseW87 > 0) { pL = baseL87; pW = baseW87; }
+      else { pL = manualL; pW = manualW; }
+      unitL = pL * gx + _sumArr(pgXs) + 2 * kx;
+      unitW = pW * gy + _sumArr(pgYs) + 2 * ky;
     }
     document.getElementById('panel_len').value = fmtNum(unitL);
     document.getElementById('panel_w').value = fmtNum(unitW);
@@ -464,7 +468,7 @@ function computeLive(){
     document.getElementById('panel_w').value = fmtNum(pW);
     document.getElementById('panel_base_len').value = '';
     document.getElementById('panel_base_w').value = '';
-    unitL = pL; unitW = pW;
+    unitL = pL + 2 * kx; unitW = pW + 2 * ky;   /* v2.87 — sheet fit CUTTING size (+2×CNC MARGIN) par */
   }
 
   var pcsPanel = px * py;
@@ -589,7 +593,7 @@ function computeLive(){
     document.getElementById('gangPcsSheet').innerHTML = pcsSheet + ' <span class="u">PCS</span>';
     document.getElementById('gangNote').innerHTML =
       '💡 Panel ' + fmtNum(pL) + '×' + fmtNum(pW) + ' mm (' + pcsPanel + ' PCS) × ' + gx + '×' + gy +
-      ' multiplier + ' + fmtNum(kx) + '/' + fmtNum(ky) + ' mm kerf = CUTTING SIZE ' + fmtNum(gl) + '×' + fmtNum(gw) +
+      ' multiplier + ' + fmtNum(kx) + '/' + fmtNum(ky) + ' mm CNC MARGIN = CUTTING SIZE ' + fmtNum(gl) + '×' + fmtNum(gw) +
       ' mm (' + pcsUnit + ' PCS/unit). Sheet ' + fmtNum(sl) + '×' + fmtNum(sw) + ' mm me <b>' + layTxt.toLowerCase() +
       '</b> fit hoti hai — calculation isi ke hisaab se: ' + gangCount + ' × ' + pcsUnit + ' PCS = ' +
       '<b>' + pcsSheet + ' PCS per sheet</b>.';
@@ -635,6 +639,31 @@ function computeLive(){
   mark(om, bm, best === 'mixed');
 
   /* --- SVG previews --- */
+/* ---- v2.86 PRINT / PDF ---- sirf 3 previews (PANEL / GANG PANEL / PANEL IN SHEET) ---- */
+(function(){
+  var st = document.createElement('style');
+  st.textContent = '#prevPrintSheet{display:none}' +
+    '@media print{body.prevprint .sidebar,body.prevprint .topbar,body.prevprint .content>*:not(#prevPrintSheet){display:none!important}' +
+    'body.prevprint #prevPrintSheet{display:block!important}' +
+    '#prevPrintSheet .pp-block{page-break-after:always;padding:10px 0}' +
+    '#prevPrintSheet .pp-h{font:800 15px Segoe UI,Arial;margin-bottom:8px;color:#192338}}';
+  document.head.appendChild(st);
+})();
+function printPreviews(){
+  var ids = [['svgPanel', 'PANEL PREVIEW \u2014 1 PANEL + INDIVIDUAL PCB'],
+             ['svgGangPanel', 'GANG PANEL PREVIEW (MULTIPLIER)'],
+             ['svgSheetLayout', 'PANEL IN SHEET \u2014 CUTTING LAYOUT']];
+  var out = '';
+  for (var i = 0; i < ids.length; i++){
+    var el = document.getElementById(ids[i][0]);
+    if (el && el.querySelector('svg')) out += '<div class="pp-block"><div class="pp-h">' + (i+1) + '. ' + ids[i][1] + '</div>' + el.innerHTML + '</div>';
+  }
+  if (!out) { alert('Pehle values bharke CALCULATE dabao \u2014 previews banenge tab print honge.'); return; }
+  var sh = document.getElementById('prevPrintSheet');
+  sh.innerHTML = '<div style="text-align:center;font:800 16px Segoe UI,Arial;color:#192338;border-bottom:3px solid #192338;padding-bottom:8px;margin-bottom:12px">SHIVAYA CIRCUIT PVT. LTD. \u2014 CUT LIST PREVIEWS</div>' + out;
+  document.body.classList.add('prevprint');
+  setTimeout(function(){ window.print(); setTimeout(function(){ document.body.classList.remove('prevprint'); }, 300); }, 60);
+}
   document.getElementById('svgPanel').innerHTML = svgPanel(pcbL, pcbW, px, py, gapXs, gapYs, bl, br, bt, bb, pL, pW, pcsPanel, gx, gy, kx, ky, pgXs, pgYs);
   var sheetHead = document.getElementById('sheetPreviewHead');
   if (sheetHead) sheetHead.innerHTML = (best === 'mixed')
@@ -644,17 +673,25 @@ function computeLive(){
 
 function svgPanel(pcbL, pcbW, px, py, gapXs, gapYs, bl, br, bt, bb, pL, pW, pcsPanel, gx, gy, kx, ky, pgXs, pgYs){
   /* PREVIEW #1 — PANEL: sirf EK panel + individual PCBs (borders + per-boundary gaps).
-     Multiplier copies GANG PANEL PREVIEW (#2) me — sheet fit #3 me. */
-  var W = 440, H = 322, pad = 26;
-  var scale = Math.min((W - 2*pad - 16) / pL, (H - 2*pad - 22) / pW);
+     Multiplier copies GANG PANEL PREVIEW (#2) me — sheet fit #3 me.
+     v2.86 \u2014 canvas me FIXED bottom zone (dims + captions) = koi overlap nahi.
+     PCB size na diya ho (panel-mode) to grid se NIKALO: (panel - borders - gaps) / grid. */
+  var W = 460, H = 356, pad = 22, BOT = 64;
+  var effL = pcbL, effW = pcbW;
+  if ((!effL || effL <= 0) && px > 0) effL = (pL - bl - br - _sumArr(pgXs || gapXs)) / px;
+  if ((!effW || effW <= 0) && py > 0) effW = (pW - bt - bb - _sumArr(pgYs || gapYs)) / py;
+  if (effL > 0 && effL < 200) effL = Math.round(effL * 100) / 100;
+  if (effW > 0 && effW < 200) effW = Math.round(effW * 100) / 100;
+  var availW = W - 2*pad - 16, availH = H - pad - BOT;
+  var scale = Math.min(availW / pL, availH / pW);
   var P = pL * scale, Q = pW * scale;
-  var x0 = pad + (W - 2*pad - 16 - P) / 2, y0 = pad + (H - 2*pad - 22 - Q) / 2;
-  var cw = pcbL * scale, ch = pcbW * scale;
+  var x0 = pad + (availW - P) / 2, y0 = pad;
+  var cw = (effL > 0 ? effL : 0) * scale, ch = (effW > 0 ? effW : 0) * scale;
   var bx = bl * scale, by = bt * scale;
   var s = '<svg viewBox="0 0 ' + W + ' ' + H + '" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;display:block">';
   var i, j;
   s += '<rect x="' + x0.toFixed(1) + '" y="' + y0.toFixed(1) + '" width="' + P.toFixed(1) + '" height="' + Q.toFixed(1) + '" fill="#dbeafe" stroke="#2563eb" stroke-width="2" rx="3"/>';
-  if (cw > 2.4 && ch > 2.4) {
+  if (cw > 2.4 && ch > 2.4 && effL > 0 && effW > 0) {
     var ox = bx;
     for (i = 0; i < px; i++) {
       var oy = by;
@@ -671,20 +708,20 @@ function svgPanel(pcbL, pcbW, px, py, gapXs, gapYs, bl, br, bt, bb, pL, pW, pcsP
     s += '<text x="' + (x0 + P/2).toFixed(1) + '" y="' + (y0 + Q - 10).toFixed(1) + '" text-anchor="middle" font-size="10" fill="#b45309" font-family="Segoe UI,Arial">gap X:' + fmtNum(_sumArr(gapXs)) + ' / Y:' + fmtNum(_sumArr(gapYs)) + ' mm</text>';
   /* v2.83 \u2014 PANEL DIMENSION side me (neeche = length, right = rotated width) */
   var dmc = '#475569';
-  var dy = y0 + Q + 14;
+  var dy = y0 + Q + 13;
   s += '<line x1="' + x0.toFixed(1) + '" y1="' + dy.toFixed(1) + '" x2="' + (x0+P).toFixed(1) + '" y2="' + dy.toFixed(1) + '" stroke="' + dmc + '" stroke-width="1"/>';
   s += '<line x1="' + x0.toFixed(1) + '" y1="' + (dy-3).toFixed(1) + '" x2="' + x0.toFixed(1) + '" y2="' + (dy+3).toFixed(1) + '" stroke="' + dmc + '" stroke-width="1"/>';
   s += '<line x1="' + (x0+P).toFixed(1) + '" y1="' + (dy-3).toFixed(1) + '" x2="' + (x0+P).toFixed(1) + '" y2="' + (dy+3).toFixed(1) + '" stroke="' + dmc + '" stroke-width="1"/>';
-  s += '<text x="' + (x0+P/2).toFixed(1) + '" y="' + (dy+12).toFixed(1) + '" text-anchor="middle" font-size="11" fill="#334155" font-weight="700" font-family="Segoe UI,Arial">' + fmtNum(pL) + ' mm</text>';
+  s += '<text x="' + (x0+P/2).toFixed(1) + '" y="' + (dy+11).toFixed(1) + '" text-anchor="middle" font-size="11" fill="#334155" font-weight="700" font-family="Segoe UI,Arial">' + fmtNum(pL) + ' mm</text>';
   var dx = x0 + P + 13;
   s += '<line x1="' + dx.toFixed(1) + '" y1="' + y0.toFixed(1) + '" x2="' + dx.toFixed(1) + '" y2="' + (y0+Q).toFixed(1) + '" stroke="' + dmc + '" stroke-width="1"/>';
   s += '<line x1="' + (dx-3).toFixed(1) + '" y1="' + y0.toFixed(1) + '" x2="' + (dx+3).toFixed(1) + '" y2="' + y0.toFixed(1) + '" stroke="' + dmc + '" stroke-width="1"/>';
   s += '<line x1="' + (dx-3).toFixed(1) + '" y1="' + (y0+Q).toFixed(1) + '" x2="' + (dx+3).toFixed(1) + '" y2="' + (y0+Q).toFixed(1) + '" stroke="' + dmc + '" stroke-width="1"/>';
   s += '<text x="' + (dx+10).toFixed(1) + '" y="' + (y0+Q/2).toFixed(1) + '" text-anchor="middle" font-size="11" fill="#334155" font-weight="700" font-family="Segoe UI,Arial" transform="rotate(90 ' + (dx+10).toFixed(1) + ' ' + (y0+Q/2).toFixed(1) + ')">' + fmtNum(pW) + ' mm</text>';
-  var lbl = 'PANEL: ' + fmtNum(pL) + '\u00d7' + fmtNum(pW) + ' mm \u00b7 PCB: ' + fmtNum(pcbL) + '\u00d7' + fmtNum(pcbW) + ' mm \u00b7 ' + pcsPanel + ' PCBs (' + px + '\u00d7' + py + ')';
-  s += '<text x="' + (W/2) + '" y="' + (H-19) + '" text-anchor="middle" font-size="12" fill="#8a8f98" font-family="Segoe UI,Arial">' + lbl + '</text>';
+  var lbl = 'PANEL: ' + fmtNum(pL) + '\u00d7' + fmtNum(pW) + ' mm \u00b7 PCB: ' + (effL > 0 ? fmtNum(effL) + '\u00d7' + fmtNum(effW) : '\u2014') + ' mm \u00b7 ' + pcsPanel + ' PCBs (' + px + '\u00d7' + py + ')';
+  s += '<text x="' + (W/2) + '" y="' + (H-32) + '" text-anchor="middle" font-size="12" fill="#8a8f98" font-family="Segoe UI,Arial">' + lbl + '</text>';
   var lbl2 = 'BORDER: L ' + fmtNum(bl) + ' / R ' + fmtNum(br) + ' / T ' + fmtNum(bt) + ' / B ' + fmtNum(bb) + ' mm';
-  s += '<text x="' + (W/2) + '" y="' + (H-5) + '" text-anchor="middle" font-size="11" fill="#b45309" font-weight="700" font-family="Segoe UI,Arial">' + lbl2 + '</text>';
+  s += '<text x="' + (W/2) + '" y="' + (H-16) + '" text-anchor="middle" font-size="11" fill="#b45309" font-weight="700" font-family="Segoe UI,Arial">' + lbl2 + '</text>';
   s += '</svg>';
   return s;
 }
@@ -839,8 +876,8 @@ function svgGangPanel(pcbL, pcbW, px, py, gapXs, gapYs, bl, br, bt, bb, pL, pW, 
      per-joint gap labels + total cutting size (gl x gw) dimensions ke saath */
   var W = 470, H = 412, pad = 30;
   pgXs = pgXs || []; pgYs = pgYs || [];
-  var gl = pL * gx + (pgXs.length ? _sumArr(pgXs) : kx * (gx - 1));
-  var gw = pW * gy + (pgYs.length ? _sumArr(pgYs) : ky * (gy - 1));
+  var gl = pL * gx + (pgXs.length ? _sumArr(pgXs) : kx * (gx - 1)) + 2 * kx;   /* v2.87 + CNC MARGIN */
+  var gw = pW * gy + (pgYs.length ? _sumArr(pgYs) : ky * (gy - 1)) + 2 * ky;   /* v2.87 + CNC MARGIN */
   var scale = Math.min((W - pad - 46) / gl, (H - pad - 44) / gw);
   var S = gl * scale, T = gw * scale;
   var x0 = pad + (W - pad - 46 - S) / 2, y0 = pad + (H - pad - 44 - T) / 2;
@@ -1011,4 +1048,5 @@ function calcClPrice(){
 })();
 calcClPrice();
 </script>
+<div id="prevPrintSheet"></div>
 {% endblock %}
