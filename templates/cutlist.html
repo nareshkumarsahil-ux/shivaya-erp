@@ -141,6 +141,7 @@
           <div class="field" style="flex:1"><label>CNC MARGIN X (MM)</label><input type="number" step="0.01" name="kerf_x" id="kerf_x" value="{{ fields.get('kerf_x') if fields.get('kerf_x') not in (None, '') else 2 }}"></div>
           <div class="field" style="flex:1"><label>CNC MARGIN Y (MM)</label><input type="number" step="0.01" name="kerf_y" id="kerf_y" value="{{ fields.get('kerf_y') if fields.get('kerf_y') not in (None, '') else 2 }}"></div>
           <div class="field" style="flex:1"><label>NO. OF SHEETS</label><input type="number" name="sheets" id="sheets" value="{{ fields.sheets }}" min="1"></div>
+          <div class="field" style="flex:1"><label>ORDER QTY (PANELS)</label><input type="number" name="order_qty" id="order_qty" value="{{ fields.get('order_qty') or '' }}" min="0" placeholder="jaise 350"></div>
         </div>
         <div class="result-line" id="liveSheetLine" style="display:none"></div>
         <div style="display:flex;gap:10px;margin-top:14px">
@@ -233,6 +234,11 @@
           <div class="gstat"><div class="glbl">SHEET SIZE</div><div class="gnum" style="font-size:15px"><span id="slSheet">—</span> <span class="u">mm</span></div></div>
           <div class="gstat"><div class="glbl">1 SHEET ME {{ 'CUTTING PANELS' if gang_info else 'PANELS' }}</div><div class="gnum" style="color:#4f46e5" id="slCount">—</div></div>
           <div class="gstat"><div class="glbl">TOTAL PCB (1 SHEET)</div><div class="gnum" style="color:#166534" id="slPcs">—</div></div>
+        {% set R96 = result %}
+        <div class="gstat"><div class="glbl">ORDER QTY (PANELS)</div><div class="gnum" style="color:#334155" id="slOrderQty">{{ fields.get('order_qty') if fields.get('order_qty') else '—' }}</div></div>
+        <div class="gstat"><div class="glbl">TOTAL PANELS ({{ R96.sheets if R96 else 1 }} SH)</div><div class="gnum" style="color:#1d4ed8" id="slTotPanels">{{ '%0.0f'|format(R96.total_panels) if R96 and R96.total_panels else '—' }}</div></div>
+        <div class="gstat"><div class="glbl">TOTAL PCB ({{ R96.sheets if R96 else 1 }} SH)</div><div class="gnum" style="color:#166534" id="slTotPcs">{{ '%0.0f'|format(R96.total_pcs) if R96 and R96.total_pcs else '—' }}</div></div>
+        <div class="gstat"><div class="glbl">WASTE PANELS{% if R96 and R96.order_qty %} ({{ '%0.2f'|format(R96.cutting_len) }}×{{ '%0.2f'|format(R96.cutting_w) }} mm){% endif %}</div><div class="gnum" style="color:#dc2626" id="slWastePanels">{% if R96 and R96.order_qty %}{{ '%0.0f'|format(R96.waste_panels) }}{% else %}—{% endif %}</div></div>
         </div>
         <div style="margin-top:12px">
           <span class="muted small" style="display:inline-flex;gap:12px;flex-wrap:wrap">
@@ -630,6 +636,18 @@ function computeLive(){
     document.getElementById('slSheet').textContent = fmtNum(sl) + '×' + fmtNum(sw);
     document.getElementById('slCount').textContent = String(pps);
     document.getElementById('slPcs').textContent = fmtNum(pps * pcsUnit);
+    /* v2.96 ''' + D + ''' ORDER QTY: N-sheet totals + WASTE PANELS */
+    var _oqEl = document.getElementById('order_qty');
+    var _oq = _oqEl ? (parseInt(_oqEl.value, 10) || 0) : 0;
+    var _totPan = pps * sheets, _totPcs = _totPan * pcsUnit;
+    document.getElementById('slTotPanels').textContent = fmtNum(_totPan);
+    document.getElementById('slTotPcs').textContent = fmtNum(_totPcs);
+    var _wEl = document.getElementById('slWastePanels');
+    if (_oq > 0) {
+      _wEl.textContent = String(Math.max(0, _totPan - _oq));
+    } else {
+      _wEl.textContent = '\u2014';
+    }
     var slh = document.getElementById('sheetLayoutHead');
     if (slh) slh.textContent = gangActive ? '📐 GANG PANEL IN SHEET — 1 SHEET ME KITNE GANG PANELS' : '📐 PANEL IN SHEET — 1 SHEET ME KITNE PANELS';
     document.getElementById('svgSheetLayout').innerHTML =
@@ -939,7 +957,7 @@ function svgGangPanel(pcbL, pcbW, px, py, gapXs, gapYs, bl, br, bt, bb, pL, pW, 
   return s;
 }
 ['pcb_len','pcb_w','pcbs_x','pcbs_y','gap_x','gap_y','border_l','border_r','border_t','border_b',
- 'gang_x','gang_y','sheet_len','sheet_w','panel_len','panel_w','kerf_x','kerf_y','sheets'
+ 'gang_x','gang_y','sheet_len','sheet_w','panel_len','panel_w','kerf_x','kerf_y','sheets','order_qty'
 ].forEach(function(id){
   document.getElementById(id).addEventListener('input', computeLive);
 });
@@ -1061,7 +1079,8 @@ calcClPrice();
     'body.prevshow .sidebar,body.prevshow .topbar,body.prevshow .content>*:not(#prevPrintSheet){display:none!important}' +
     'body.prevshow #prevPrintSheet{display:block!important;position:static;padding:0}' +
     '#prevPrintSheet .pp-tools,#prevPrintSheet .pp-screen{display:none!important}' +
-    '#prevPrintSheet .pp-block{page-break-after:always;padding:0;height:170mm;overflow:hidden;display:flex;flex-direction:column}' +
+    '#prevPrintSheet .pp-block{page-break-after:always;padding:0;height:176mm;overflow:hidden;display:flex;flex-direction:column}' +
+    '#prevPrintSheet .pp-block:last-child{page-break-after:auto}' +
     '#prevPrintSheet .pp-top{border-bottom:2.5px solid #192338;padding-bottom:2mm;margin-bottom:2.5mm;text-align:center}' +
     '#prevPrintSheet .pp-co{font:800 13.5px Segoe UI,Arial;letter-spacing:1.5px;color:#192338}' +
     '#prevPrintSheet .pp-title{font:700 10.5px Segoe UI,Arial;color:#334155;margin-top:1mm}' +
@@ -1074,7 +1093,7 @@ calcClPrice();
     '.pp-sec .gstat{padding:2mm 3mm!important}' +
     '.pp-sec .gstat .glbl{font-size:8px!important}.pp-sec .gstat .gnum{font-size:12px!important}' +
     '#prevPrintSheet .pp-sec [id^="svg"]{max-width:100%!important;margin:2mm auto 0!important}' +
-    '#prevPrintSheet .pp-sec svg{width:auto!important;max-width:100%!important;height:auto!important;max-height:122mm!important;display:block;margin:0 auto}}';
+    '#prevPrintSheet .pp-sec svg{width:auto!important;max-width:100%!important;height:auto!important;max-height:120mm!important;display:block;margin:0 auto}}';
   document.head.appendChild(st);
 })();
 /* POORA SECTION clone: heading + stats boxes + note + legend + svg (buttons hata ke) */

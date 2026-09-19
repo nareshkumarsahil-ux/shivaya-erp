@@ -843,7 +843,7 @@ FIELD_KEYS = ["pcb_len", "pcb_w", "pcbs_x", "pcbs_y", "gap_x", "gap_y",
               "border_l", "border_r", "border_t", "border_b",
               "gang_x", "gang_y", "sheet_len", "sheet_w", "kerf_x", "kerf_y", "sheets", "use",
               "panel_len", "panel_w", "panel_base_len", "panel_base_w",
-              "per_sq_inch", "pcb_price", "gaps_x", "gaps_y", "pgaps_x", "pgaps_y"]
+              "per_sq_inch", "pcb_price", "gaps_x", "gaps_y", "pgaps_x", "pgaps_y", "order_qty"]
 DEFAULTS = {"pcb_len": "40", "pcb_w": "50", "pcbs_x": "10", "pcbs_y": "5",
             "gap_x": "0", "gap_y": "0",
             "border_l": "0", "border_r": "0", "border_t": "5", "border_b": "5",
@@ -998,6 +998,19 @@ def compute_layout(p):
     total_pcs = pcs_per_sheet * sheets
 
     # used area = cutting unit ka pura area (multiplier ke beech ka kerf gap included)
+    # v2.96 — ORDER QTY (PANELS): N sheets ke TOTAL PANELS/PCB + WASTE PANELS (dim = cutting size)
+    _oq96 = _i(p, "order_qty", 0)
+    order_qty = _oq96 if _oq96 > 0 else 0
+    if order_qty:
+        panels_needed = order_qty                                     # order PANELS me hi hai
+        sheets_needed = (order_qty + panels_per_sheet - 1) // panels_per_sheet if panels_per_sheet else 0
+        waste_panels = max(0, total_panels - order_qty)
+        waste_pcs = max(0, total_pcs - order_qty * pcs_unit)
+    else:
+        panels_needed = sheets_needed = waste_panels = waste_pcs = 0
+    order_info = {"order_qty": order_qty, "panels_needed": panels_needed,
+                  "sheets_needed": sheets_needed, "waste_panels": waste_panels, "waste_pcs": waste_pcs}
+
     used = total_panels * gang_len * gang_w
     sheet_area = sheets * sheet_len * sheet_w
     wastage = round(100 * (sheet_area - used) / sheet_area, 1) if sheet_area else 0
@@ -1023,6 +1036,8 @@ def compute_layout(p):
         "gang_len": gang_len, "gang_w": gang_w,
         "panels_per_sheet": panels_per_sheet, "pcs_per_sheet": pcs_per_sheet,
         "total_panels": total_panels, "total_pcs": total_pcs,
+        "order_qty": order_qty, "panels_needed": panels_needed, "sheets_needed": sheets_needed,
+        "waste_panels": waste_panels, "waste_pcs": waste_pcs, "order_info": order_info,
         "wastage": wastage, "inches": inches,
     }
 
