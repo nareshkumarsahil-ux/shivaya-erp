@@ -1573,11 +1573,13 @@ def cutlist():
                     flash(f"Model '{name}' updated — saari cut list details + price save ho gayi.", "success")
                 else:
                     flash("Select a valid finished product.", "error")
-            elif name or (f.get("pcb_code") or "").strip() or (f.get("party_code") or "").strip() or (f.get("party_name") or "").strip():
-                # v2.97 — save_name khali ho to model NAME = PCB CODE-PARTY CODE-PARTY NAME
+            else:
+                # v3.02 — naya model HAMESHA save hoga: name/codes khali bhi ho to AUTO-NAME se save
                 if not name:
                     name = "-".join(x for x in [(f.get("pcb_code") or "").strip(), (f.get("party_code") or "").strip(),
                                                 (f.get("party_name") or "").strip()] if x)
+                if not name:
+                    name = "MODEL-" + _now_ist().strftime("%d%b-%H%M").upper()
                 cutting_len = result["cutting_len"]
                 cutting_w = result["cutting_w"]
                 db.execute(
@@ -1602,9 +1604,10 @@ def cutlist():
                      (f.get("pcb_code") or "").strip(), (f.get("party_code") or "").strip(),
                      (f.get("party_name") or "").strip(),
                      _today_ist().isoformat()))
-                flash(f"Model '{name}' saved to Finished Products (price + PCB/party codes ke saath).", "success")
-            else:
-                flash("Enter a name to save as finished product.", "error")
+                flash("Naya model '" + name + "' FINISHED PRODUCTS me save ho gaya — Products page par PCB/PARTY codes ke saath dikh raha hai.", "success")
+
+        if action == "save_model" and not result:
+            flash("Save nahi hua — layout invalid hai. Sheet L/W + PCB size bhar ke Calculate karo, phir Save dabao.", "error")
 
         if action == "apply_order" and result:
             try:
