@@ -84,9 +84,9 @@ def token_login():
 # Operator ka limited access (screenshot jaisa): Dashboard, Job Orders, Machines,
 # Quality, Operator View — in pages mein wo dekh + kaam kar sakta hai. Baaki sab admin-only.
 OPERATOR_READ = {"dashboard", "orders", "machines", "quality", "operator_view",
-                 "product_attachment_view", "dispatch_photo", "jobcard"}
+                 "product_attachment_view", "dispatch_photo", "jobcard", "my_work"}
 OPERATOR_WRITE = {"operator_action", "operator_issue", "machine_status", "quality", "quality_result",
-                  "dispatch_attach_photo"}
+                  "dispatch_attach_photo", "my_work_claim"}
 
 
 @app.before_request
@@ -233,6 +233,37 @@ def logout():
     return redirect(url_for("login"))
 
 
+def _working_ops(order_ids):
+    """v2.98 — kaun kar raha hai: current/last process row ka start_name (fallback end_name)."""
+    if not order_ids:
+        return {}
+    ph = ",".join("?" * len(order_ids))
+    wop = {}
+    try:
+        rows = db.query(f"SELECT order_id, start_name, end_name, start_dt, end_dt FROM jobcard_process "
+                        f"WHERE order_id IN ({ph}) ORDER BY ord, id", tuple(order_ids))
+    except Exception:
+        return {}
+    for r in rows:
+        oid = r["order_id"]
+        name = (r["start_name"] or "").strip() or (r["end_name"] or "").strip()
+        if r["start_dt"] and not r["end_dt"] and (r["start_name"] or "").strip():
+            wop[oid] = r["start_name"].strip()   # ABHI chal raha hai
+        elif oid not in wop and name:
+            wop[oid] = name                       # fallback: pehla known naam
+    return wop
+
+
+def _decorate_working_ops(rows):
+    """orders rows ke operator ko live working operator se bharo (dict list return)."""
+    rows = [dict(r) for r in rows]
+    ids = [r["id"] for r in rows]
+    wop = _working_ops(ids)
+    for r in rows:
+        r["operator"] = wop.get(r["id"]) or (r.get("operator") or "")
+    return rows
+
+
 # ---------------------------------------------------------------- dashboard
 @app.route("/")
 @login_required
@@ -284,7 +315,8 @@ def dashboard():
                            active_orders=active_orders, total_orders=total_orders, urgent=urgent,
                            overdue_rev=overdue_rev, pending_rev=pending_rev, low_stock=low_stock,
                            machines_running=machines_running, total_machines=total_machines,
-                           tracking=tracking, overview=overview, notices=notices, q=q)
+                           tracking=_decorate_working_ops(tracking), overview=_decorate_working_ops(overview),  # v2.98
+                           notices=notices, q=q)
 
 
 # ---------------------------------------------------------------- live process tracking
@@ -299,7 +331,7 @@ def tracking():
     else:
         rows = db.query("SELECT * FROM orders ORDER BY CASE status WHEN 'pending' THEN 0 ELSE 1 END, id DESC")
     operators = db.query("SELECT DISTINCT name FROM employees WHERE department='Production' ORDER BY name")
-    rows = [dict(r) for r in rows]
+    rows = _decorate_working_ops(rows)   # v2.98 — OPERATOR = kaun kar raha hai
     for r in rows:
         r["step_idx"] = PROCESS_STEPS.index(r["current_process"]) if r["current_process"] in PROCESS_STEPS else 0
         # agla process AUTO (order ke flow se) + uski assignment (kaun karega)
@@ -330,6 +362,15 @@ def tracking_move(order_id):
         db.execute("UPDATE orders SET current_process=?, operator=?, progress=?, status=? WHERE id=?",
                    (next_step, operator, max(order["progress"], progress), _st, order_id))
         db.execute("UPDATE process_log SET status='done' WHERE order_id=? AND process=?", (order_id, order["current_process"]))
+        # v2.99: assignment table bhi sync — "Mera Work" me sahii dikhe
+        _nx = db.query("SELECT operator FROM order_assignments WHERE order_id=? AND process=?",
+                       (order_id, next_step), one=True)
+        if _nx:
+            db.execute("UPDATE order_assignments SET operator=? WHERE order_id=? AND process=?",
+                       (operator, order_id, next_step))
+        else:
+            db.execute("INSERT INTO order_assignments (order_id, process, operator) VALUES (?,?,?)",
+                       (order_id, next_step, operator))
         db.execute("INSERT INTO process_log (order_id, process, status, operator, updated_on) VALUES (?,?,?,?,?)",
                    (order_id, next_step, "done" if next_step == "Completed" else "active", operator,
                     _today_ist().isoformat()))
@@ -843,7 +884,8 @@ FIELD_KEYS = ["pcb_len", "pcb_w", "pcbs_x", "pcbs_y", "gap_x", "gap_y",
               "border_l", "border_r", "border_t", "border_b",
               "gang_x", "gang_y", "sheet_len", "sheet_w", "kerf_x", "kerf_y", "sheets", "use",
               "panel_len", "panel_w", "panel_base_len", "panel_base_w",
-              "per_sq_inch", "pcb_price", "gaps_x", "gaps_y", "pgaps_x", "pgaps_y", "order_qty"]
+              "per_sq_inch", "pcb_price", "gaps_x", "gaps_y", "pgaps_x", "pgaps_y", "order_qty",
+              "pcb_code", "party_code", "party_name"]
 DEFAULTS = {"pcb_len": "40", "pcb_w": "50", "pcbs_x": "10", "pcbs_y": "5",
             "gap_x": "0", "gap_y": "0",
             "border_l": "0", "border_r": "0", "border_t": "5", "border_b": "5",
@@ -1461,6 +1503,7 @@ def pcbcalc():
 @login_required
 def cutlist():
     fields = {}
+    load_model_name = ""
     load_model_id = request.args.get("model") or (request.values.get("model_id") if request.method == "POST" else None)
 
     if request.method == "POST":
@@ -1510,7 +1553,9 @@ def cutlist():
                         "border_l=?, border_r=?, border_t=?, border_b=?, gang_x=?, gang_y=?, sheet_len=?, sheet_w=?, "
                         "panel_len=?, panel_w=?, cutting_len=?, cutting_w=?, kerf_x=?, kerf_y=?, orientation=?, "
                         "pcs_panel=?, panels_sheet=?, sheets=?, x_qty=?, y_qty=?, cnc_margin_x=?, cnc_margin_y=?, "
-                        "pcb_price=?, per_sq_inch=?, gaps_x=?, gaps_y=? WHERE id=?",
+                        "pcb_price=?, per_sq_inch=?, gaps_x=?, gaps_y=?, " 
+                        "pcb_code=COALESCE(NULLIF(?, ''), pcb_code), party_code=COALESCE(NULLIF(?, ''), party_code), "
+                        "party_name=COALESCE(NULLIF(?, ''), party_name) WHERE id=?",
                         (name, result["pcb_len"], result["pcb_w"], result["pcbs_x"], result["pcbs_y"],
                          result["gap_x"], result["gap_y"],
                          result["border_l"], result["border_r"], result["border_t"], result["border_b"],
@@ -1522,19 +1567,26 @@ def cutlist():
                          result["border_l"], result["border_t"],
                          up_price, up_rs,
                          ",".join(f"{g:g}" for g in result["gaps_x"]),
-                         ",".join(f"{g:g}" for g in result["gaps_y"]), model["id"]))
+                         ",".join(f"{g:g}" for g in result["gaps_y"]),
+                         (f.get("pcb_code") or "").strip(), (f.get("party_code") or "").strip(),
+                         (f.get("party_name") or "").strip(), model["id"]))
                     flash(f"Model '{name}' updated — saari cut list details + price save ho gayi.", "success")
                 else:
                     flash("Select a valid finished product.", "error")
-            elif name:
+            elif name or (f.get("pcb_code") or "").strip() or (f.get("party_code") or "").strip() or (f.get("party_name") or "").strip():
+                # v2.97 — save_name khali ho to model NAME = PCB CODE-PARTY CODE-PARTY NAME
+                if not name:
+                    name = "-".join(x for x in [(f.get("pcb_code") or "").strip(), (f.get("party_code") or "").strip(),
+                                                (f.get("party_name") or "").strip()] if x)
                 cutting_len = result["cutting_len"]
                 cutting_w = result["cutting_w"]
                 db.execute(
                     "INSERT INTO product_models (name, pcb_len, pcb_w, pcbs_x, pcbs_y, gap_x, gap_y, border_l, "
                     "border_r, border_t, border_b, gang_x, gang_y, sheet_len, sheet_w, panel_len, panel_w, "
                     "cutting_len, cutting_w, kerf_x, kerf_y, orientation, pcs_panel, panels_sheet, sheets, "
-                    "x_qty, y_qty, cnc_margin_x, cnc_margin_y, pcb_price, per_sq_inch, gaps_x, gaps_y, created_on) "
-                    "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    "x_qty, y_qty, cnc_margin_x, cnc_margin_y, pcb_price, per_sq_inch, gaps_x, gaps_y, "
+                    "pcb_code, party_code, party_name, created_on) "
+                    "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                     (name, result["pcb_len"], result["pcb_w"], result["pcbs_x"], result["pcbs_y"],
                      result["gap_x"], result["gap_y"],
                      result["border_l"], result["border_r"], result["border_t"], result["border_b"],
@@ -1547,8 +1599,10 @@ def cutlist():
                      pm_price or 0, pm_rs or 0,
                      ",".join(f"{g:g}" for g in result["gaps_x"]),
                      ",".join(f"{g:g}" for g in result["gaps_y"]),
+                     (f.get("pcb_code") or "").strip(), (f.get("party_code") or "").strip(),
+                     (f.get("party_name") or "").strip(),
                      _today_ist().isoformat()))
-                flash(f"Model '{name}' saved to Finished Products (price ke saath).", "success")
+                flash(f"Model '{name}' saved to Finished Products (price + PCB/party codes ke saath).", "success")
             else:
                 flash("Enter a name to save as finished product.", "error")
 
@@ -1676,6 +1730,10 @@ def cutlist():
         try:
             model = db.query("SELECT * FROM product_models WHERE id=?", (int(load_model_id),), one=True)
             if model:
+                load_model_name = model["name"]   # v2.97: print preview me MODEL NAME
+                _m96 = dict(model)
+                for _c96 in ("pcb_code", "party_code", "party_name"):
+                    fields[_c96] = _m96.get(_c96) or ""
                 for k in FIELD_KEYS:
                     val = model[k] if k in model.keys() and model[k] is not None else ""
                     # 0 values ko KHAALI chhodo — '0.0' likha user ko blank hi dikhna chahiye
@@ -1718,9 +1776,9 @@ def cutlist():
                     if not fields.get("sheet_w") and (model["sheet_w"] or 0) > 0:
                         fields["sheet_w"] = f"{model['sheet_w']:g}"
                     if not fields.get("kerf_x"):
-                        fields["kerf_x"] = "2"
+                        fields["kerf_x"] = "0"   # v2.97: CNC margin default 0
                     if not fields.get("kerf_y"):
-                        fields["kerf_y"] = "2"
+                        fields["kerf_y"] = "0"
                     flash(f"Loaded model '{model['name']}' — panel/PCB details load ho gayi. PCB size khaali hai: {model['pcs_panel']} PCS/panel diya hai. Sheet size bharo, Calculate dabao.", "success")
         except (ValueError, TypeError):
             pass
@@ -1753,7 +1811,7 @@ def cutlist():
                            models=models, orders=orders, SHEET_PRESETS=SHEET_PRESETS,
                            svg_panel=svg_panel, svg_sheet=svg_sheet, gang_info=gang_info,
                            svg_gang_panel=svg_gang_panel, svg_sheet_layout=svg_sheet_layout,
-                           disp_pl=disp_pl, disp_pw=disp_pw)
+                           disp_pl=disp_pl, disp_pw=disp_pw, load_model_name=load_model_name)
 
 
 # ---------------------------------------------------------------- finished products
@@ -3637,6 +3695,81 @@ def proc_skipped(order_id, process):
     return False
 
 
+@app.route("/my-work")
+@login_required
+def my_work():
+    """v2.99 — MERA WORK: employee ka pura working record + apne kaam + claim."""
+    me = session.get("op_name") or session.get("user_name") or "Operator"
+    is_admin = session.get("user_role") == "admin"
+    view_emp = me
+    if is_admin:
+        view_emp = request.args.get("emp", "").strip() or me
+    employees = db.query("SELECT name, designation FROM employees ORDER BY name") if is_admin else []
+
+    _all = db.query("SELECT * FROM orders WHERE status != 'done' ORDER BY "
+                    "CASE priority WHEN 'urgent' THEN 0 ELSE 1 END, delivery_date, id")
+    my_jobs, claimable = [], []
+    for o in _all:
+        _, prow = current_proc_row(o["id"])
+        if not prow:
+            continue
+        asg = proc_assignment(o["id"], prow["process"])
+        assigned = _op_names(asg["operator"]) if asg else []
+        mine = (view_emp in assigned) or ((o["operator"] or "").strip() == view_emp)
+        d = dict(o)
+        d["proc"] = prow["process"]
+        d["state"] = op_state(o["id"], prow["process"])
+        d["pause_reason"] = ""
+        if d["state"] == "paused":
+            last = db.query("SELECT reason FROM jobcard_log WHERE order_id=? AND process=? AND action='pause' "
+                            "ORDER BY id DESC LIMIT 1", (o["id"], prow["process"]), one=True)
+            d["pause_reason"] = last["reason"] if last else ""
+        (my_jobs if mine else claimable).append(d)
+
+    history = db.query(
+        "SELECT l.*, o.order_no FROM jobcard_log l LEFT JOIN orders o ON o.id = l.order_id "
+        "WHERE l.operator=? ORDER BY l.id DESC LIMIT 150", (view_emp,))
+    total_actions = db.query("SELECT COUNT(*) c FROM jobcard_log WHERE operator=?", (view_emp,), one=True)["c"]
+    total_finishes = db.query("SELECT COUNT(*) c FROM jobcard_log WHERE operator=? AND action='finish'",
+                              (view_emp,), one=True)["c"]
+    my_issues = db.query("SELECT item_name, qty, unit, taken_on FROM material_issues WHERE worker=? "
+                         "ORDER BY id DESC LIMIT 30", (view_emp,))
+    my_dispatches = db.query("SELECT d.ddate, d.dtime, d.mode, o.order_no FROM dispatch_log d "
+                             "LEFT JOIN orders o ON o.id = d.order_id WHERE d.dispatched_by=? "
+                             "ORDER BY d.id DESC LIMIT 20", (view_emp,))
+    return render_template("my_work.html", active="mywork", view_emp=view_emp, is_admin=is_admin,
+                           employees=employees, my_jobs=my_jobs, claimable=claimable,
+                           history=history, total_actions=total_actions, total_finishes=total_finishes,
+                           my_issues=my_issues, my_dispatches=my_dispatches)
+
+
+@app.route("/my-work/claim", methods=["POST"])
+@login_required
+def my_work_claim():
+    """v2.99 — pending job apne account me lo: assignment + operator + log."""
+    me = session.get("op_name") or session.get("user_name") or "Operator"
+    order_id = int(request.form.get("order_id", 0) or 0)
+    o = db.query("SELECT * FROM orders WHERE id=?", (order_id,), one=True)
+    if not o or o["status"] == "done":
+        flash("Order not found.", "error")
+        return redirect_with_token(url_for("my_work"))
+    _, prow = current_proc_row(order_id)
+    proc = prow["process"] if prow else (o["current_process"] or "")
+    _ex = db.query("SELECT operator FROM order_assignments WHERE order_id=? AND process=?",
+                   (order_id, proc), one=True)
+    if _ex:
+        db.execute("UPDATE order_assignments SET operator=? WHERE order_id=? AND process=?",
+                   (me, order_id, proc))
+    else:
+        db.execute("INSERT INTO order_assignments (order_id, process, operator) VALUES (?,?,?)",
+                   (order_id, proc, me))
+    db.execute("UPDATE orders SET operator=? WHERE id=?", (me, order_id))
+    db.execute("INSERT INTO jobcard_log (order_id, process, action, operator, details, ts) VALUES (?,?,?,?,?,?)",
+               (order_id, proc, "claim", me, "Job apne account me liya (claim)", op_now()))
+    flash("Claim ho gaya: " + o["order_no"] + " " + chr(0x2014) + " " + proc + " ab aapke account me hai. Start dabake shuru karo.", "success")
+    return redirect_with_token(url_for("my_work"))
+
+
 @app.route("/operator")
 @login_required
 def operator_view():
@@ -3793,7 +3926,7 @@ def operator_action():
         db.execute("INSERT INTO jobcard_log (order_id, process, action, operator, ts) VALUES (?,?,?,?,?)",
                    (order_id, process, "start", op, now))
         # STATUS -> RUNNING: dashboard + live process tracking me bhi dikhe
-        db.execute("UPDATE orders SET status='running' WHERE id=? AND status NOT IN ('done')", (order_id,))
+        db.execute("UPDATE orders SET status='running', operator=? WHERE id=? AND status NOT IN ('done')", (op, order_id))
         flash(f"Started: {process} — START {now} job card mein save ho gaya.", "success")
     elif action == "pause":
         db.execute("INSERT INTO jobcard_log (order_id, process, action, operator, reason, details, ts) VALUES (?,?,?,?,?,?,?)",
@@ -3805,7 +3938,7 @@ def operator_action():
         db.execute("INSERT INTO jobcard_log (order_id, process, action, operator, ts) VALUES (?,?,?,?,?)",
                    (order_id, process, "resume", op, now))
         # STATUS -> RUNNING wapas
-        db.execute("UPDATE orders SET status='running' WHERE id=? AND status NOT IN ('done')", (order_id,))
+        db.execute("UPDATE orders SET status='running', operator=? WHERE id=? AND status NOT IN ('done')", (op, order_id))
         flash(f"Resumed: {process}", "success")
     elif action == "finish":
         if not row["start_dt"]:

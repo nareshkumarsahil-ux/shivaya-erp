@@ -138,8 +138,8 @@
           <span class="muted">Panel size is locked — computed from PCB Builder above (includes CNC margin). Untick "Use" to enter panel size manually.</span>
         </label>
         <div style="display:flex;gap:12px;margin-bottom:14px">
-          <div class="field" style="flex:1"><label>CNC MARGIN X (MM)</label><input type="number" step="0.01" name="kerf_x" id="kerf_x" value="{{ fields.get('kerf_x') if fields.get('kerf_x') not in (None, '') else 2 }}"></div>
-          <div class="field" style="flex:1"><label>CNC MARGIN Y (MM)</label><input type="number" step="0.01" name="kerf_y" id="kerf_y" value="{{ fields.get('kerf_y') if fields.get('kerf_y') not in (None, '') else 2 }}"></div>
+          <div class="field" style="flex:1"><label>CNC MARGIN X (MM)</label><input type="number" step="0.01" name="kerf_x" id="kerf_x" value="{{ fields.get('kerf_x') if fields.get('kerf_x') not in (None, '') else 0 }}"></div>
+          <div class="field" style="flex:1"><label>CNC MARGIN Y (MM)</label><input type="number" step="0.01" name="kerf_y" id="kerf_y" value="{{ fields.get('kerf_y') if fields.get('kerf_y') not in (None, '') else 0 }}"></div>
           <div class="field" style="flex:1"><label>NO. OF SHEETS</label><input type="number" name="sheets" id="sheets" value="{{ fields.sheets }}" min="1"></div>
           <div class="field" style="flex:1"><label>ORDER QTY (PANELS)</label><input type="number" name="order_qty" id="order_qty" value="{{ fields.get('order_qty') or '' }}" min="0" placeholder="jaise 350"></div>
         </div>
@@ -172,9 +172,26 @@
             <option value="">Select finished product…</option>
             {% for m in models %}<option value="{{ m.id }}">{{ m.name }} (update)</option>{% endfor %}
           </select>
-          <input type="text" name="save_name" placeholder="or new name…" style="flex:1;min-width:180px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px">
+          <input type="text" name="pcb_code" id="pcb_code" placeholder="PCB CODE (jaise PCB-101)" value="{{ fields.get('pcb_code') or '' }}" style="width:150px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px">
+          <input type="text" name="party_code" id="party_code" placeholder="PARTY CODE (jaise P-22)" value="{{ fields.get('party_code') or '' }}" style="width:140px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px">
+          <input type="text" name="party_name" id="party_name" placeholder="PARTY NAME" value="{{ fields.get('party_name') or '' }}" style="width:170px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px">
+        </div>
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:8px">
+          <input type="text" name="save_name" id="save_name" placeholder="MODEL NAME (codes se auto — chahe to badlo)" style="flex:1;min-width:220px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-weight:700">
           <button class="btn btn-amber" type="submit" name="action" value="save_model">Save Layout to Model</button>
         </div>
+        <script>
+        /* v2.97 — MODEL NAME auto: PCB CODE-PARTY CODE-PARTY NAME */
+        (function(){
+          var pc = document.getElementById('pcb_code'), gc = document.getElementById('party_code'),
+              pn = document.getElementById('party_name'), sn = document.getElementById('save_name');
+          function compose(){
+            var v = [pc && pc.value.trim(), gc && gc.value.trim(), pn && pn.value.trim()].filter(Boolean).join('-');
+            if (v) sn.value = v;
+          }
+          [pc, gc, pn].forEach(function(el){ if (el) el.addEventListener('input', function(){ sn.value = ''; compose(); }); });
+        })();
+        </script>
         <p class="muted small" style="margin-top:8px">💡 Save as Finished Product — Job Order for it will auto-fill from here instead of being re-entered.</p>
       </div>
     </div>
@@ -1130,6 +1147,13 @@ function _closePrev(){
   var sh = document.getElementById('prevPrintSheet');
   if (sh) sh.innerHTML = '';
 }
+function _modelName97(){
+  var si = document.getElementById('save_name');
+  var v = si && si.value.trim();
+  if (v) return v;
+  var hn = document.getElementById('printModelName');
+  return hn ? hn.textContent.trim() : '';
+}
 function _printDocs(list){
   var body = '', tot = 0, n = 0;
   for (var i = 0; i < list.length; i++) if (list[i][0]) tot++;
@@ -1139,7 +1163,7 @@ function _printDocs(list){
     body += '<div class="pp-block"><div class="pp-top">' +
       '<div class="pp-co">SHIVAYA CIRCUIT PVT. LTD.</div>' +
       '<div class="pp-title">' + list[i][1] + '</div>' +
-      '<div class="pp-meta">PCB: TOP = LENGTH (X) · LEFT = WIDTH (Y) · A4 LANDSCAPE' + (tot > 1 ? ' · PAGE ' + n + '/' + tot : '') + '</div>' +
+      '<div class="pp-meta">MODEL: ' + (_modelName97() || '\u2014') + ' · PCB: TOP = LENGTH (X) · LEFT = WIDTH (Y) · A4 LANDSCAPE' + (tot > 1 ? ' · PAGE ' + n + '/' + tot : '') + '</div>' +
       '</div>' + list[i][0] + '</div>';
   }
   if (!body) {
@@ -1161,5 +1185,6 @@ window.printPanelPreview = printPanelPreview;
 window.printGangPreview = printGangPreview;
 window.printSheetPreview = printSheetPreview;
 </script>
+<div id="printModelName" style="display:none">{{ load_model_name or '' }}</div>
 <div id="prevPrintSheet"></div>
 {% endblock %}

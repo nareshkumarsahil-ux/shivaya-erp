@@ -1,0 +1,151 @@
+{% extends "base.html" %}
+{% block title %}Mera Work{% endblock %}
+{% block page_title %}Mera Work{% endblock %}
+{% block content %}
+<div class="section-title"><span class="live-dot"></span>&nbsp; 🎯 MERA WORK — {{ view_emp|upper }}</div>
+
+{% if is_admin %}
+<div class="panel" style="margin-bottom:14px">
+  <div class="panel-body" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+    <b style="font-size:13px">👑 ADMIN: kisi bhi employee ka record dekho:</b>
+    <form method="get" action="/my-work" style="display:flex;gap:8px;align-items:center">
+      <select name="emp" style="padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px">
+        {% for e in employees %}<option value="{{ e.name }}" {{'selected' if e.name==view_emp}}>{{ e.name }}{% if e.designation %} — {{ e.designation }}{% endif %}</option>{% endfor %}
+      </select>
+      <button class="btn btn-outline btn-sm" type="submit">Dekho →</button>
+    </form>
+  </div>
+</div>
+{% endif %}
+
+<div class="cards" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr));margin-bottom:16px">
+  <div class="stat"><div class="top"><span class="lbl">MERE KAAM</span></div><div class="num" style="color:#1d4ed8">{{ my_jobs|length }}</div></div>
+  <div class="stat"><div class="top"><span class="lbl">CLAIM HO SAKTE</span></div><div class="num" style="color:#b45309">{{ claimable|length }}</div></div>
+  <div class="stat"><div class="top"><span class="lbl">TOTAL ACTIONS</span></div><div class="num">{{ total_actions }}</div></div>
+  <div class="stat"><div class="top"><span class="lbl">JOBS FINISH KIYE</span></div><div class="num" style="color:#166534">{{ total_finishes }}</div></div>
+</div>
+
+<!-- ================= MERE KAAM ================= -->
+<div class="section-title">📌 MERE KAAM — jo mere account me hain (Start / Pause / Finish yahin se)</div>
+<div class="panel">
+  <div class="panel-body">
+    {% for j in my_jobs %}
+    <div style="border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:10px">
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <b class="mono">{{ j.order_no }}</b>
+        <span class="badge {{'b-blue' if j.status=='running' else 'b-pending' if j.status=='pending' else 'b-amber'}}">{{ {'pending':'Pending','running':'⏱ Running','hold':'⏸ Hold'}.get(j.status, j.status) }}</span>
+        <span class="badge b-amber">{{ j.proc }}</span>
+        {% if j.state == 'paused' %}<span class="badge b-amber">⏸ {{ j.pause_reason or 'Paused' }}</span>{% endif %}
+      </div>
+      <div style="margin-top:4px;font-size:13.5px">{{ j.party }}{% if j.product %} · {{ j.product }}{% endif %} · {{ j.qty or 0 }} pcs</div>
+      <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;align-items:center">
+        {% if j.state != 'paused' %}
+        <form method="post" action="/operator/action" style="display:inline">
+          <input type="hidden" name="order_id" value="{{ j.id }}"><input type="hidden" name="process" value="{{ j.proc }}">
+          <button class="btn btn-outline btn-sm" name="action" value="pause" type="submit">⏸ Pause</button>
+          <input type="text" name="reason" placeholder="reason (optional)" style="width:130px;padding:6px 8px;border:1px solid var(--border);border-radius:7px;font-size:12px">
+        </form>
+        <form method="post" action="/operator/action" style="display:inline">
+          <input type="hidden" name="order_id" value="{{ j.id }}"><input type="hidden" name="process" value="{{ j.proc }}">
+          <button class="btn btn-sm" name="action" value="start" type="submit">▶ Start / Resume</button>
+          <button class="btn btn-amber btn-sm" name="action" value="finish" type="submit">✅ Finish</button>
+        </form>
+        {% else %}
+        <form method="post" action="/operator/action" style="display:inline">
+          <input type="hidden" name="order_id" value="{{ j.id }}"><input type="hidden" name="process" value="{{ j.proc }}">
+          <button class="btn btn-sm" name="action" value="resume" type="submit">▶ Resume</button>
+        </form>
+        {% endif %}
+        <a class="btn btn-outline btn-sm" href="/jobcard/{{ j.id }}">📄 Job Card</a>
+      </div>
+    </div>
+    {% else %}
+    <div class="empty">Mere account me koi kaam nahi — neeche "KAAM LE LO" se pending job apne naam par le lo.</div>
+    {% endfor %}
+  </div>
+</div>
+
+<!-- ================= KAAM LE LO ================= -->
+<div class="section-title">🎯 KAAM LE LO — pending jobs, apne account me lo</div>
+<div class="panel">
+  <div class="panel-body" style="padding:0;overflow-x:auto">
+    <table>
+      <thead><tr><th>Order #</th><th>Party</th><th>Product</th><th>Current Process</th><th></th></tr></thead>
+      <tbody>
+        {% for j in claimable %}
+        <tr>
+          <td><b class="mono">{{ j.order_no }}</b></td>
+          <td>{{ j.party }}</td>
+          <td class="small">{{ j.product }}</td>
+          <td><span class="badge b-amber">{{ j.proc }}</span></td>
+          <td>
+            <form method="post" action="/my-work/claim">
+              <input type="hidden" name="order_id" value="{{ j.id }}">
+              <button class="btn btn-amber btn-sm" type="submit">📌 Mere Account me Lo</button>
+            </form>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5"><div class="empty">🎉 Abhi koi pending job nahi — sab assigned hain.</div></td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ================= HISTORY ================= -->
+<div class="section-title">✅ MAINE KYA KIYA — mera pura working record</div>
+<div class="panel">
+  <div class="panel-body" style="padding:0;overflow-x:auto">
+    <table>
+      <thead><tr><th>Date/Time</th><th>Order #</th><th>Process</th><th>Action</th><th>Reason / Details</th></tr></thead>
+      <tbody>
+        {% for l in history %}
+        <tr>
+          <td class="small mono">{{ l.ts }}</td>
+          <td><b class="mono">{{ l.order_no or '—' }}</b></td>
+          <td>{{ l.process }}</td>
+          <td><span class="badge {{'b-done' if l.action=='finish' else 'b-amber' if l.action=='pause' else 'b-blue'}}">{{ {'start':'▶ Start','pause':'⏸ Pause','resume':'▶ Resume','finish':'✅ Finish','handover':'🤝 Handover','claim':'📌 Claim'}.get(l.action, l.action) }}</span></td>
+          <td class="small">{{ l.reason }}{% if l.reason and l.details %} · {% endif %}{{ l.details }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5"><div class="empty">Abhi koi record nahi — kaam Start karoge to yahan aayega.</div></td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;margin-top:14px">
+  <div class="panel">
+    <div class="panel-head"><h3>🗄️ MAINE MATERIAL MANGWAYE</h3></div>
+    <div class="panel-body" style="padding:0;overflow-x:auto">
+      <table>
+        <thead><tr><th>Date</th><th>Item</th><th>Qty</th></tr></thead>
+        <tbody>
+          {% for m in my_issues %}
+          <tr><td class="small mono">{{ m.issue_date or m.created_on or '—' }}</td><td>{{ m.item or m.item_name or '—' }}</td><td>{{ m.qty or '—' }}</td></tr>
+          {% else %}
+          <tr><td colspan="3"><div class="empty">Koi material issue nahi.</div></td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <div class="panel">
+    <div class="panel-head"><h3>🚚 MAINE DISPATCH KIYE</h3></div>
+    <div class="panel-body" style="padding:0;overflow-x:auto">
+      <table>
+        <thead><tr><th>Date</th><th>Order</th><th>Mode</th></tr></thead>
+        <tbody>
+          {% for d in my_dispatches %}
+          <tr><td class="small mono">{{ d.ddate }} {{ d.dtime }}</td><td class="mono">{{ d.order_no or '—' }}</td><td>{{ d.mode or '—' }}</td></tr>
+          {% else %}
+          <tr><td colspan="3"><div class="empty">Koi dispatch record nahi.</div></td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

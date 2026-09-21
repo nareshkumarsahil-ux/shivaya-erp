@@ -337,6 +337,7 @@ CREATE TABLE IF NOT EXISTS product_models (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
     model_code TEXT DEFAULT '',
+    pcb_code TEXT DEFAULT '', party_code TEXT DEFAULT '', party_name TEXT DEFAULT '',
     pcb_len REAL DEFAULT 0, pcb_w REAL DEFAULT 0,
     pcbs_x INTEGER DEFAULT 1, pcbs_y INTEGER DEFAULT 1,
     gap_x REAL DEFAULT 0, gap_y REAL DEFAULT 0,
@@ -847,6 +848,9 @@ def migrate(conn):
     pcols = [r[1] for r in conn.execute("PRAGMA table_info(product_models)")]
     if pcols and "model_code" not in pcols:
         conn.execute("ALTER TABLE product_models ADD COLUMN model_code TEXT DEFAULT ''")
+    for _c96 in ("pcb_code", "party_code", "party_name"):
+        if pcols and _c96 not in pcols:
+            conn.execute(f"ALTER TABLE product_models ADD COLUMN {_c96} TEXT DEFAULT ''")
     if pcols and "gap_x" not in pcols:
         conn.execute("ALTER TABLE product_models ADD COLUMN gap_x REAL DEFAULT 0")
     if pcols and "gap_y" not in pcols:
