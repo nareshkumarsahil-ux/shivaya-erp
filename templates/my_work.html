@@ -56,6 +56,12 @@
           <button class="btn btn-sm" name="action" value="resume" type="submit">▶ Resume</button>
         </form>
         {% endif %}
+        {% if is_admin %}
+        <form method="post" action="/my-work/reset" style="display:inline" onsubmit="return confirm('RESET: {{ j.order_no }} — {{ j.proc }} fresh ho jayega (start/finish undo). Sahi hai?')">
+          <input type="hidden" name="order_id" value="{{ j.id }}"><input type="hidden" name="process" value="{{ j.proc }}">
+          <button class="btn btn-outline btn-sm" type="submit" title="Admin: process fresh karo">🔄 Reset</button>
+        </form>
+        {% endif %}
         <a class="btn btn-outline btn-sm" href="/jobcard/{{ j.id }}">📄 Job Card</a>
       </div>
     </div>
@@ -105,7 +111,7 @@
           <td class="small mono">{{ l.ts }}</td>
           <td><b class="mono">{{ l.order_no or '—' }}</b></td>
           <td>{{ l.process }}</td>
-          <td><span class="badge {{'b-done' if l.action=='finish' else 'b-amber' if l.action=='pause' else 'b-blue'}}">{{ {'start':'▶ Start','pause':'⏸ Pause','resume':'▶ Resume','finish':'✅ Finish','handover':'🤝 Handover','claim':'📌 Claim'}.get(l.action, l.action) }}</span></td>
+          <td><span class="badge {{'b-done' if l.action=='finish' else 'b-amber' if l.action=='pause' else 'b-gray' if l.action=='reset' else 'b-blue'}}">{{ {'start':'▶ Start','pause':'⏸ Pause','resume':'▶ Resume','finish':'✅ Finish','handover':'🤝 Handover','claim':'📌 Claim','reset':'🔄 Reset'}.get(l.action, l.action) }}</span></td>
           <td class="small">{{ l.reason }}{% if l.reason and l.details %} · {% endif %}{{ l.details }}</td>
         </tr>
         {% else %}

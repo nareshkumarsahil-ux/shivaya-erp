@@ -1897,7 +1897,9 @@ def products():
                 int(f.get("x_qty", 0) or 0), int(f.get("y_qty", 0) or 0),
                 float(f.get("cnc_margin_x", 0) or 0), float(f.get("cnc_margin_y", 0) or 0),
                 float(f.get("pcb_price", 0) or 0), _per_sq,
-                _thick)
+                _thick,
+                (f.get("pcb_code") or "").strip(), (f.get("party_code") or "").strip(),
+                (f.get("party_name") or "").strip())
         # ---- EDIT: existing product update ----
         try:
             edit_id = int(f.get("edit_id", 0) or 0)
@@ -1910,7 +1912,9 @@ def products():
                     "gap_x=?, gap_y=?, border_l=?, border_r=?, border_t=?, border_b=?, gang_x=?, gang_y=?, "
                     "sheet_len=?, sheet_w=?, panel_len=?, panel_w=?, kerf_x=?, kerf_y=?, orientation=?, "
                     "pcs_panel=?, panels_sheet=?, sheets=?, cutting_len=?, cutting_w=?, x_qty=?, y_qty=?, "
-                    "cnc_margin_x=?, cnc_margin_y=?, pcb_price=?, per_sq_inch=?, sheet_thickness=? WHERE id=?",
+                    "cnc_margin_x=?, cnc_margin_y=?, pcb_price=?, per_sq_inch=?, sheet_thickness=?, "
+                    "pcb_code=COALESCE(NULLIF(?, \'\'), pcb_code), party_code=COALESCE(NULLIF(?, \'\'), party_code), "
+                    "party_name=COALESCE(NULLIF(?, \'\'), party_name) WHERE id=?",
                     vals + (edit_id,))
                 flash(f"Finished product '{name}' update ho gaya ✅ (cut list layout + price ke saath)", "success")
             else:
@@ -1923,8 +1927,8 @@ def products():
                     "border_l, border_r, border_t, border_b, gang_x, gang_y, sheet_len, sheet_w, panel_len, panel_w, "
                     "kerf_x, kerf_y, orientation, pcs_panel, panels_sheet, sheets, cutting_len, cutting_w, "
                     "x_qty, y_qty, cnc_margin_x, cnc_margin_y, pcb_price, per_sq_inch, sheet_thickness, "
-                    "order_id, created_on) "
-                    "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    "pcb_code, party_code, party_name, order_id, created_on) "
+                    "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                     vals + (None, _today_ist().isoformat()))
                 flash(f"Finished product '{name}' manually add ho gaya ✅ — BOM set karne ke liye 🧪 BOM button dabao.", "success")
         except Exception as e:
@@ -3767,6 +3771,50 @@ def my_work_claim():
     db.execute("INSERT INTO jobcard_log (order_id, process, action, operator, details, ts) VALUES (?,?,?,?,?,?)",
                (order_id, proc, "claim", me, "Job apne account me liya (claim)", op_now()))
     flash("Claim ho gaya: " + o["order_no"] + " " + chr(0x2014) + " " + proc + " ab aapke account me hai. Start dabake shuru karo.", "success")
+    return redirect_with_token(url_for("my_work"))
+
+
+@app.route("/my-work/reset", methods=["POST"])
+@login_required
+def my_work_reset():
+    """v3.00 — admin: galat claim/start/finish hua process FRESH kar do
+    (usi employee ke account me wapas fresh dikhega, assignment bani rehti hai)."""
+    if session.get("user_role") != "admin":
+        flash("Sirf admin process reset kar sakta hai.", "error")
+        return redirect_with_token(url_for("my_work"))
+    try:
+        order_id = int(request.form.get("order_id", 0) or 0)
+    except ValueError:
+        order_id = 0
+    process = request.form.get("process", "").strip()
+    o = db.query("SELECT * FROM orders WHERE id=?", (order_id,), one=True)
+    row = db.query("SELECT * FROM jobcard_process WHERE order_id=? AND process=?",
+                   (order_id, process), one=True) if o else None
+    if not row:
+        flash("Order/process nahi mila — reset nahi hua.", "error")
+        return redirect_with_token(url_for("my_work"))
+    _by = session.get("user_name") or "admin"
+    # 1) process row FRESH: start/finish dono undo
+    db.execute("UPDATE jobcard_process SET start_dt='', start_name='', end_dt='', end_name='' WHERE id=?",
+               (row["id"],))
+    # 2) audit log (history me Reset dikhega)
+    db.execute("INSERT INTO jobcard_log (order_id, process, action, operator, reason, details, ts) "
+               "VALUES (?,?,?,?,?,?,?)",
+               (order_id, process, "reset", _by, request.form.get("reason", "").strip(),
+                "Admin reset — process fresh kiya (claim/start/finish undo, assignment bani rahi)",
+                op_now()))
+    # 3) current_process + status recompute — reset wala process wapas current/pending
+    advance_current(order_id)
+    _rows = db.get_jc_processes(order_id)
+    if _rows and all(r["end_dt"] for r in _rows):
+        _st = "done"
+    elif any(r["start_dt"] and not r["end_dt"] for r in _rows):
+        _st = "running"
+    else:
+        _st = "pending"
+    db.execute("UPDATE orders SET status=? WHERE id=?", (_st, order_id))
+    flash("Reset ho gaya: " + o["order_no"] + " — " + process +
+          " ab fresh hai — employee dobara Start kar sakta hai.", "success")
     return redirect_with_token(url_for("my_work"))
 
 
