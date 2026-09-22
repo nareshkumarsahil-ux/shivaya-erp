@@ -19,11 +19,18 @@
       <input type="password" name="password" placeholder="••••••••" required>
     </div>
     <button class="btn" type="submit" id="loginBtn">Login →</button>
+    <button class="btn btn-amber" type="button" style="width:100%;margin-top:8px" onclick="quickLogin('sahil','admin123')">👑 1-CLICK OWNER LOGIN (Sahil)</button>
     <div class="demo-hint">Admin: <b>sahil</b> / <b>admin123</b><br>Employees: apna naam ka pehla word + password (admin se lein — default <b>shivaya@123</b>)<br>Jaise CNC Operator: <b>ravi</b> · Dispatch: <b>shivam</b></div>
   </form>
 </div>
 <script>
 /* JS-based login: works even where native form submission / cookies are blocked */
+function quickLogin(u, p){
+  var f = document.getElementById('loginForm');
+  f.username.value = u;
+  f.password.value = p;
+  if (f.requestSubmit) { f.requestSubmit(); } else { f.submit(); }
+}
 (function(){
   var form = document.getElementById('loginForm');
   var btn  = document.getElementById('loginBtn');

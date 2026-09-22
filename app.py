@@ -1537,6 +1537,11 @@ def cutlist():
                     pm_rs = None
             name = f.get("save_name", "").strip()
             sel = f.get("save_select", "").strip()
+            # v3.04 — MODEL NO fallback: purana/stale form ho jisme model_code field nahi,
+            # to MODEL NAME ko hi MODEL NO bana do — Model No. kabhi khali na rahe
+            _mc = (f.get("model_code") or "").strip()
+            if not _mc:
+                _mc = name
             if sel:
                 try:
                     model = db.query("SELECT * FROM product_models WHERE id=?", (int(sel),), one=True)
@@ -1571,7 +1576,7 @@ def cutlist():
                          ",".join(f"{g:g}" for g in result["gaps_y"]),
                          (f.get("pcb_code") or "").strip(), (f.get("party_code") or "").strip(),
                          (f.get("party_name") or "").strip(),
-                         (f.get("model_code") or "").strip(), model["id"]))
+                         _mc, model["id"]))
                     flash(f"Model '{name}' updated — saari cut list details + price save ho gayi.", "success")
                 else:
                     flash("Select a valid finished product.", "error")
@@ -1609,7 +1614,7 @@ def cutlist():
                      ",".join(f"{g:g}" for g in result["gaps_x"]),
                      ",".join(f"{g:g}" for g in result["gaps_y"]),
                      (f.get("pcb_code") or "").strip(), (f.get("party_code") or "").strip(),
-                     (f.get("party_name") or "").strip(), (f.get("model_code") or "").strip(),
+                     (f.get("party_name") or "").strip(), _mc,
                      _today_ist().isoformat()))
                 flash("Naya model '" + name + "' FINISHED PRODUCTS me save ho gaya — Products page par PCB/PARTY codes ke saath dikh raha hai.", "success")
 
