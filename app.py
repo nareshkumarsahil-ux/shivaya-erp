@@ -1576,7 +1576,7 @@ def cutlist():
                          ",".join(f"{g:g}" for g in result["gaps_y"]),
                          (f.get("pcb_code") or "").strip(), (f.get("party_code") or "").strip(),
                          (f.get("party_name") or "").strip(),
-                         _mc, model["id"]))
+                         (f.get("model_code") or "").strip(), model["id"]))
                     flash(f"Model '{name}' updated — saari cut list details + price save ho gayi.", "success")
                 else:
                     flash("Select a valid finished product.", "error")
@@ -1631,6 +1631,8 @@ def cutlist():
                             f"({result['sheet_len']:g}\u00d7{result['sheet_w']:g}) \u00b7 {result['best']}")
                     # v2.70 \u2014 BLANK GUARD: cut list me qty/panels 0 aa gaye to purani sahi values
                     # overwrite NAHI hoti (pehle apply ke baad order sab BLANK ho jata tha)
+                    # v3.07 — Apply-to-Order se bane finished product me bhi MODEL NO jaye
+                    _mc_ap = (f.get("model_code") or "").strip()
                     _qty = result["total_pcs"] if (result["total_pcs"] or 0) > 0 else (order["qty"] or 0)
                     _qpan = result["total_panels"] if (result["total_panels"] or 0) > 0 else (order["qty_panel"] or 0)
                     _qpcs = result["pcs_panel"] if (result["pcs_panel"] or 0) > 0 else (order["pcs_panel"] or 0)
@@ -1706,8 +1708,9 @@ def cutlist():
                             "INSERT INTO product_models (name, pcb_len, pcb_w, pcbs_x, pcbs_y, gap_x, gap_y, border_l, "
                             "border_r, border_t, border_b, gang_x, gang_y, sheet_len, sheet_w, panel_len, panel_w, "
                             "cutting_len, cutting_w, kerf_x, kerf_y, orientation, pcs_panel, panels_sheet, sheets, "
-                            "x_qty, y_qty, cnc_margin_x, cnc_margin_y, pcb_price, per_sq_inch, gaps_x, gaps_y, created_on) "
-                            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                            "x_qty, y_qty, cnc_margin_x, cnc_margin_y, pcb_price, per_sq_inch, gaps_x, gaps_y, "
+                            "model_code, pcb_code, party_code, party_name, created_on) "
+                            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                             (_pname, result["pcb_len"], result["pcb_w"], result["pcbs_x"], result["pcbs_y"],
                              result["gap_x"], result["gap_y"],
                              result["border_l"], result["border_r"], result["border_t"], result["border_b"],
@@ -1720,6 +1723,8 @@ def cutlist():
                              price if price is not None else 0, rs_pcb if rs_pcb is not None else 0,
                              ",".join(f"{g:g}" for g in result["gaps_x"]),
                              ",".join(f"{g:g}" for g in result["gaps_y"]),
+                             _mc_ap or _pname, (f.get("pcb_code") or "").strip(),
+                             (f.get("party_code") or "").strip(), (f.get("party_name") or "").strip(),
                              _today_ist().isoformat()))
                         flash(f"Finished Product '{_pname}' bhi save ho gaya \u2014 ab FINISHED PRODUCT dropdown me milega.", "success")
                     _qtxt = f"Qty set to {result['total_pcs']} pcs" if (result["total_pcs"] or 0) > 0 \

@@ -15,7 +15,7 @@ import http.client
 import urllib.parse
 
 # Schema version — bump karo jab SCHEMA/migrate badle, taaki agla deploy tables update kare.
-SCHEMA_VERSION = "2026-09-12.11"
+SCHEMA_VERSION = "2026-09-22.12"   # v3.07 bump: product_models code columns Turso par forced-migrate
 
 # Entry timestamps IST (Asia/Kolkata) me — server UTC par ho sakta hai (Vercel)
 IST = datetime.timezone(datetime.timedelta(hours=5, minutes=30), "IST")
@@ -569,6 +569,10 @@ class _TursoHTTP:
             "stmt": {"sql": "COMMIT", "args": [], "named_args": [], "want_rows": False},
         })
         data = self._request("/v1/batch", {"batch": {"steps": steps}})
+        if data.get("error"):
+            _e = data["error"]
+            _m = _e.get("message") if isinstance(_e, dict) else str(_e)
+            raise _TursoHTTPError("Turso batch: %s" % (_m or "unknown error"))
         result = data.get("result") or {}
         step_errors = result.get("step_errors") or []
         for i in range(len(stmts)):
@@ -602,6 +606,10 @@ class _TursoHTTP:
                 "want_rows": True,
             }
         })
+        if data.get("error"):
+            _e = data["error"]
+            _m = _e.get("message") if isinstance(_e, dict) else str(_e)
+            raise _TursoHTTPError("Turso: %s" % (_m or "unknown error"))
         result = data.get("result") or {}
         lid = result.get("last_insert_rowid")
         return _TursoResult(
@@ -889,6 +897,11 @@ def migrate(conn):
         conn.execute("ALTER TABLE product_models ADD COLUMN gaps_x TEXT DEFAULT ''")
     if pcols and "gaps_y" not in pcols:
         conn.execute("ALTER TABLE product_models ADD COLUMN gaps_y TEXT DEFAULT ''")
+    # v3.07 — PURANE models jinke MODEL NO (model_code) khali hain — name se auto-fill
+    try:
+        conn.execute("UPDATE product_models SET model_code = name WHERE model_code = '' OR model_code IS NULL")
+    except Exception:
+        pass
     # PRICE HISTORY columns (sheet thickness price ke saath)
     phcols = [r[1] for r in conn.execute("PRAGMA table_info(price_history)")]
     if phcols and "sheet_thickness" not in phcols:
