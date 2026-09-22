@@ -300,14 +300,14 @@ function pmThickRate(){
   <div class="panel-body" style="padding:0;overflow-x:auto">
     <table id="modelsTable">
       <thead>
-        <tr><th>Model</th><th>PCB / PARTY CODES</th><th>Sheet Thickness</th><th>PCB (mm)</th><th>PCBs</th><th>PANEL & CUTTING PANEL</th><th class="t-right">PCS/Panel</th><th class="t-right">Panels/Sheet</th><th class="t-right">FG Stock</th><th class="t-right">Current / Last Price</th><th>Created</th><th></th></tr>
+        <tr><th>Model</th><th>MODEL NO</th><th>PCB / PARTY CODES</th><th>Sheet Thickness</th><th>PCB (mm)</th><th>PCBs</th><th>PANEL & CUTTING PANEL</th><th class="t-right">PCS/Panel</th><th class="t-right">Panels/Sheet</th><th class="t-right">FG Stock</th><th class="t-right">Current / Last Price</th><th>Created</th><th></th></tr>
       </thead>
       <tbody>
         {% for m in models %}
         <tr>
           <td><b>{{ m.name }}</b>{% if m.model_code %} <span class="muted small mono">{{ m.model_code }}</span>{% endif %}{% if m.attachment_data %}<span title="{{ m.attachment_name or 'attachment hai' }}" style="cursor:default"> 📎</span>{% endif %}{% if m.party %}<div class="muted" style="font-size:10px">👤 {{ m.party }}</div>{% endif %}</td>
+          <td class="mono" style="white-space:nowrap">{% if m.model_code %}<b style="font-size:13.5px;color:#192338">{{ m.model_code }}</b>{% else %}<span class="muted">—</span>{% endif %}</td>
           <td class="mono small" style="white-space:nowrap">
-            {% if m.model_code %}<div style="margin-bottom:2px"><span class="badge" style="background:#192338;color:#fff;font-size:9.5px">NO: {{ m.model_code }}</span></div>{% endif %}
             {% if m.pcb_code %}<div><span class="badge b-blue" style="font-size:9px">PCB: {{ m.pcb_code }}</span></div>{% endif %}
             {% if m.party_code %}<div><span class="badge b-amber" style="font-size:9px">PTY: {{ m.party_code }}</span></div>{% endif %}
             {% if m.party_name %}<div class="muted" style="font-size:10px">👤 {{ m.party_name }}</div>{% endif %}
@@ -357,7 +357,7 @@ function pmThickRate(){
           </td>
         </tr>
         <tr id="produce-{{ m.id }}" style="display:none">
-          <td colspan="11" style="background:#f0fdf4;border-top:1px dashed #bbf7d0">
+          <td colspan="12" style="background:#f0fdf4;border-top:1px dashed #bbf7d0">
             <form method="post" action="/products/{{ m.id }}/produce" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
               <b style="color:#166534">🏭 {{ m.name }} — Ready hua?</b>
               <label class="small">QTY (PCS)
@@ -377,7 +377,7 @@ function pmThickRate(){
           </td>
         </tr>
         {% else %}
-        <tr><td colspan="11"><div class="empty">No finished products yet — Cut List Optimizer mein layout bana kar "Save Layout to Model" karein.</div></td></tr>
+        <tr><td colspan="12"><div class="empty">No finished products yet — Cut List Optimizer mein layout bana kar "Save Layout to Model" karein.</div></td></tr>
         {% endfor %}
       </tbody>
     </table>

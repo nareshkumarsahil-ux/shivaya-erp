@@ -170,7 +170,7 @@
         <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
           <select name="save_select" style="flex:1;min-width:180px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px">
             <option value="">Select finished product…</option>
-            {% for m in models %}<option value="{{ m.id }}">{{ m.name }} (update)</option>{% endfor %}
+            {% for m in models %}<option value="{{ m.id }}">{{ m.name }}{% if m.model_code %} · NO: {{ m.model_code }}{% endif %} (update)</option>{% endfor %}
           </select>
           <input type="text" name="pcb_code" id="pcb_code" placeholder="PCB CODE (jaise PCB-101)" value="{{ fields.get('pcb_code') or '' }}" style="width:150px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px">
           <input type="text" name="party_code" id="party_code" placeholder="PARTY CODE (jaise P-22)" value="{{ fields.get('party_code') or '' }}" style="width:140px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px">
