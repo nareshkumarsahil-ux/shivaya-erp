@@ -1580,6 +1580,10 @@ def cutlist():
                                                 (f.get("party_name") or "").strip()] if x)
                 if not name:
                     name = "MODEL-" + _now_ist().strftime("%d%b-%H%M").upper()
+                _bn, _nn = name, 2
+                while db.query("SELECT id FROM product_models WHERE name=?", (name,), one=True):
+                    name = _bn + "-" + str(_nn)
+                    _nn += 1
                 cutting_len = result["cutting_len"]
                 cutting_w = result["cutting_w"]
                 db.execute(
