@@ -885,7 +885,7 @@ FIELD_KEYS = ["pcb_len", "pcb_w", "pcbs_x", "pcbs_y", "gap_x", "gap_y",
               "gang_x", "gang_y", "sheet_len", "sheet_w", "kerf_x", "kerf_y", "sheets", "use",
               "panel_len", "panel_w", "panel_base_len", "panel_base_w",
               "per_sq_inch", "pcb_price", "gaps_x", "gaps_y", "pgaps_x", "pgaps_y", "order_qty",
-              "pcb_code", "party_code", "party_name"]
+              "pcb_code", "party_code", "party_name", "model_code"]
 DEFAULTS = {"pcb_len": "40", "pcb_w": "50", "pcbs_x": "10", "pcbs_y": "5",
             "gap_x": "0", "gap_y": "0",
             "border_l": "0", "border_r": "0", "border_t": "5", "border_b": "5",
@@ -1555,7 +1555,8 @@ def cutlist():
                         "pcs_panel=?, panels_sheet=?, sheets=?, x_qty=?, y_qty=?, cnc_margin_x=?, cnc_margin_y=?, "
                         "pcb_price=?, per_sq_inch=?, gaps_x=?, gaps_y=?, " 
                         "pcb_code=COALESCE(NULLIF(?, ''), pcb_code), party_code=COALESCE(NULLIF(?, ''), party_code), "
-                        "party_name=COALESCE(NULLIF(?, ''), party_name) WHERE id=?",
+                        "party_name=COALESCE(NULLIF(?, ''), party_name), "
+                        "model_code=COALESCE(NULLIF(?, ''), model_code) WHERE id=?",
                         (name, result["pcb_len"], result["pcb_w"], result["pcbs_x"], result["pcbs_y"],
                          result["gap_x"], result["gap_y"],
                          result["border_l"], result["border_r"], result["border_t"], result["border_b"],
@@ -1569,7 +1570,8 @@ def cutlist():
                          ",".join(f"{g:g}" for g in result["gaps_x"]),
                          ",".join(f"{g:g}" for g in result["gaps_y"]),
                          (f.get("pcb_code") or "").strip(), (f.get("party_code") or "").strip(),
-                         (f.get("party_name") or "").strip(), model["id"]))
+                         (f.get("party_name") or "").strip(),
+                         (f.get("model_code") or "").strip(), model["id"]))
                     flash(f"Model '{name}' updated — saari cut list details + price save ho gayi.", "success")
                 else:
                     flash("Select a valid finished product.", "error")
@@ -1577,7 +1579,8 @@ def cutlist():
                 # v3.02 — naya model HAMESHA save hoga: name/codes khali bhi ho to AUTO-NAME se save
                 if not name:
                     name = "-".join(x for x in [(f.get("pcb_code") or "").strip(), (f.get("party_code") or "").strip(),
-                                                (f.get("party_name") or "").strip()] if x)
+                                                (f.get("party_name") or "").strip(),
+                                                (f.get("model_code") or "").strip()] if x)
                 if not name:
                     name = "MODEL-" + _now_ist().strftime("%d%b-%H%M").upper()
                 _bn, _nn = name, 2
@@ -1591,8 +1594,8 @@ def cutlist():
                     "border_r, border_t, border_b, gang_x, gang_y, sheet_len, sheet_w, panel_len, panel_w, "
                     "cutting_len, cutting_w, kerf_x, kerf_y, orientation, pcs_panel, panels_sheet, sheets, "
                     "x_qty, y_qty, cnc_margin_x, cnc_margin_y, pcb_price, per_sq_inch, gaps_x, gaps_y, "
-                    "pcb_code, party_code, party_name, created_on) "
-                    "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    "pcb_code, party_code, party_name, model_code, created_on) "
+                    "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                     (name, result["pcb_len"], result["pcb_w"], result["pcbs_x"], result["pcbs_y"],
                      result["gap_x"], result["gap_y"],
                      result["border_l"], result["border_r"], result["border_t"], result["border_b"],
@@ -1606,7 +1609,7 @@ def cutlist():
                      ",".join(f"{g:g}" for g in result["gaps_x"]),
                      ",".join(f"{g:g}" for g in result["gaps_y"]),
                      (f.get("pcb_code") or "").strip(), (f.get("party_code") or "").strip(),
-                     (f.get("party_name") or "").strip(),
+                     (f.get("party_name") or "").strip(), (f.get("model_code") or "").strip(),
                      _today_ist().isoformat()))
                 flash("Naya model '" + name + "' FINISHED PRODUCTS me save ho gaya — Products page par PCB/PARTY codes ke saath dikh raha hai.", "success")
 
