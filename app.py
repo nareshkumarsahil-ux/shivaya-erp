@@ -86,7 +86,7 @@ def token_login():
 OPERATOR_READ = {"dashboard", "orders", "machines", "quality", "operator_view",
                  "product_attachment_view", "dispatch_photo", "jobcard", "my_work"}
 OPERATOR_WRITE = {"operator_action", "operator_issue", "machine_status", "quality", "quality_result",
-                  "dispatch_attach_photo", "my_work_claim"}
+                  "dispatch_attach_photo", "my_work_claim", "request_material", "request_action"}
 
 
 @app.before_request
@@ -1512,6 +1512,19 @@ def cutlist():
         if action == "load" and f.get("model_id"):
             return redirect_with_token(url_for("cutlist", model=f.get("model_id")))
         fields = {k: f.get(k, "") for k in FIELD_KEYS}
+        # v3.11 — SHEET POOL USE: pool wali sheet size fields me daal ke normal calculate
+        if action == "pool_use":
+            try:
+                _pid = int(f.get("pool_id", 0) or 0)
+            except ValueError:
+                _pid = 0
+            _pr = db.query("SELECT * FROM sheet_pool WHERE id=?", (_pid,), one=True) if _pid else None
+            if _pr:
+                fields["sheet_len"] = format(_pr["sheet_len"] or 0, "g")
+                fields["sheet_w"] = format(_pr["sheet_w"] or 0, "g")
+                flash("Sheet " + format(_pr["sheet_len"] or 0, "g") + "\u00d7" + format(_pr["sheet_w"] or 0, "g") +
+                      " USE ho gayi — layout isi sheet par recalculate hua.", "success")
+            action = "calculate"
         result = compute_layout(fields)
 
         if action == "save_model" and result:
@@ -1620,6 +1633,26 @@ def cutlist():
 
         if action == "save_model" and not result:
             flash("Save nahi hua — layout invalid hai. Sheet L/W + PCB size bhar ke Calculate karo, phir Save dabao.", "error")
+
+        if action == "pool_add":
+            try:
+                _pl = float(f.get("pool_len", 0) or 0)
+                _pwd = float(f.get("pool_w", 0) or 0)
+            except ValueError:
+                _pl = _pwd = 0
+            if _pl > 0 and _pwd > 0:
+                db.execute("INSERT INTO sheet_pool (sheet_len, sheet_w, note, created_on) VALUES (?,?,?,?)",
+                           (_pl, _pwd, (f.get("pool_note") or "").strip(), _today_ist().isoformat()))
+                flash("Sheet " + format(_pl, "g") + "\u00d7" + format(_pwd, "g") +
+                      " STOCK POOL me add ho gayi — ab compare me dikhegi.", "success")
+            else:
+                flash("Pool add: LENGTH aur WIDTH dono (0 se zyada) chahiye.", "error")
+        if action == "pool_del":
+            try:
+                db.execute("DELETE FROM sheet_pool WHERE id=?", (int(f.get("pool_id", 0) or 0),))
+                flash("Sheet size pool se hata di gayi.", "success")
+            except ValueError:
+                pass
 
         if action == "apply_order" and result:
             try:
@@ -1813,6 +1846,43 @@ def cutlist():
         fields = {}
         result = None
 
+    # v3.11 — SHEET STOCK POOL compare: har pool sheet par layout compute, best-pehle sort
+    pool_rows = []
+    try:
+        _oq11 = float(fields.get("order_qty", 0) or 0)
+    except ValueError:
+        _oq11 = 0
+    try:
+        _cur_l = float(fields.get("sheet_len", 0) or 0)
+        _cur_w = float(fields.get("sheet_w", 0) or 0)
+    except ValueError:
+        _cur_l = _cur_w = 0
+    for _pr in db.query("SELECT * FROM sheet_pool ORDER BY sheet_len, sheet_w"):
+        p2 = dict(DEFAULTS)
+        p2.update({k: v for k, v in fields.items() if v not in ("", None)})
+        p2["sheet_len"] = str(_pr["sheet_len"] or 0)
+        p2["sheet_w"] = str(_pr["sheet_w"] or 0)
+        try:
+            r2 = compute_layout(p2)
+        except Exception:
+            r2 = None
+        if r2 and (r2["panels_per_sheet"] or 0) > 0 and (r2["pcs_per_sheet"] or 0) > 0:
+            pool_rows.append({
+                "id": _pr["id"], "sheet_len": _pr["sheet_len"] or 0, "sheet_w": _pr["sheet_w"] or 0,
+                "note": _pr["note"] or "", "panels": r2["panels_per_sheet"],
+                "pcs": r2["pcs_per_sheet"],
+                "unit_label": ("PCS/unit" if r2["gang_active"] else "PCS/panel"),
+                "waste": round(r2["wastage"] or 0, 1), "best": r2["best"],
+                "sheets_needed": (r2["sheets_needed"] or 0) if _oq11 else 0,
+                "is_current": (abs((_pr["sheet_len"] or 0) - _cur_l) < 0.01
+                               and abs((_pr["sheet_w"] or 0) - _cur_w) < 0.01),
+            })
+    if pool_rows:
+        _mx = max(r["pcs"] for r in pool_rows)
+        for r in pool_rows:
+            r["is_best"] = (r["pcs"] == _mx)
+        pool_rows.sort(key=lambda r: (-r["pcs"], r["sheet_len"], r["sheet_w"]))
+
     models = db.query("SELECT * FROM product_models ORDER BY id DESC")
     orders = db.query("SELECT id, order_no, party, product FROM orders WHERE status!='done' ORDER BY id DESC")
     svg_panel = svg_panel_preview(result) if result else ""
@@ -1827,7 +1897,7 @@ def cutlist():
             disp_pl, disp_pw = result["cutting_len"], result["cutting_w"]
         else:
             disp_pl, disp_pw = result["panel_len"], result["panel_w"]
-    return render_template("cutlist.html", active="cutlist", fields=fields, result=result,
+    return render_template("cutlist.html", active="cutlist", fields=fields, pool_rows=pool_rows, result=result,
                            models=models, orders=orders, SHEET_PRESETS=SHEET_PRESETS,
                            svg_panel=svg_panel, svg_sheet=svg_sheet, gang_info=gang_info,
                            svg_gang_panel=svg_gang_panel, svg_sheet_layout=svg_sheet_layout,
@@ -3086,7 +3156,21 @@ def employees():
     if eid and eid.isdigit():
         edit_emp = db.query("SELECT * FROM employees WHERE id=?", (int(eid),), one=True)
     return render_template("employees.html", active="employees", employees=rows, att=att, stats=stats,
-                           att_labels=ATT_LABELS, show_add=request.args.get("add"), edit_emp=edit_emp)
+                           att_labels=ATT_LABELS, show_add=request.args.get("add"), edit_emp=edit_emp,
+                           dispatch_incharge=get_dispatch_incharge())
+
+
+@app.route("/employees/dispatch-incharge", methods=["POST"])
+@admin_required
+def dispatch_incharge_set():
+    """v3.08 — admin ek person chuno — Material + Product dispatch SIRF wahi karega."""
+    name = (request.form.get("incharge") or "").strip()
+    if not name:
+        flash("In-charge chuno (koi ek employee).", "error")
+        return redirect_with_token(url_for("employees"))
+    set_dispatch_incharge(name)
+    flash("🚚 DISPATCH IN-CHARGE set: " + name + " — ab Material + Product dispatch sirf ye karega.", "success")
+    return redirect_with_token(url_for("employees"))
 
 
 @app.route("/employees/<int:emp_id>/edit", methods=["POST"])
@@ -3614,6 +3698,26 @@ def _op_names(val):
     return [x.strip() for x in (val or "").split(",") if x.strip() and x.strip() != "Unassigned"]
 
 
+def get_dispatch_incharge():
+    """v3.08 — Material + Product dispatch SIRF ye ek person karega (meta setting)."""
+    try:
+        r = db.query("SELECT value FROM meta WHERE key='dispatch_incharge'", one=True)
+        return (r["value"] or "").strip() if r else ""
+    except Exception:
+        return ""
+
+
+def set_dispatch_incharge(name):
+    db.execute("DELETE FROM meta WHERE key='dispatch_incharge'")
+    db.execute("INSERT INTO meta (key, value) VALUES ('dispatch_incharge', ?)", ((name or "").strip(),))
+
+
+def dispatch_block_msg():
+    _i = get_dispatch_incharge()
+    return ("🚚 Dispatch sirf IN-CHARGE (" + (_i or "SET NAHI — admin: Employees page par set karo") +
+            ") kar sakta hai — aapko permission nahi.")
+
+
 DESIGNATION_JOBS = {
     "CNC": ["CNC DRILLING", "DIE/CNC", "DRILLING"],
     "DRILL": ["CNC DRILLING", "DIE/CNC", "DRILLING"],
@@ -3895,11 +3999,26 @@ def operator_view():
         dispatch_rows = db.query(
             "SELECT dl.*, o.order_no, o.party FROM dispatch_log dl "
             "LEFT JOIN orders o ON o.id=dl.order_id ORDER BY dl.id DESC LIMIT 30")
+    _inch = get_dispatch_incharge()
+    _admin = session.get("user_role") == "admin"
+    _can_issue = (bool(_inch) and op == _inch) or _admin
+    # v3.10 LIVE PROCESS TRACKING (dashboard jaisi table) — live operator + progress ke saath
+    _live_rows = db.query("SELECT * FROM orders WHERE status != 'done' ORDER BY "
+                          "CASE priority WHEN 'urgent' THEN 0 ELSE 1 END, "
+                          "CASE status WHEN 'running' THEN 0 WHEN 'hold' THEN 1 ELSE 2 END, id")
+    live_tracking = _decorate_working_ops(_live_rows)
+    my_requests = db.query("SELECT * FROM material_requests WHERE requested_by=? ORDER BY id DESC LIMIT 30", (op,))
+    pending_requests = db.query(
+        "SELECT r.*, o.order_no FROM material_requests r LEFT JOIN orders o ON o.id=r.order_id "
+        "WHERE r.status='pending' ORDER BY r.id DESC LIMIT 50") if _can_issue else []
     return render_template("operator.html", active="operator", jobs=jobs, logs=logs,
                            employees=employees, op=op, designation=designation,
                            inv_items=inv_items, my_issues=my_issues, is_dispatch=is_dispatch,
                            dispatch_rows=dispatch_rows,
-                           admin_show=session.get("user_role") == "admin")
+                           incharge=_inch, is_incharge=_can_issue, is_admin_view=_admin,
+                           my_requests=my_requests, pending_requests=pending_requests,
+                           live_tracking=live_tracking,
+                           admin_show=_admin)
 
 
 @app.route("/operator/switch", methods=["POST"])
@@ -3921,6 +4040,10 @@ def operator_switch():
 @app.route("/operator/issue", methods=["POST"])
 @login_required
 def operator_issue():
+    _op0 = session.get("op_name") or session.get("user_name") or ""
+    if get_dispatch_incharge() != _op0 and session.get("user_role") != "admin":
+        flash(dispatch_block_msg(), "error")
+        return redirect_with_token(url_for("operator_view"))
     """Operator khud stock se item le — entry auto uske naam + uske job order ke saath."""
     f = request.form
     try:
@@ -3961,6 +4084,75 @@ def operator_issue():
     if new_stock < 0:
         msg += f" ⚠️ STOCK SHORT: ab {new_stock:g} {item['unit']} bacha."
     flash(msg, "error" if new_stock < 0 else "success")
+    return redirect_with_token(url_for("operator_view"))
+
+
+@app.route("/operator/request-material", methods=["POST"])
+@login_required
+def request_material():
+    """v3.09 — KOI BHI employee (bina admin power) stock ke liye REQUEST bhej sakta hai.
+    Entry pending request banti hai — in-charge/admin Issue dabayega tab stock katega."""
+    op = session.get("op_name") or session.get("user_name") or "Operator"
+    f = request.form
+    try:
+        order_id = int(f.get("order_id", 0) or 0)
+        item_id = int(f.get("item_id", 0) or 0)
+        qty = float(f.get("qty", 0) or 0)
+    except ValueError:
+        order_id, item_id, qty = 0, 0, 0
+    item = db.query("SELECT * FROM inventory WHERE id=?", (item_id,), one=True) if item_id else None
+    if not item or qty <= 0:
+        flash("Request ke liye item aur qty (0 se zyada) dono chahiye.", "error")
+        return redirect_with_token(url_for("operator_view"))
+    db.execute("INSERT INTO material_requests (order_id, item_id, item_name, qty, unit, note, "
+               "requested_by, status, req_on) VALUES (?,?,?,?,?,?,?,?,?)",
+               (order_id or None, item_id, item["name"], qty, item["unit"] or "",
+                f.get("note", "").strip(), op, "pending", _now_ist().strftime("%Y-%m-%d %H:%M")))
+    flash("🧾 Request bhej di gayi: " + item["name"] + " " + format(qty, "g") + " " + (item["unit"] or "") +
+          " — DISPATCH IN-CHARGE pass pending hai. Issue hone par inventory entry ban jayegi.", "success")
+    return redirect_with_token(url_for("operator_view"))
+
+
+@app.route("/operator/request-action", methods=["POST"])
+@login_required
+def request_action():
+    """v3.09 — sirf in-charge/admin: request Issue (stock kata + entry) ya Reject."""
+    op = session.get("op_name") or session.get("user_name") or ""
+    if get_dispatch_incharge() != op and session.get("user_role") != "admin":
+        flash(dispatch_block_msg(), "error")
+        return redirect_with_token(url_for("operator_view"))
+    try:
+        rid = int(request.form.get("request_id", 0) or 0)
+    except ValueError:
+        rid = 0
+    req = db.query("SELECT * FROM material_requests WHERE id=?", (rid,), one=True) if rid else None
+    if not req or req["status"] != "pending":
+        flash("Request nahi mili ya pehle process ho chuki.", "error")
+        return redirect_with_token(url_for("operator_view"))
+    do = request.form.get("do", "")
+    if do == "issue":
+        item = db.query("SELECT * FROM inventory WHERE id=?", (req["item_id"],), one=True)
+        if not item:
+            flash("Request ka item inventory me ab nahi hai.", "error")
+            return redirect_with_token(url_for("operator_view"))
+        qty = req["qty"] or 0
+        new_stock = round((item["stock"] or 0) - qty, 4)
+        db.execute("UPDATE inventory SET stock=? WHERE id=?", (new_stock, item["id"]))
+        _now = _now_ist().strftime("%Y-%m-%d %H:%M")
+        db.execute("INSERT INTO material_issues (order_id, item_id, item_name, qty, unit, worker, taken_on, notes) "
+                   "VALUES (?,?,?,?,?,?,?,?)",
+                   (req["order_id"] or None, req["item_id"], item["name"], qty, item["unit"] or "",
+                    req["requested_by"], _now,
+                    (req["note"] or "").strip() + " [req #" + str(rid) + " issue by " + op + "]"))
+        db.execute("UPDATE material_requests SET status='issued', issued_by=?, issued_on=? WHERE id=?",
+                   (op, _now, rid))
+        flash("✅ Request #" + str(rid) + " ISSUE ho gayi — " + item["name"] + " " + format(qty, "g") +
+              " " + (item["unit"] or "") + " stock se kata, entry " + (req["requested_by"] or "?") +
+              " ke naam par. " + ("⚠️ STOCK SHORT: " + format(new_stock, "g") if new_stock < 0 else ""), "error" if new_stock < 0 else "success")
+    else:
+        db.execute("UPDATE material_requests SET status='rejected', reject_reason=?, issued_by=? WHERE id=?",
+                   (request.form.get("reason", "").strip() or "in-charge ne mana kiya", op, rid))
+        flash("Request #" + str(rid) + " reject ho gayi.", "error")
     return redirect_with_token(url_for("operator_view"))
 
 
@@ -4017,6 +4209,9 @@ def operator_action():
         nxt = advance_current(order_id)
         flash(f"Finished: {process} — FINISH {now}. Next: {nxt}.", "success")
     elif action == "dispatch":
+        if get_dispatch_incharge() != op and session.get("user_role") != "admin":
+            flash(dispatch_block_msg(), "error")
+            return redirect_with_token(url_for("operator_view"))
         mode = f.get("mode", "").strip()
         if mode:
             ph_name, ph_mime, ph_data = "", "", None

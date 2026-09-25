@@ -2,6 +2,20 @@
 {% block title %}Employees{% endblock %}
 {% block page_title %}Employees{% endblock %}
 {% block content %}
+<!-- v3.08 DISPATCH IN-CHARGE setting (admin) -->
+<div class="panel" style="margin-bottom:14px;border-left:4px solid #b45309">
+  <div class="panel-head"><h3>🚚 DISPATCH IN-CHARGE — Material + Product dispatch kewal YE karega</h3></div>
+  <div class="panel-body">
+    <form method="post" action="/employees/dispatch-incharge" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+      <select name="incharge" required style="min-width:220px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px">
+        <option value="">— employee chuno —</option>
+        {% for e in employees %}<option value="{{ e.name }}" {{ 'selected' if dispatch_incharge == e.name }}>{{ e.name }}{% if e.designation %} · {{ e.designation }}{% endif %}</option>{% endfor %}
+      </select>
+      <button class="btn" type="submit">🚚 In-charge Set Karo</button>
+      <span class="muted small">Abhi set hai: {% if dispatch_incharge %}<span class="badge" style="background:#b45309;color:#fff;font-size:11px">{{ dispatch_incharge }}</span>{% else %}<span class="badge b-amber">Koi nahi — jab tak set nahi hoga, dispatch band rahega</span>{% endif %}</span>
+    </form>
+  </div>
+</div>
 <style>
 .stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:16px}
 .stat-card{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:2px}

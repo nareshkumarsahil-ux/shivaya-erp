@@ -15,7 +15,7 @@ import http.client
 import urllib.parse
 
 # Schema version — bump karo jab SCHEMA/migrate badle, taaki agla deploy tables update kare.
-SCHEMA_VERSION = "2026-09-22.12"   # v3.07 bump: product_models code columns Turso par forced-migrate
+SCHEMA_VERSION = "2026-09-24.14"   # v3.11 bump: sheet_pool table (Turso forced-migrate)
 
 # Entry timestamps IST (Asia/Kolkata) me — server UTC par ho sakta hai (Vercel)
 IST = datetime.timezone(datetime.timedelta(hours=5, minutes=30), "IST")
@@ -853,6 +853,17 @@ def migrate(conn):
     jcols = [r[1] for r in conn.execute("PRAGMA table_info(jobcard)")]
     if jcols and "po_no" not in jcols:
         conn.execute("ALTER TABLE jobcard ADD COLUMN po_no TEXT DEFAULT ''")
+    # v3.11 SHEET STOCK POOL: available sheet sizes — compare karke best chuno
+    conn.execute("CREATE TABLE IF NOT EXISTS sheet_pool ("
+                 "id INTEGER PRIMARY KEY AUTOINCREMENT, sheet_len REAL DEFAULT 0, sheet_w REAL DEFAULT 0, "
+                 "note TEXT DEFAULT '', created_on TEXT DEFAULT '')")
+    # v3.09 MATERIAL REQUEST: employee request bheje (bina admin power), in-charge issue/reject kare
+    conn.execute("CREATE TABLE IF NOT EXISTS material_requests ("
+                 "id INTEGER PRIMARY KEY AUTOINCREMENT, order_id INTEGER, item_id INTEGER, "
+                 "item_name TEXT DEFAULT '', qty REAL DEFAULT 0, unit TEXT DEFAULT '', "
+                 "note TEXT DEFAULT '', requested_by TEXT DEFAULT '', status TEXT DEFAULT 'pending', "
+                 "req_on TEXT DEFAULT '', issued_by TEXT DEFAULT '', issued_on TEXT DEFAULT '', "
+                 "reject_reason TEXT DEFAULT '')")
     pcols = [r[1] for r in conn.execute("PRAGMA table_info(product_models)")]
     if pcols and "model_code" not in pcols:
         conn.execute("ALTER TABLE product_models ADD COLUMN model_code TEXT DEFAULT ''")
@@ -1135,6 +1146,17 @@ def ensure_db():
                         c.execute("CREATE TABLE IF NOT EXISTS purchase_order_items ("
                                   "id INTEGER PRIMARY KEY AUTOINCREMENT, po_id INTEGER, item TEXT DEFAULT '', "
                                   "qty TEXT DEFAULT '', rate REAL DEFAULT 0, amount REAL DEFAULT 0)")
+                        # v3.11 SHEET STOCK POOL (fast-path self-heal)
+                        c.execute("CREATE TABLE IF NOT EXISTS sheet_pool ("
+                                  "id INTEGER PRIMARY KEY AUTOINCREMENT, sheet_len REAL DEFAULT 0, "
+                                  "sheet_w REAL DEFAULT 0, note TEXT DEFAULT '', created_on TEXT DEFAULT '')")
+                        # v3.09 MATERIAL REQUEST (fast-path self-heal)
+                        c.execute("CREATE TABLE IF NOT EXISTS material_requests ("
+                                  "id INTEGER PRIMARY KEY AUTOINCREMENT, order_id INTEGER, item_id INTEGER, "
+                                  "item_name TEXT DEFAULT '', qty REAL DEFAULT 0, unit TEXT DEFAULT '', "
+                                  "note TEXT DEFAULT '', requested_by TEXT DEFAULT '', status TEXT DEFAULT 'pending', "
+                                  "req_on TEXT DEFAULT '', issued_by TEXT DEFAULT '', issued_on TEXT DEFAULT '', "
+                                  "reject_reason TEXT DEFAULT '')")
                         c.execute("CREATE TABLE IF NOT EXISTS billing_items ("
                                   "id INTEGER PRIMARY KEY AUTOINCREMENT, bill_id INTEGER, item TEXT DEFAULT '', "
                                   "qty TEXT DEFAULT '', rate REAL DEFAULT 0, amount REAL DEFAULT 0)")

@@ -151,6 +151,54 @@
       </div>
     </div>
 
+    <!-- v3.11 SHEET STOCK POOL — multiple sheet sizes, compare + USE -->
+    <div class="panel" style="border-left:4px solid #2563eb">
+      <div class="panel-head"><h3>🗄 SHEET STOCK POOL — available sheet sizes (ek ya multiple, compare karke chuno)</h3></div>
+      <div class="panel-body">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
+          <div class="field" style="flex:0 0 120px;margin-bottom:0"><label>LENGTH (mm)</label><input type="number" step="any" name="pool_len" placeholder="1000"></div>
+          <div class="field" style="flex:0 0 120px;margin-bottom:0"><label>WIDTH (mm)</label><input type="number" step="any" name="pool_w" placeholder="1200"></div>
+          <div class="field" style="flex:1;min-width:150px;margin-bottom:0"><label>NOTE (jaise godown-A)</label><input name="pool_note" placeholder="optional"></div>
+          <button class="btn btn-outline btn-sm" type="submit" name="action" value="pool_add">➕ Pool me jodo</button>
+        </div>
+        {% if pool_rows %}
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px">
+          {% for p in pool_rows %}
+          <span class="badge {{'b-blue' if p.is_current else 'b-gray'}}" style="font-size:11.5px">{{ p.sheet_len|gfmt }}×{{ p.sheet_w|gfmt }}{% if p.note %} · {{ p.note }}{% endif %}{% if p.is_current %} ✓ CURRENT{% endif %}{% if p.is_best %} 🏆{% endif %}</span>
+          {% endfor %}
+        </div>
+        <table style="width:100%;font-size:12.5px;margin-top:10px">
+          <thead><tr><th>Sheet Size</th><th class="t-right">Panels/Sheet</th><th class="t-right">PCS/Sheet</th><th>Best Fit</th><th class="t-right">Waste</th><th class="t-right">Sheets (order qty)</th><th></th></tr></thead>
+          <tbody>
+            {% for p in pool_rows %}
+            <tr style="{{'background:#f0fdf4' if p.is_best}}">
+              <td class="mono"><b>{{ p.sheet_len|gfmt }}×{{ p.sheet_w|gfmt }}</b>{% if p.note %} <span class="muted small">{{ p.note }}</span>{% endif %}{% if p.is_current %} <span class="badge b-blue" style="font-size:9px">CURRENT</span>{% endif %}</td>
+              <td class="t-right mono">{{ p.panels }}</td>
+              <td class="t-right mono"><b>{{ p.pcs }}</b> <span class="muted small">{{ p.unit_label }}</span></td>
+              <td class="small">{{ p.best }}{% if p.is_best %} <span class="badge b-done" style="font-size:9px">🏆 BEST</span>{% endif %}</td>
+              <td class="t-right mono">{{ p.waste }}%</td>
+              <td class="t-right mono">{% if p.sheets_needed %}{{ p.sheets_needed }}{% else %}—{% endif %}</td>
+              <td style="white-space:nowrap">
+                <form method="post" action="/cutlist" style="display:inline">
+                  <input type="hidden" name="pool_id" value="{{ p.id }}">
+                  <button class="btn btn-outline btn-xs" type="submit" name="action" value="pool_use">USE →</button>
+                </form>
+                <form method="post" action="/cutlist" style="display:inline">
+                  <input type="hidden" name="pool_id" value="{{ p.id }}">
+                  <button class="btn btn-outline btn-xs" type="submit" name="action" value="pool_del" title="Pool se hatao">✕</button>
+                </form>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        <div class="muted small" style="margin-top:6px">🏆 = is PCB/panel ke liye sabse zyada PCS/sheet (kam waste). <b>USE →</b> dabao — sheet size form me aa jayega, Calculate khud ho jayega. Order QTY (Panels) bharo to sheets-needed bhi dikhega.</div>
+        {% else %}
+        <div class="muted small" style="margin-top:8px">💡 Pool khali hai — upar se apni available sheet sizes (jaise 1000×1200, 1100×1200) jodo. Phir har size ka <b>compare table</b> dikhega: kaunsi sheet me zyada PCS, kam waste — ek click me USE karo. Sizes save rehti hain (har baar dubara type nahi karna).</div>
+        {% endif %}
+      </div>
+    </div>
+
     <div class="panel">
       <div class="panel-head"><h3>📋 APPLY TO JOB ORDER</h3></div>
       <div class="panel-body">

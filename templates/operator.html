@@ -67,7 +67,7 @@
 {% set urgent_jobs = jobs | selectattr('priority', 'equalto', 'urgent') | list %}
 {% set normal_jobs = jobs | rejectattr('priority', 'equalto', 'urgent') | list %}
 
-{% macro jobcard(j, emps) %}
+{% macro jobcard(j, emps, is_incharge=False) %}
   <div class="jobcard {{'urgent' if j.priority=='urgent'}}" data-mine="{{ '1' if j.mine else '0' }}">
     <div class="jtop">
       <span class="ono">{{ j.order_no }}</span>
@@ -99,7 +99,7 @@
       {% if j.dispatched %}
       <span class="state-badge st-done" style="background:#d8f4ee;color:#0f766e">🚚 DISPATCHED — {{ j.dispatched.mode }} · {{ j.dispatched.ddate }} {{ j.dispatched.dtime }}</span>
       {% if j.dispatched.photo_data %}<a class="btn btn-outline btn-xs" target="_blank" href="/dispatch/{{ j.dispatched.id }}/photo{% if request.args.get('token') %}?token={{ request.args.get('token') }}{% endif %}" title="Dispatch photo/screenshot">📷 Photo</a>{% endif %}
-      {% elif j.is_dispatch_step %}
+      {% elif j.is_dispatch_step and is_incharge %}
       <button class="btn btn-sm" onclick="toggleReason('dispatch-{{ j.id }}')">🚚 Dispatch</button>
       {% elif j.skipped %}
       <span class="muted small">⏭ Ye process skip hai — NONE selected tha, agla process hoga</span>
@@ -133,6 +133,7 @@
         <button class="btn btn-amber btn-sm" type="submit">⏸ Confirm Pause</button>
       </form>
     </div>
+    {% if is_incharge %}
     <div id="dispatch-{{ j.id }}" class="reasonbox hide">
       <form method="post" action="/operator/action" enctype="multipart/form-data" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;width:100%">
         <input type="hidden" name="action" value="dispatch">
@@ -151,6 +152,7 @@
         <button class="btn btn-sm" type="submit">🚚 Dispatch (auto date/time)</button>
       </form>
     </div>
+    {% endif %}
     <div id="handover-{{ j.id }}" class="reasonbox hide">
       <form method="post" action="/operator/action" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;width:100%">
         <input type="hidden" name="action" value="handover">
@@ -167,11 +169,42 @@
   </div>
 {% endmacro %}
 
+<!-- v3.10 LIVE PROCESS TRACKING (dashboard jaisi table) -->
+<div class="section-title" style="margin-top:6px"><span class="live-dot"></span>&nbsp; LIVE PROCESS TRACKING <span class="muted small" style="font-weight:600">— kaun kya kar raha hai abhi</span></div>
+<div class="panel">
+  <div class="panel-head"><h3>Live Process Tracking ({{ live_tracking|length }} orders)</h3></div>
+  <div class="panel-body" style="padding:0;overflow-x:auto">
+    <table>
+      <thead>
+        <tr><th>Order #</th><th>Party</th><th>Current Process</th><th>Status</th><th>Operator</th><th class="t-right">Progress</th><th>Qty</th></tr>
+      </thead>
+      <tbody>
+        {% for o in live_tracking %}
+        <tr>
+          <td><b class="mono">{{ o.order_no }}</b>{% if o.priority=='urgent' %} <span class="badge b-urgent">URGENT</span>{% endif %}</td>
+          <td>{{ o.party }}</td>
+          <td><span class="badge {{'b-amber' if o.current_process!='Completed' else 'b-done'}}">{{ o.current_process }}</span></td>
+          <td><span class="badge {{'b-pending' if o.status=='pending' else 'b-blue' if o.status=='running' else 'b-amber' if o.status=='hold' else 'b-done'}}">{{ {'pending':'Pending','running':'⏱ Running','hold':'⏸ Hold','scheduled':'Scheduled','done':'Completed'}.get(o.status, o.status) }}</span></td>
+          <td>{% if o.operator %}<b>{{ o.operator }}</b>{% else %}<span class="muted">—</span>{% endif %}</td>
+          <td class="t-right">
+            <span class="prog-label">{{ o.progress }}%</span>
+            <span class="prog" style="display:inline-block;vertical-align:middle"><span class="fill {{'done' if o.progress>=100}}" style="width:{{ o.progress }}%"></span></span>
+          </td>
+          <td class="mono small">{{ o.qty }} pcs</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7"><div class="empty">Abhi koi active order nahi hai</div></td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
 <div class="section-title sec-emergency" style="margin-top:6px">🚨 EMERGENCY ORDERS — SABSE PEHLE YE KARO <span class="cnt">{{ urgent_jobs|length }}</span></div>
 {% if urgent_jobs %}
 <div class="cards" style="grid-template-columns:repeat(auto-fill,minmax(340px,1fr))">
   {% for j in urgent_jobs %}
-  {{ jobcard(j, employees) }}
+  {{ jobcard(j, employees, is_incharge) }}
   {% endfor %}
 </div>
 {% else %}
@@ -181,10 +214,18 @@
 <div class="section-title" style="margin-top:24px">🛠️ JOBS AWAITING ACTION</div>
 <div class="cards" style="grid-template-columns:repeat(auto-fill,minmax(340px,1fr))">
   {% for j in normal_jobs %}
-  {{ jobcard(j, employees) }}
+  {{ jobcard(j, employees, is_incharge) }}
   {% else %}
   <div class="empty" style="grid-column:1/-1">No active jobs 🎉</div>
   {% endfor %}
+</div>
+
+<!-- v3.08 DISPATCH IN-CHARGE banner -->
+<div class="panel" style="margin-bottom:14px;border-left:4px solid #b45309">
+  <div class="panel-body" style="padding:10px 14px;font-size:13.5px">
+    🚚 <b>DISPATCH IN-CHARGE:</b> {% if incharge %}<span class="badge" style="background:#b45309;color:#fff;font-size:12px">{{ incharge }}</span>{% else %}<span class="badge b-amber">SET NAHI — admin: Employees page par set karo</span>{% endif %}
+    <span class="muted small" style="margin-left:8px">Material Dispatch + Product Dispatch ka kaam kewal YEHI person karega.</span>
+  </div>
 </div>
 
 <!-- ================= ITEM LO — STOCK SE ITEM LENA ================= -->
@@ -210,6 +251,41 @@
     {% else %}
     <div class="empty">Abhi koi dispatch entry nahi — dispatch wale jobs upar dikhenge, wahan se 📷 photo ke saath dispatch karo.</div>
     {% endfor %}
+  </div>
+</div>
+{% endif %}
+{% if is_incharge %}
+{% if pending_requests %}
+<div class="panel" style="border-left:4px solid #2563eb">
+  <div class="panel-head"><h3>📥 MATERIAL REQUESTS — PENDING ({{ pending_requests|length }})</h3></div>
+  <div class="panel-body" style="padding:0;overflow-x:auto">
+    <table style="width:100%;font-size:12.5px">
+      <thead><tr><th>#</th><th>Kisne maanga</th><th>Item</th><th>Qty</th><th>Order</th><th>Note</th><th>Kab</th><th>Karo</th></tr></thead>
+      <tbody>
+        {% for r in pending_requests %}
+        <tr>
+          <td class="mono">{{ r.id }}</td>
+          <td><b>{{ r.requested_by }}</b></td>
+          <td class="mono">{{ r.item_name }}</td>
+          <td class="mono">{{ r.qty|gfmt }} {{ r.unit }}</td>
+          <td class="small mono">{{ r.order_no or '—' }}</td>
+          <td class="small">{{ r.note }}</td>
+          <td class="small muted">{{ r.req_on }}</td>
+          <td style="white-space:nowrap">
+            <form method="post" action="/operator/request-action" style="display:inline">
+              <input type="hidden" name="request_id" value="{{ r.id }}"><input type="hidden" name="do" value="issue">
+              <button class="btn btn-sm" style="background:#16a34a;color:#fff" type="submit">✅ Issue (stock se do)</button>
+            </form>
+            <form method="post" action="/operator/request-action" style="display:inline;flex:1">
+              <input type="hidden" name="request_id" value="{{ r.id }}"><input type="hidden" name="do" value="reject">
+              <input type="text" name="reason" placeholder="wajah (optional)" style="width:110px;padding:5px 7px;border:1px solid var(--border);border-radius:7px;font-size:11px">
+              <button class="btn btn-outline btn-sm" type="submit">❌</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
   </div>
 </div>
 {% endif %}
@@ -244,6 +320,57 @@
     <div class="muted small" style="margin-top:8px">👷 Entry auto <b>{{ op }}</b> ke naam + date/time ke saath save hogi → inventory balance turant update → Job Card ke <b>MATERIAL ISSUES</b> aur Inventory ki <b>Material Issue History</b> mein dikhegi.</div>
   </div>
 </div>
+{% else %}
+<div class="panel">
+  <div class="panel-head"><h3>🧾 ITEM MANGO — stock se material chahiye? REQUEST bhejo (admin power nahi chahiye)</h3></div>
+  <div class="panel-body">
+    <form method="post" action="/operator/request-material" style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
+      <div class="field" style="flex:1.2;min-width:170px"><label>JOB ORDER (kis kaam ke liye)</label>
+        <select name="order_id" required>
+          <option value="">— order chuno —</option>
+          {% for j in jobs %}
+          <option value="{{ j.id }}">#{{ j.order_no }} — {{ j.proc }}{% if j.party %} · {{ j.party }}{% endif %}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="field" style="flex:1.8;min-width:190px"><label>ITEM (kitna stock hai dik raha hai)</label>
+        <select name="item_id" required>
+          <option value="">— item chuno —</option>
+          {% for it in inv_items %}
+          <option value="{{ it.id }}">{{ it.name }} — {{ it.stock|gfmt }} {{ it.unit }} stock</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="field" style="flex:0 0 90px"><label>QTY</label>
+        <input type="number" step="any" min="0.001" name="qty" required placeholder="0">
+      </div>
+      <div class="field" style="flex:1.2;min-width:150px"><label>NOTE (kyun chahiye)</label>
+        <input name="note" placeholder="e.g. drilling job ke liye">
+      </div>
+      <button class="btn" type="submit" style="background:#2563eb;color:#fff">🧾 Request Bhejo</button>
+    </form>
+    <div class="muted small" style="margin-top:8px">🚚 Stock se item issue karna sirf <b>DISPATCH IN-CHARGE{% if incharge %} ({{ incharge }}){% endif %}</b> karega — request pending dikhegi, ISSUE hone par aapke naam ki entry ban jayegi.</div>
+    {% if my_requests %}
+    <table style="width:100%;font-size:12.5px;margin-top:10px">
+      <thead><tr><th>Item</th><th>Qty</th><th>Maanga</th><th>Note</th><th>Status</th></tr></thead>
+      <tbody>
+        {% for r in my_requests %}
+        <tr>
+          <td class="mono">{{ r.item_name }}</td>
+          <td class="mono">{{ r.qty|gfmt }} {{ r.unit }}</td>
+          <td class="small muted">{{ r.req_on }}</td>
+          <td class="small">{{ r.note }}</td>
+          <td>{% if r.status == 'pending' %}<span class="badge b-amber">⏳ Pending</span>
+              {% elif r.status == 'issued' %}<span class="badge b-done">✅ Issued{% if r.issued_by %} — {{ r.issued_by }}{% endif %}</span>
+              {% else %}<span class="badge b-pending">❌ Reject{% if r.reject_reason %} — {{ r.reject_reason }}{% endif %}</span>{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
 
 <!-- ================= MY ISSUED ITEMS ================= -->
 <div class="panel" style="margin-top:14px">
