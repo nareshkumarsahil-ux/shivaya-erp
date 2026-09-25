@@ -1550,6 +1550,10 @@ def cutlist():
                     pm_rs = None
             name = f.get("save_name", "").strip()
             sel = f.get("save_select", "").strip()
+            # v3.12 — PARTY NAME naya hai to PARTIES me automatic add
+            _pn12 = (f.get("party_name") or "").strip()
+            if _pn12 and ensure_party(_pn12):
+                flash("👤 Party '" + _pn12 + "' PARTIES me bhi add ho gayi (auto).", "success")
             # v3.04 — MODEL NO fallback: purana/stale form ho jisme model_code field nahi,
             # to MODEL NAME ko hi MODEL NO bana do — Model No. kabhi khali na rahe
             _mc = (f.get("model_code") or "").strip()
@@ -3710,6 +3714,21 @@ def get_dispatch_incharge():
 def set_dispatch_incharge(name):
     db.execute("DELETE FROM meta WHERE key='dispatch_incharge'")
     db.execute("INSERT INTO meta (key, value) VALUES ('dispatch_incharge', ?)", ((name or "").strip(),))
+
+
+def ensure_party(name):
+    """v3.12 — party ka naam pehli baar aaya to PARTIES me auto-add (customer)."""
+    name = (name or "").strip()
+    if not name:
+        return False
+    _ex = db.query("SELECT id FROM parties WHERE name=?", (name,), one=True)
+    if _ex:
+        return False
+    try:
+        db.execute("INSERT INTO parties (name, ptype) VALUES (?, 'customer')", (name,))
+        return True
+    except Exception:
+        return False
 
 
 def dispatch_block_msg():
