@@ -2,58 +2,45 @@
 {% block title %}Settings{% endblock %}
 {% block page_title %}⚙️ Settings — Colors{% endblock %}
 {% block content %}
-<div style="max-width:760px">
+<div style="max-width:780px">
+
+  <div id="mixStatus" style="display:none;position:fixed;top:16px;right:16px;z-index:99999;background:#0f172a;color:#fff;padding:10px 16px;border-radius:10px;font-size:13px;font-weight:700;box-shadow:0 8px 24px rgba(0,0,0,.3)"></div>
 
   <div class="panel">
-    <div class="panel-head"><b>🎨 App Theme Color</b><span style="font-size:12px;color:#8a8f98">Poore software ka color — sidebar, buttons, sab jagah</span></div>
+    <div class="panel-head"><b>🎨 App Theme Color</b><span style="font-size:12px;color:#8a8f98">Poore software ka color — sidebar, buttons, sab jagah (turant change hota hai)</span></div>
     <div style="padding:18px">
-      <form method="post" action="/ui-brand" style="display:flex;gap:14px;align-items:center;flex-wrap:wrap">
-        <input type="hidden" name="next" value="/settings">
-        <label class="mixwrap" title="Color mixer — koi bhi color chuno">
-          <input type="color" name="color" value="{{ ui_brand }}" onchange="document.getElementById('pv1').style.background=this.value">
-        </label>
-        <div style="font-size:13px">Round mixer par click karo — <b>koi bhi color</b> (rainbow box me apna color banao)</div>
-        <button class="btn btn-amber" type="submit">💾 Save App Color</button>
-        <span id="pv1" style="width:26px;height:26px;border-radius:8px;background:{{ ui_brand }};display:inline-block;border:2px solid #fff;box-shadow:0 0 0 1px #ddd"></span>
-      </form>
+      <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+        <span id="pvUi" style="width:34px;height:34px;border-radius:10px;background:{{ ui_brand }};display:inline-block;border:2px solid #fff;box-shadow:0 0 0 1px #ddd"></span>
+        <button type="button" class="btn btn-amber" onclick="openMixer(this, CUR_UI, {ok: saveUi, live: liveUi})">🎨 Color Mixer Kholo — koi bhi color banao</button>
+        <span style="font-size:12px;color:#8a8f98">Rainbow square + slider se apna color banao</span>
+      </div>
       <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;align-items:center">
         <span style="font-size:11px;font-weight:700;color:#8a8f98">QUICK:</span>
         {% for c, n in [('#f59e0b', 'Amber (default)'), ('#2563eb', 'Blue'), ('#7c3aed', 'Purple'), ('#db2777', 'Pink'), ('#dc2626', 'Red'), ('#059669', 'Green'), ('#0ea5e9', 'Sky'), ('#111827', 'Black')] %}
-        <form method="post" action="/ui-brand" style="display:inline">
-          <input type="hidden" name="next" value="/settings">
-          <button type="submit" title="{{ n }}" style="width:26px;height:26px;border-radius:50%;border:{{ '2.5px solid #111' if c == ui_brand else '1px solid #ccc' }};cursor:pointer;background:{{ c }}"></button>
-        </form>
+        <button type="button" title="{{ n }}" onclick="saveUi('{{ c }}')" style="width:28px;height:28px;border-radius:50%;border:{{ '3px solid #111' if c == ui_brand else '1px solid #ccc' }};cursor:pointer;background:{{ c }}"></button>
         {% endfor %}
       </div>
     </div>
   </div>
 
   <div class="panel">
-    <div class="panel-head"><b>🧾 Print Document Color</b><span style="font-size:12px;color:#8a8f98">PI + Invoice print/PDF ke header band ka color</span></div>
+    <div class="panel-head"><b>🧾 Print Document Color</b><span style="font-size:12px;color:#8a8f98">PI + Invoice print/PDF header ka color</span></div>
     <div style="padding:18px">
-      <form method="post" action="/doc-brand" style="display:flex;gap:14px;align-items:center;flex-wrap:wrap">
-        <input type="hidden" name="next" value="/settings">
-        <label class="mixwrap" title="Color mixer — koi bhi color chuno">
-          <input type="color" name="color" value="{{ doc_brand }}" onchange="document.getElementById('pv2').style.background=this.value">
-        </label>
-        <div style="font-size:13px">Print header (PROFORMA INVOICE / INVOICE) ka color</div>
-        <button class="btn btn-amber" type="submit">💾 Save Print Color</button>
-        <span id="pv2" style="width:26px;height:26px;border-radius:8px;background:{{ doc_brand }};display:inline-block;border:2px solid #fff;box-shadow:0 0 0 1px #ddd"></span>
-      </form>
+      <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+        <span id="pvDoc" style="width:34px;height:34px;border-radius:10px;background:{{ doc_brand }};display:inline-block;border:2px solid #fff;box-shadow:0 0 0 1px #ddd"></span>
+        <button type="button" class="btn btn-amber" onclick="openMixer(this, CUR_DOC, {ok: saveDoc, live: liveDoc})">🎨 Color Mixer Kholo — koi bhi color banao</button>
+      </div>
       <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;align-items:center">
         <span style="font-size:11px;font-weight:700;color:#8a8f98">QUICK:</span>
         {% for c, n in [('#1d4ed8', 'Blue (default)'), ('#0e7490', 'Teal'), ('#047857', 'Green'), ('#b91c1c', 'Red'), ('#7c3aed', 'Purple'), ('#c2410c', 'Orange'), ('#111827', 'Black')] %}
-        <form method="post" action="/doc-brand" style="display:inline">
-          <input type="hidden" name="next" value="/settings">
-          <button type="submit" title="{{ n }}" style="width:26px;height:26px;border-radius:50%;border:{{ '2.5px solid #111' if c == doc_brand else '1px solid #ccc' }};cursor:pointer;background:{{ c }}"></button>
-        </form>
+        <button type="button" title="{{ n }}" onclick="saveDoc('{{ c }}')" style="width:28px;height:28px;border-radius:50%;border:{{ '3px solid #111' if c == doc_brand else '1px solid #ccc' }};cursor:pointer;background:{{ c }}"></button>
         {% endfor %}
       </div>
     </div>
   </div>
 
   <div class="panel">
-    <div class="panel-head"><b>👀 Live Preview</b></div>
+    <div class="panel-head"><b>👀 Live Preview</b><span style="font-size:12px;color:#8a8f98">Mixer ghumao — yahan turant dikhega</span></div>
     <div style="padding:18px;display:flex;gap:14px;align-items:center;flex-wrap:wrap">
       <div style="width:120px;border-radius:10px;overflow:hidden;border:1px solid #e5e5e5">
         <div style="background:#192338;padding:10px"><div id="pvSide" style="width:40px;height:12px;border-radius:4px;background:{{ ui_brand }}"></div></div>
@@ -67,16 +54,100 @@
   </div>
 
 </div>
-<style>
-  .mixwrap { position: relative; width: 46px; height: 46px; border-radius: 50%; cursor: pointer; flex: 0 0 auto;
-    background: conic-gradient(#ef4444,#f59e0b,#84cc16,#06b6d4,#6366f1,#d946ef,#ef4444);
-    box-shadow: 0 2px 8px rgba(0,0,0,.25); }
-  .mixwrap input { position: absolute; inset: 6px; opacity: 0; cursor: pointer; padding: 0; }
-</style>
 <script>
-  var i1 = document.querySelector('form[action="/ui-brand"] input[type=color]');
-  if (i1) i1.addEventListener('input', function(){ var p=document.getElementById('pvSide'),b=document.getElementById('pvBtn'); if(p)p.style.background=this.value; if(b)b.style.background=this.value; });
-  var i2 = document.querySelector('form[action="/doc-brand"] input[type=color]');
-  if (i2) i2.addEventListener('input', function(){ var p=document.getElementById('pvBand'); if(p)p.style.background=this.value; });
+var CUR_UI = '{{ ui_brand }}', CUR_DOC = '{{ doc_brand }}';
+function postColor(url, hex) {
+  try { fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: 'color=' + encodeURIComponent(hex) + '&next=/settings' }).catch(function () {}); } catch (e) {}
+}
+function showMsg(m) {
+  var el = document.getElementById('mixStatus');
+  el.textContent = '✓ ' + m; el.style.display = 'block';
+  clearTimeout(el._t); el._t = setTimeout(function () { el.style.display = 'none'; }, 2500);
+}
+function liveUi(h) {
+  CUR_UI = h;
+  document.documentElement.style.setProperty('--ui-brand', h);
+  document.getElementById('pvUi').style.background = h;
+  var a = document.getElementById('pvSide'), b = document.getElementById('pvBtn');
+  if (a) a.style.background = h; if (b) b.style.background = h;
+}
+function saveUi(h) { liveUi(h); postColor('/ui-brand', h); showMsg('App theme color save: ' + h.toUpperCase()); }
+function liveDoc(h) {
+  CUR_DOC = h;
+  document.getElementById('pvDoc').style.background = h;
+  var b = document.getElementById('pvBand'); if (b) b.style.background = h;
+}
+function saveDoc(h) { liveDoc(h); postColor('/doc-brand', h); showMsg('Print color save: ' + h.toUpperCase()); }
+
+function _hsv2hex(h, s, v) {
+  var c = v * s, x = c * (1 - Math.abs((h / 60) % 2 - 1)), m = v - c, r = 0, g = 0, b = 0;
+  if (h < 60) { r = c; g = x; } else if (h < 120) { r = x; g = c; } else if (h < 180) { g = c; b = x; }
+  else if (h < 240) { g = x; b = c; } else if (h < 300) { r = x; b = c; } else { r = c; b = x; }
+  function f(n) { var t = Math.round((n + m) * 255).toString(16); return t.length < 2 ? '0' + t : t; }
+  return '#' + f(r) + f(g) + f(b);
+}
+function _hex2hsv(hex) {
+  var r = parseInt(hex.substr(1, 2), 16) / 255, g = parseInt(hex.substr(3, 2), 16) / 255, b = parseInt(hex.substr(5, 2), 16) / 255;
+  var mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn, h = 0;
+  if (d) { if (mx === r) h = ((g - b) / d) % 6; else if (mx === g) h = (b - r) / d + 2; else h = (r - g) / d + 4; h *= 60; if (h < 0) h += 360; }
+  return [h, mx ? d / mx : 0, mx];
+}
+function openMixer(anchor, hex0, cb) {
+  var old = document.getElementById('mixPop');
+  if (old) old.remove();
+  var hsv = _hex2hsv(hex0);
+  var pop = document.createElement('div'); pop.id = 'mixPop';
+  pop.style.cssText = 'position:fixed;z-index:99999;background:#fff;border:1px solid #cbd5e1;border-radius:14px;box-shadow:0 14px 44px rgba(0,0,0,.28);padding:13px;width:236px;font-family:Segoe UI,Arial,sans-serif';
+  pop.innerHTML =
+    '<div style="font-size:11px;font-weight:800;letter-spacing:1px;color:#64748b;margin-bottom:8px">🎨 COLOR MIXER</div>' +
+    '<div id="mxSV" style="position:relative;height:132px;border-radius:9px;cursor:crosshair;touch-action:none">' +
+      '<div id="mxDot" style="position:absolute;width:14px;height:14px;border-radius:50%;border:3px solid #fff;box-shadow:0 0 5px rgba(0,0,0,.5);transform:translate(-50%,50%);pointer-events:none;left:50%;bottom:50%"></div>' +
+    '</div>' +
+    '<input id="mxH" type="range" min="0" max="360" style="width:100%;margin:10px 0 8px;-webkit-appearance:none;appearance:none;height:12px;border-radius:7px;outline:none;cursor:pointer;background:linear-gradient(to right,#f00,#ff0,#0f0,#0ff,#00f,#f0f,#f00)">' +
+    '<div style="display:flex;align-items:center;gap:8px">' +
+      '<div id="mxPv" style="width:36px;height:36px;border-radius:9px;flex:0 0 auto;box-shadow:inset 0 0 0 1px rgba(0,0,0,.12)"></div>' +
+      '<input id="mxHex" maxlength="7" style="flex:1;min-width:0;padding:7px 8px;border:1px solid #cbd5e1;border-radius:8px;font-size:13px;font-weight:700;text-transform:uppercase">' +
+      '<button id="mxOk" type="button" style="padding:9px 13px;border:0;border-radius:8px;background:#0f172a;color:#fff;font-weight:800;cursor:pointer;font-size:12px">✓ LAGAO</button>' +
+    '</div>' +
+    '<div style="font-size:10px;color:#94a3b8;margin-top:7px">Square me click/drag karke rang banao • slider se tone</div>';
+  document.body.appendChild(pop);
+  var sv = pop.querySelector('#mxSV'), dot = pop.querySelector('#mxDot'), hr = pop.querySelector('#mxH'),
+      pv = pop.querySelector('#mxPv'), hx = pop.querySelector('#mxHex');
+  function cur() { return _hsv2hex(hsv[0], hsv[1], hsv[2]); }
+  function draw() {
+    sv.style.background = 'linear-gradient(to top,#000,rgba(0,0,0,0)),linear-gradient(to right,#fff,hsl(' + Math.round(hsv[0]) + ',100%,50%))';
+    dot.style.left = (hsv[1] * 100) + '%'; dot.style.bottom = (hsv[2] * 100) + '%';
+    pv.style.background = cur(); hx.value = cur().toUpperCase();
+    hr.value = Math.round(hsv[0]);
+    if (cb && cb.live) cb.live(cur());
+  }
+  function pos(e) {
+    var r = sv.getBoundingClientRect();
+    hsv[1] = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
+    hsv[2] = Math.min(1, Math.max(0, 1 - (e.clientY - r.top) / r.height));
+    draw();
+  }
+  var drag = false;
+  sv.addEventListener('pointerdown', function (e) { drag = true; sv.setPointerCapture(e.pointerId); pos(e); });
+  sv.addEventListener('pointermove', function (e) { if (drag) pos(e); });
+  sv.addEventListener('pointerup', function () { drag = false; });
+  hr.addEventListener('input', function () { hsv[0] = +this.value; draw(); });
+  hx.addEventListener('change', function () {
+    var v = this.value.trim();
+    if (/^#[0-9a-fA-F]{6}$/.test(v)) { hsv = _hex2hsv(v); draw(); }
+  });
+  pop.querySelector('#mxOk').addEventListener('click', function () { if (cb && cb.ok) cb.ok(cur()); pop.remove(); });
+  var r = anchor.getBoundingClientRect();
+  pop.style.left = Math.max(8, Math.min(window.innerWidth - 252, r.left - 100)) + 'px';
+  pop.style.top = Math.min(window.innerHeight - 300, r.bottom + 8) + 'px';
+  draw();
+  setTimeout(function () {
+    document.addEventListener('pointerdown', function es(e) {
+      if (!pop.contains(e.target) && !anchor.contains(e.target)) { pop.remove(); document.removeEventListener('pointerdown', es); }
+    });
+  }, 10);
+}
+
 </script>
 {% endblock %}

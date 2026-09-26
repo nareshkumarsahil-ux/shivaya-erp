@@ -3199,7 +3199,6 @@ def doc_brand():
     color = (request.form.get("color") or "").strip()
     if re.match(r"^#[0-9a-fA-F]{6}$", color):
         db.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('doc_brand', ?)", (color,))
-        flash("Print document ka color update: " + color + " \u2014 PI + Invoice dono par yahi lagega.", "success")
     nxt = request.form.get("next") or url_for("proforma")
     return redirect(nxt)
 
@@ -3211,7 +3210,6 @@ def ui_brand():
     color = (request.form.get("color") or "").strip()
     if re.match(r"^#[0-9a-fA-F]{6}$", color):
         db.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('ui_theme', ?)", (color,))
-        flash("App theme color update: " + color + " \u2014 poore software par lag gaya.", "success")
     nxt = request.form.get("next") or url_for("settings")
     return redirect(nxt)
 
