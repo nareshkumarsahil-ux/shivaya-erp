@@ -15,7 +15,7 @@ import http.client
 import urllib.parse
 
 # Schema version — bump karo jab SCHEMA/migrate badle, taaki agla deploy tables update kare.
-SCHEMA_VERSION = "2026-09-25.17"   # v3.18 bump: HSN code — products/inventory/machines/PI+billing items
+SCHEMA_VERSION = "2026-09-25.18"   # v3.20 bump: product_models.shape (PCB SHAPE: rect/square/round)
 
 # Entry timestamps IST (Asia/Kolkata) me — server UTC par ho sakta hai (Vercel)
 IST = datetime.timezone(datetime.timedelta(hours=5, minutes=30), "IST")
@@ -891,6 +891,10 @@ def migrate(conn):
     pcols = [r[1] for r in conn.execute("PRAGMA table_info(product_models)")]
     if pcols and "model_code" not in pcols:
         conn.execute("ALTER TABLE product_models ADD COLUMN model_code TEXT DEFAULT ''")
+    # v3.20 PCB SHAPE: rect (default) / square / round — previews me PCB ka shape
+    if pcols and "shape" not in pcols:
+        conn.execute("ALTER TABLE product_models ADD COLUMN shape TEXT DEFAULT 'rect'")
+    conn.execute("UPDATE product_models SET shape='rect' WHERE shape IS NULL OR shape=''")
     for _c96 in ("pcb_code", "party_code", "party_name"):
         if pcols and _c96 not in pcols:
             conn.execute(f"ALTER TABLE product_models ADD COLUMN {_c96} TEXT DEFAULT ''")
@@ -1183,6 +1187,14 @@ def ensure_db():
                                              ("bank_details", "TEXT DEFAULT ''"), ("other_terms", "TEXT DEFAULT ''")):
                             if _pc17 and _c17f not in _pc17:
                                 c.execute(f"ALTER TABLE proforma_invoices ADD COLUMN {_c17f} {_d17f}")
+                        # v3.20 PCB SHAPE (fast-path self-heal)
+                        try:
+                            _pmc20 = [x[1] for x in c.execute("PRAGMA table_info(product_models)").fetchall()]
+                            if _pmc20 and "shape" not in _pmc20:
+                                c.execute("ALTER TABLE product_models ADD COLUMN shape TEXT DEFAULT 'rect'")
+                            c.execute("UPDATE product_models SET shape='rect' WHERE shape IS NULL OR shape=''")
+                        except Exception:
+                            pass
                         # v3.18 HSN CODE (fast-path self-heal)
                         for _t18f in ("product_models", "inventory", "machines", "proforma_items", "billing_items"):
                             try:

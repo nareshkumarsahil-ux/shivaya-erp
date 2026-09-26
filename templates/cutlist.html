@@ -49,6 +49,13 @@
           <b style="color:var(--muted);margin-top:16px">×</b>
           <div class="field" style="flex:1"><label>Width</label><input type="number" step="0.01" name="pcb_w" id="pcb_w" value="{{ fields.pcb_w }}" required></div>
         </div>
+        <div class="field" style="margin-bottom:14px"><label>PCB SHAPE (preview me wahi shape dikhega)</label>
+          <select name="shape" id="shape_sel" style="padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;max-width:240px">
+            <option value="rect" {{ 'selected' if (fields.shape or 'rect') == 'rect' }}>▭ RECTANGLE (default)</option>
+            <option value="square" {{ 'selected' if fields.shape == 'square' }}>□ SQUARE</option>
+            <option value="round" {{ 'selected' if fields.shape == 'round' }}>⬤ ROUND (GOL PCB)</option>
+          </select>
+        </div>
         <div style="display:flex;gap:12px;margin-bottom:14px">
           <div class="field" style="flex:1"><label>PCBs Across X</label><input type="number" name="pcbs_x" id="pcbs_x" value="{{ fields.pcbs_x }}" required></div>
           <div class="field" style="flex:1"><label>PCBs Across Y</label><input type="number" name="pcbs_y" id="pcbs_y" value="{{ fields.pcbs_y }}" required></div>
@@ -508,6 +515,8 @@ function computeLive(){
   var bl = num('border_l'), br = num('border_r'), bt = num('border_t'), bb = num('border_b');
   var gx = Math.max(1, intNum('gang_x')), gy = Math.max(1, intNum('gang_y'));
   var sl = num('sheet_len'), sw = num('sheet_w');
+  var _shEl = document.getElementById('shape_sel');
+  var shape = (_shEl && _shEl.value) ? _shEl.value : 'rect';   /* v3.20 PCB SHAPE */
   var kx = num('kerf_x'), ky = num('kerf_y');
   var sheets = Math.max(1, intNum('sheets'));
   var useLocked = document.getElementById('useChk').checked;
@@ -690,7 +699,7 @@ function computeLive(){
     var gh = document.getElementById('gangHead');
     if (gh) gh.textContent = '🔗 GANG PANEL PREVIEW — ' + gx + '×' + gy + ' MULTIPLIER = ' + pcsUnit + ' PCS';
     document.getElementById('svgGangPanel').innerHTML =
-      svgGangPanel(pcbL, pcbW, px, py, gapXs, gapYs, bl, br, bt, bb, pL, pW, pcsPanel, gx, gy, kx, ky, pgXs, pgYs);
+      svgGangPanel(pcbL, pcbW, px, py, gapXs, gapYs, bl, br, bt, bb, pL, pW, pcsPanel, gx, gy, kx, ky, pgXs, pgYs, shape);
     _zApply('svgGangPanel');
   } else {
     gpEl.style.display = 'none';
@@ -743,7 +752,7 @@ function computeLive(){
 
   /* --- SVG previews --- */
 
-  document.getElementById('svgPanel').innerHTML = svgPanel(pcbL, pcbW, px, py, gapXs, gapYs, bl, br, bt, bb, pL, pW, pcsPanel, gx, gy, kx, ky, pgXs, pgYs);
+  document.getElementById('svgPanel').innerHTML = svgPanel(pcbL, pcbW, px, py, gapXs, gapYs, bl, br, bt, bb, pL, pW, pcsPanel, gx, gy, kx, ky, pgXs, pgYs, shape);
   _zApply('svgPanel');
   var sheetHead = document.getElementById('sheetPreviewHead');
   if (sheetHead) sheetHead.innerHTML = (best === 'mixed')
@@ -751,7 +760,8 @@ function computeLive(){
     : '🔲 <span style="color:#16a34a;font-weight:700">Gang panels</span> · Sheet — <span style="display:inline-flex;gap:4px;align-items:center"><span style="width:10px;height:10px;background:#dcfce7;border:1.5px solid #16a34a;border-radius:2px;display:inline-block"></span>Gang</span> <span style="display:inline-flex;gap:4px;align-items:center"><span style="width:10px;height:10px;background:#bfdbfe;border:1.5px solid #2563eb;border-radius:2px;display:inline-block"></span>Panel</span>';
 }
 
-function svgPanel(pcbL, pcbW, px, py, gapXs, gapYs, bl, br, bt, bb, pL, pW, pcsPanel, gx, gy, kx, ky, pgXs, pgYs){
+function svgPanel(pcbL, pcbW, px, py, gapXs, gapYs, bl, br, bt, bb, pL, pW, pcsPanel, gx, gy, kx, ky, pgXs, pgYs, shape){
+  shape = shape || 'rect';   /* v3.20 */
   /* PREVIEW #1 — PANEL: sirf EK panel + individual PCBs (borders + per-boundary gaps).
      Multiplier copies GANG PANEL PREVIEW (#2) me — sheet fit #3 me.
      v2.86 \u2014 canvas me FIXED bottom zone (dims + captions) = koi overlap nahi.
@@ -776,7 +786,9 @@ function svgPanel(pcbL, pcbW, px, py, gapXs, gapYs, bl, br, bt, bb, pL, pW, pcsP
     for (i = 0; i < px; i++) {
       var oy = by;
       for (j = 0; j < py; j++) {
-        s += '<rect x="' + (x0 + ox).toFixed(1) + '" y="' + (y0 + oy).toFixed(1) + '" width="' + cw.toFixed(1) + '" height="' + ch.toFixed(1) + '" fill="#fbbf24" fill-opacity="0.5" stroke="#f59e0b" stroke-width="0.8"/>';
+        s += (shape === 'round')
+          ? '<ellipse cx="' + (x0 + ox + cw / 2).toFixed(1) + '" cy="' + (y0 + oy + ch / 2).toFixed(1) + '" rx="' + (cw / 2).toFixed(1) + '" ry="' + (ch / 2).toFixed(1) + '" fill="#fbbf24" fill-opacity="0.5" stroke="#f59e0b" stroke-width="0.8"/>'
+          : '<rect x="' + (x0 + ox).toFixed(1) + '" y="' + (y0 + oy).toFixed(1) + '" width="' + cw.toFixed(1) + '" height="' + ch.toFixed(1) + '" fill="#fbbf24" fill-opacity="0.5" stroke="#f59e0b" stroke-width="0.8"/>';
         s += _pcbDim(x0 + ox + cw / 2, y0 + oy + ch / 2, cw, ch, effL, effW);   /* v2.91 PCB DIMENSION */
         oy += ch + ((j < gapYs.length ? gapYs[j] : 0) * scale);
       }
@@ -952,7 +964,8 @@ function svgSheetLayout(sl, sw, cl, cw, gx2, gy2, gx, gy, kx, ky, pps, best, mN,
   s += '</svg>';
   return s;
 }
-function svgGangPanel(pcbL, pcbW, px, py, gapXs, gapYs, bl, br, bt, bb, pL, pW, pcsPanel, gx, gy, kx, ky, pgXs, pgYs){
+function svgGangPanel(pcbL, pcbW, px, py, gapXs, gapYs, bl, br, bt, bb, pL, pW, pcsPanel, gx, gy, kx, ky, pgXs, pgYs, shape){
+  shape = shape || 'rect';   /* v3.20 */
   /* PREVIEW #2 — GANG PANEL: EK gang unit ka zoom — multiplier panels, har panel me PCBs,
      per-joint gap labels + total cutting size (gl x gw) dimensions ke saath */
   var W = 470, H = 412, pad = 30;
@@ -986,7 +999,9 @@ function svgGangPanel(pcbL, pcbW, px, py, gapXs, gapYs, bl, br, bt, bb, pL, pW, 
         for (i = 0; i < px; i++) {
           var oy = by;
           for (j = 0; j < py; j++) {
-            s += '<rect x="' + (xp + ox).toFixed(1) + '" y="' + (yp + oy).toFixed(1) + '" width="' + cw.toFixed(1) + '" height="' + ch.toFixed(1) + '" fill="#fbbf24" fill-opacity="0.5" stroke="#f59e0b" stroke-width="0.8"/>';
+            s += (shape === 'round')
+              ? '<ellipse cx="' + (xp + ox + cw / 2).toFixed(1) + '" cy="' + (yp + oy + ch / 2).toFixed(1) + '" rx="' + (cw / 2).toFixed(1) + '" ry="' + (ch / 2).toFixed(1) + '" fill="#fbbf24" fill-opacity="0.5" stroke="#f59e0b" stroke-width="0.8"/>'
+              : '<rect x="' + (xp + ox).toFixed(1) + '" y="' + (yp + oy).toFixed(1) + '" width="' + cw.toFixed(1) + '" height="' + ch.toFixed(1) + '" fill="#fbbf24" fill-opacity="0.5" stroke="#f59e0b" stroke-width="0.8"/>';
             s += _pcbDim(xp + ox + cw / 2, yp + oy + ch / 2, cw, ch, pcbL, pcbW);   /* v2.91 PCB DIMENSION */
             oy += ch + ((j < gapYs.length ? gapYs[j] : 0) * scale);
           }

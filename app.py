@@ -896,13 +896,13 @@ FIELD_KEYS = ["pcb_len", "pcb_w", "pcbs_x", "pcbs_y", "gap_x", "gap_y",
               "gang_x", "gang_y", "sheet_len", "sheet_w", "kerf_x", "kerf_y", "sheets", "use",
               "panel_len", "panel_w", "panel_base_len", "panel_base_w",
               "per_sq_inch", "pcb_price", "gaps_x", "gaps_y", "pgaps_x", "pgaps_y", "order_qty",
-              "pcb_code", "party_code", "party_name", "model_code"]
+              "pcb_code", "party_code", "party_name", "model_code", "shape"]
 DEFAULTS = {"pcb_len": "40", "pcb_w": "50", "pcbs_x": "10", "pcbs_y": "5",
             "gap_x": "0", "gap_y": "0",
             "border_l": "0", "border_r": "0", "border_t": "5", "border_b": "5",
             "gang_x": "1", "gang_y": "1", "sheet_len": "1200", "sheet_w": "1000",
             "kerf_x": "2", "kerf_y": "2", "sheets": "1", "use": "1",
-            "panel_len": "400", "panel_w": "260",
+            "panel_len": "400", "panel_w": "260", "shape": "rect",
             "per_sq_inch": "", "pcb_price": "", "pgaps_x": "", "pgaps_y": ""}
 SHEET_PRESETS = ["1244x1044", "1240x1040", "1230x1030", "1200x1100", "1200x1000", "1100x1100", "1050x1050"]
 
@@ -1071,6 +1071,7 @@ def compute_layout(p):
 
     return {
         "pcb_len": pcb_len, "pcb_w": pcb_w, "pcbs_x": pcbs_x, "pcbs_y": pcbs_y,
+        "shape": (p.get("shape") or "rect").strip().lower() if isinstance(p.get("shape"), str) else "rect",
         "gap_x": gap_x, "gap_y": gap_y,
         "gaps_x": gaps_x, "gaps_y": gaps_y,
         "border_l": border_l, "border_r": border_r, "border_t": border_t, "border_b": border_b,
@@ -1115,7 +1116,7 @@ def svg_panel_preview(r):
         for i in range(r["pcbs_x"]):
             oy = by
             for j in range(r["pcbs_y"]):
-                s.append(f'<rect x="{x0 + ox:.1f}" y="{y0 + oy:.1f}" width="{cw:.1f}" height="{ch:.1f}" fill="#fbbf24" fill-opacity="0.5" stroke="#f59e0b" stroke-width="0.8"/>')
+                s.append(_pcb_shape_svg(x0 + ox, y0 + oy, cw, ch, r.get("shape") or "rect"))
                 _pcb_dim_text(s, x0 + ox + cw / 2, y0 + oy + ch / 2, cw, ch, r["pcb_len"], r["pcb_w"])   # v2.91
                 oy += ch + (gaps_y_s[j] * scale if j < len(gaps_y_s) else gys)
             if i < r["pcbs_x"] - 1:
@@ -1200,6 +1201,15 @@ def _svg_dim_h(s, cx, cy, mm):
              f'stroke="#ffffff" stroke-width="2.5">{mm:g}</text>')
 
 
+def _pcb_shape_svg(x, y, w, h, shape):
+    """v3.20 — PCB drawing by shape: round -> ellipse, square/rect -> rect."""
+    if shape == "round":
+        return (f'<ellipse cx="{x + w / 2:.1f}" cy="{y + h / 2:.1f}" rx="{w / 2:.1f}" ry="{h / 2:.1f}" '
+                f'fill="#fbbf24" fill-opacity="0.5" stroke="#f59e0b" stroke-width="0.8"/>')
+    return (f'<rect x="{x:.1f}" y="{y:.1f}" width="{w:.1f}" height="{h:.1f}" '
+            f'fill="#fbbf24" fill-opacity="0.5" stroke="#f59e0b" stroke-width="0.8"/>')
+
+
 def _pcb_dim_text(s, cx, cy, w, h, dl, dw):
     """v2.93 — PCB dims edge-style (sheet-layout jaisa): TOP = LENGTH, LEFT = WIDTH (rotated)."""
     lt, lw_ = f"{dl:g}", f"{dw:g}"
@@ -1276,7 +1286,7 @@ def svg_gang_panel_preview(r):
                 for i in range(r["pcbs_x"]):
                     oy = by
                     for j in range(r["pcbs_y"]):
-                        s.append(f'<rect x="{xp + ox:.1f}" y="{yp + oy:.1f}" width="{cw:.1f}" height="{ch:.1f}" fill="#fbbf24" fill-opacity="0.5" stroke="#f59e0b" stroke-width="0.8"/>')
+                        s.append(_pcb_shape_svg(xp + ox, yp + oy, cw, ch, r.get("shape") or "rect"))
                         _pcb_dim_text(s, xp + ox + cw / 2, yp + oy + ch / 2, cw, ch, r["pcb_len"], r["pcb_w"])   # v2.91
                         oy += ch + (gaps_y_s[j] * scale if j < len(gaps_y_s) else gys)
                     if i < r["pcbs_x"] - 1:
@@ -1589,7 +1599,7 @@ def cutlist():
                         "pcb_price=?, per_sq_inch=?, gaps_x=?, gaps_y=?, " 
                         "pcb_code=COALESCE(NULLIF(?, ''), pcb_code), party_code=COALESCE(NULLIF(?, ''), party_code), "
                         "party_name=COALESCE(NULLIF(?, ''), party_name), "
-                        "model_code=COALESCE(NULLIF(?, ''), model_code) WHERE id=?",
+                        "model_code=COALESCE(NULLIF(?, ''), model_code), shape=? WHERE id=?",
                         (name, result["pcb_len"], result["pcb_w"], result["pcbs_x"], result["pcbs_y"],
                          result["gap_x"], result["gap_y"],
                          result["border_l"], result["border_r"], result["border_t"], result["border_b"],
@@ -1604,7 +1614,7 @@ def cutlist():
                          ",".join(f"{g:g}" for g in result["gaps_y"]),
                          (f.get("pcb_code") or "").strip(), (f.get("party_code") or "").strip(),
                          (f.get("party_name") or "").strip(),
-                         (f.get("model_code") or "").strip(), model["id"]))
+                         (f.get("model_code") or "").strip(), result.get("shape") or "rect", model["id"]))
                     flash(f"Model '{name}' updated — saari cut list details + price save ho gayi.", "success")
                 else:
                     flash("Select a valid finished product.", "error")
@@ -1627,8 +1637,8 @@ def cutlist():
                     "border_r, border_t, border_b, gang_x, gang_y, sheet_len, sheet_w, panel_len, panel_w, "
                     "cutting_len, cutting_w, kerf_x, kerf_y, orientation, pcs_panel, panels_sheet, sheets, "
                     "x_qty, y_qty, cnc_margin_x, cnc_margin_y, pcb_price, per_sq_inch, gaps_x, gaps_y, "
-                    "pcb_code, party_code, party_name, model_code, created_on) "
-                    "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    "pcb_code, party_code, party_name, model_code, shape, created_on) "
+                    "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                     (name, result["pcb_len"], result["pcb_w"], result["pcbs_x"], result["pcbs_y"],
                      result["gap_x"], result["gap_y"],
                      result["border_l"], result["border_r"], result["border_t"], result["border_b"],
@@ -1643,6 +1653,7 @@ def cutlist():
                      ",".join(f"{g:g}" for g in result["gaps_y"]),
                      (f.get("pcb_code") or "").strip(), (f.get("party_code") or "").strip(),
                      (f.get("party_name") or "").strip(), _mc,
+                     result.get("shape") or "rect",
                      _today_ist().isoformat()))
                 flash("Naya model '" + name + "' FINISHED PRODUCTS me save ho gaya — Products page par PCB/PARTY codes ke saath dikh raha hai.", "success")
 
@@ -2021,8 +2032,8 @@ def products():
                     "pcb_code=COALESCE(NULLIF(?, \'\'), pcb_code), party_code=COALESCE(NULLIF(?, \'\'), party_code), "
                     "party_name=COALESCE(NULLIF(?, \'\'), party_name) WHERE id=?",
                     vals + (edit_id,))
-                db.execute("UPDATE product_models SET hsn=? WHERE id=?",
-                           ((f.get("hsn") or "").strip() or "85340000", edit_id))
+                db.execute("UPDATE product_models SET hsn=?, shape=? WHERE id=?",
+                           ((f.get("hsn") or "").strip() or "85340000", (f.get("shape") or "rect").strip(), edit_id))
                 flash(f"Finished product '{name}' update ho gaya ✅ (cut list layout + price ke saath)", "success")
             else:
                 dup = db.query("SELECT COUNT(*) c FROM product_models WHERE name=?", (name,), one=True)["c"]
@@ -2037,8 +2048,8 @@ def products():
                     "pcb_code, party_code, party_name, order_id, created_on) "
                     "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                     vals + (None, _today_ist().isoformat()))
-                db.execute("UPDATE product_models SET hsn=? WHERE id=?",
-                           ((f.get("hsn") or "").strip() or "85340000", db.query(
+                db.execute("UPDATE product_models SET hsn=?, shape=? WHERE id=?",
+                           ((f.get("hsn") or "").strip() or "85340000", (f.get("shape") or "rect").strip(), db.query(
                                "SELECT id FROM product_models WHERE name=? ORDER BY id DESC LIMIT 1", (name,), one=True)["id"]))
                 flash(f"Finished product '{name}' manually add ho gaya ✅ — BOM set karne ke liye 🧪 BOM button dabao.", "success")
         except Exception as e:
@@ -3088,7 +3099,11 @@ def proforma():
             edit_items = db.query("SELECT * FROM proforma_items WHERE pi_id=? ORDER BY id", (_eid,))
     return render_template("proforma.html", active="proforma", rows=rows, totals=totals,
                            items_by_pi=items_by_pi, all_parties=db.query("SELECT * FROM parties ORDER BY name"),
-                           orders=db.query("SELECT id, order_no, party, product FROM orders ORDER BY id DESC LIMIT 100"),
+                           orders=db.query("SELECT o.id, o.order_no, o.party, o.product, o.qty, o.value, "
+                                           "(SELECT pcb_price FROM product_models WHERE order_id=o.id ORDER BY id DESC LIMIT 1) m_price, "
+                                           "(SELECT hsn FROM product_models WHERE order_id=o.id ORDER BY id DESC LIMIT 1) m_hsn, "
+                                           "(SELECT name FROM product_models WHERE order_id=o.id ORDER BY id DESC LIMIT 1) m_name "
+                                           "FROM orders o ORDER BY o.id DESC LIMIT 100"),
                            bill_models=db.query("SELECT * FROM product_models ORDER BY name"),
                            show_add=request.args.get("add"), comp=_po_company(),
                            edit_pi=edit_pi, edit_items=edit_items,

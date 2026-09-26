@@ -28,7 +28,7 @@
             <option value="">— khud items bharo (manual PI) —</option>
             {% for o in orders %}<option value="{{ o.id }}">#{{ o.order_no }} — {{ o.party }}{% if o.product %} · {{ o.product[:30] }}{% endif %}</option>{% endfor %}
           </select>
-          <div class="muted small" style="margin-top:4px">Order chuno to PI number me order no. jud jayega (PI-101-#21)</div>
+          <div class="muted small" style="margin-top:4px">Order chuno → party + item (qty/rate/HSN) apne aap bhar jayega; PI number me order no. bhi jud jayega (PI-101-#21)</div>
           {% endif %}
         </div>
         <div class="field full"><label>Party *</label>
@@ -134,6 +134,41 @@
 
 <script>
 var piModels = [{% for m in bill_models %}{id:{{ m.id }}, name:{{ (m.name ~ ' ' ~ (m.pcb_len|gfmt) ~ '×' ~ (m.pcb_w|gfmt) ~ 'mm')|tojson }}, price:{{ m.pcb_price or 0 }}}{% if not loop.last %},{% endif %}{% endfor %}];
+/* v3.19 — JOB ORDER auto-fill data: order chuno → party + pehli item (desc/qty/rate/HSN) auto */
+var piOrdersData = [{% for o in orders %}{id:{{ o.id }}, no:{{ (o.order_no ~ '')|tojson }}, party:{{ (o.party or '')|tojson }}, product:{{ ((o.m_name or o.product) or '')|tojson }}, qty:{{ (o.qty or 0) + 0 }}, rate:{{ (o.m_price or 0) + 0 }}, val:{{ (o.value or 0) + 0 }}, hsn:{{ ((o.m_hsn or '') or '85340000')|tojson }} }{% if not loop.last %},{% endif %}{% endfor %}];
+(function(){
+  var os = document.getElementById('pi_order');
+  if (!os) return;
+  os.addEventListener('change', function(){
+    var o = null;
+    for (var i = 0; i < piOrdersData.length; i++) if (String(piOrdersData[i].id) === String(os.value)) { o = piOrdersData[i]; break; }
+    if (!o) return;
+    var ps = document.getElementById('pi_party');
+    if (ps && o.party) {
+      var hit = false;
+      for (var j = 0; j < ps.options.length; j++) if (ps.options[j].value === o.party) { hit = true; break; }
+      if (!hit) { var op = document.createElement('option'); op.value = o.party; op.textContent = o.party + ' (order se)'; ps.appendChild(op); }
+      ps.value = o.party;
+    }
+    var tb = document.getElementById('pi_items');
+    var tr = tb ? tb.querySelector('.pi-row') : null;
+    if (tr) {
+      var it = tr.querySelector('input[name="item_n"]');
+      var qt = tr.querySelector('input[name="qty_n"]');
+      var rt = tr.querySelector('input[name="rate_n"]');
+      var hs = tr.querySelector('input[name="hsn_n"]');
+      var desc = o.product ? (o.product + ' — Job Order ' + o.no) : ('PCBs — Job Order ' + o.no);
+      var effRate = o.rate > 0 ? o.rate : ((o.val > 0 && o.qty > 0) ? Math.round(o.val / o.qty * 100) / 100 : 0);
+      if (it && !it.value.trim()) it.value = desc;
+      if (qt && !qt.value.trim() && o.qty > 0) qt.value = o.qty;
+      if (rt && !rt.value.trim() && effRate > 0) rt.value = effRate;
+      if (hs && !hs.value.trim()) hs.value = o.hsn;
+    }
+    if (typeof piCalc === 'function') piCalc();
+    var tv = document.getElementById('pi_totals');
+    if (tv) tv.innerHTML = '<span style="color:#16a34a;font-weight:700">\u2705 Order ' + o.no + ' \u2014 party: ' + o.party + ' + item auto-fill</span> \u2014 qty/rate/HSN khud badal sakte ho.';
+  });
+})();
 function piOpts(cur){
   var h = '<option value="">— item —</option>';
   piModels.forEach(function(m){
