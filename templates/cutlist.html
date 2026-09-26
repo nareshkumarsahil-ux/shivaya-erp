@@ -132,6 +132,7 @@
         <div style="display:flex;gap:12px;margin-bottom:6px">
           <div class="field" style="flex:1"><label>SHEET LENGTH (MM)</label><input type="number" step="0.01" name="sheet_len" id="sheet_len" value="{{ fields.sheet_len }}" required></div>
           <div class="field" style="flex:1"><label>SHEET WIDTH (MM)</label><input type="number" step="0.01" name="sheet_w" id="sheet_w" value="{{ fields.sheet_w }}" required></div>
+          <div class="field" style="flex:1"><label>SHEET THICKNESS (jaise 1.6MM)</label><input type="text" name="sheet_thickness" id="sheet_thickness" value="{{ fields.sheet_thickness }}" placeholder="jaise 1.6MM"></div>
         </div>
         <p class="muted small" style="margin:0 0 12px">IN INCHES: <b id="inchesLive"></b></p>
         <div style="display:flex;gap:12px;margin-bottom:4px">
@@ -227,13 +228,14 @@
             <option value="">Select finished product…</option>
             {% for m in models %}<option value="{{ m.id }}">{{ m.name }}{% if m.model_code %} · NO: {{ m.model_code }}{% endif %} (update)</option>{% endfor %}
           </select>
-          <input type="text" name="pcb_code" id="pcb_code" placeholder="PCB CODE (jaise PCB-101)" value="{{ fields.get('pcb_code') or '' }}" style="width:150px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px">
-          <input type="text" name="party_code" id="party_code" placeholder="PARTY CODE (jaise P-22)" value="{{ fields.get('party_code') or '' }}" style="width:140px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px">
+          <input type="text" name="pcb_code" id="pcb_code" placeholder="PCB CODE (jaise PCB-101 / CNC PCB)" value="{{ fields.get('pcb_code') or '' }}" style="width:170px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px">
+          <input type="text" name="party_code" id="party_code" placeholder="PARTY CODE (jaise P-22 / TOOL PCB)" value="{{ fields.get('party_code') or '' }}" style="width:170px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px">
           <input type="text" name="party_name" id="party_name" placeholder="PARTY NAME" value="{{ fields.get('party_name') or '' }}" style="width:170px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px">
         </div>
         <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:8px">
           <input type="text" name="model_code" id="model_code" placeholder="MODEL NO (jaise SCPL-105)" value="{{ fields.get('model_code') or '' }}" style="width:150px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-weight:700">
-          <input type="text" name="save_name" id="save_name" placeholder="MODEL NAME (codes se auto — chahe to badlo)" style="flex:1;min-width:220px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-weight:700">
+          <input type="text" name="save_name" id="save_name" placeholder="MODEL NAME (codes se auto — yahan kuch bhi type kar sakte ho)" style="flex:1;min-width:220px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-weight:700">
+          <input type="text" name="note_desc" id="note_desc" placeholder="EXTRA DESCRIPTION (jaise CNC PCB / TOOL PCB)" value="{{ fields.get('note_desc') or '' }}" style="flex:1;min-width:200px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px">
           <button class="btn btn-amber" type="submit" name="action" value="save_model">Save Layout to Model</button>
         </div>
         <script>
@@ -727,7 +729,7 @@ function computeLive(){
     var slh = document.getElementById('sheetLayoutHead');
     if (slh) slh.textContent = gangActive ? '📐 GANG PANEL IN SHEET — 1 SHEET ME KITNE GANG PANELS' : '📐 PANEL IN SHEET — 1 SHEET ME KITNE PANELS';
     document.getElementById('svgSheetLayout').innerHTML =
-      svgSheetLayout(sl, sw, cl, cw, gx2, gy2, gx, gy, kx, ky, pps, best, mN, mM, perN, perR, gl, gw, pcsUnit);
+      svgSheetLayout(sl, sw, cl, cw, gx2, gy2, gx, gy, kx, ky, pps, best, mN, mM, perN, perR, gl, gw, pcsUnit, shape, pcbL, pcbW, px, py);
     _zApply('svgSheetLayout');
   }
 
@@ -870,7 +872,8 @@ function svgSheet(sl, sw, cl, cw, gx2, gy2, gx, gy, kx, ky, pps, waste, best, mN
 /* ---- 📐 PANEL IN SHEET (live mirror) — gang ho to CUTTING PANEL fit, warna PANEL ----
    Poori sheet ke andar numbered panels + har panel ka andar single-PCB grid + caption
    batata hai kaunsa panel fit hua (size ke saath) aur 1 sheet me kitne aate hai. ---- */
-function svgSheetLayout(sl, sw, cl, cw, gx2, gy2, gx, gy, kx, ky, pps, best, mN, mM, perN, perR, gl, gw, pcsUnit){
+function svgSheetLayout(sl, sw, cl, cw, gx2, gy2, gx, gy, kx, ky, pps, best, mN, mM, perN, perR, gl, gw, pcsUnit, shape, pcbL, pcbW, px, py){
+  shape = shape || 'rect';   /* v3.21 — sheet layout me bhi PCB shape same */
   /* v2.63 — canvas 500x448: neeche 3 rows (sheet-dim / USE-WASTE / caption), right pe 2 rotated columns */
   var W = 500, H = 448, pad = 30;
   var scale = Math.min((W - pad - 84) / sl, (H - pad - 64) / sw);
@@ -911,13 +914,30 @@ function svgSheetLayout(sl, sw, cl, cw, gx2, gy2, gx, gy, kx, ky, pps, best, mN,
   }
   function lblW(cx, cy, mm){ s += '<text x="' + cx.toFixed(1) + '" y="' + cy.toFixed(1) + '" text-anchor="middle" font-size="8" fill="#475569" font-family="Segoe UI,Arial" style="paint-order:stroke" stroke="#ffffff" stroke-width="2.5">' + (Math.round(mm * 10) / 10) + '</text>'; }
   function lblH(cx, cy, mm){ s += '<text x="' + cx.toFixed(1) + '" y="' + cy.toFixed(1) + '" transform="rotate(-90 ' + cx.toFixed(1) + ' ' + cy.toFixed(1) + ')" text-anchor="middle" font-size="8" fill="#475569" font-family="Segoe UI,Arial" style="paint-order:stroke" stroke="#ffffff" stroke-width="2.5">' + (Math.round(mm * 10) / 10) + '</text>'; }
-  function cell(cx, cy, Cl, Cw, num, fill, stroke){
+  /* v3.21 — PCB SHAPE sheet layout me bhi (rot = rotated panel me grid swap) */
+  function pcbShapeSvg(x, y, wd, ht){
+    return (shape === 'round')
+      ? '<ellipse cx="' + (x + wd/2).toFixed(1) + '" cy="' + (y + ht/2).toFixed(1) + '" rx="' + (wd/2).toFixed(1) + '" ry="' + (ht/2).toFixed(1) + '" fill="#fbbf24" fill-opacity="0.35" stroke="#f59e0b" stroke-width="0.6"/>'
+      : '<rect x="' + x.toFixed(1) + '" y="' + y.toFixed(1) + '" width="' + wd.toFixed(1) + '" height="' + ht.toFixed(1) + '" fill="#fbbf24" fill-opacity="0.35" stroke="#f59e0b" stroke-width="0.6"/>';
+  }
+  function pcbGrid(px0, py0, pw, ph, rot){
+    var L = pcbL * scale, Wd = pcbW * scale, nx = px, ny = py;
+    if (rot) { var t = L; L = Wd; Wd = t; nx = py; ny = px; }
+    if (L < 4 || Wd < 4 || nx < 1 || ny < 1) return;
+    if (nx * L > pw + 1 || ny * Wd > ph + 1) return;
+    var mx = (pw - nx * L) / Math.max(1, nx - 1), my = (ph - ny * Wd) / Math.max(1, ny - 1);
+    for (var a = 0; a < nx; a++) for (var b = 0; b < ny; b++)
+      s += pcbShapeSvg(px0 + a * (L + mx), py0 + b * (Wd + my), L, Wd);
+  }
+  function cell(cx, cy, Cl, Cw, num, fill, stroke, rot){
     s += '<rect x="' + cx.toFixed(1) + '" y="' + cy.toFixed(1) + '" width="' + Cl.toFixed(1) + '" height="' + Cw.toFixed(1) + '" fill="' + fill + '" stroke="' + stroke + '" stroke-width="2" rx="3"/>';
     if (gx > 1 || gy > 1) {
       var p = (Cl - Kx * (gx - 1)) / gx, q = (Cw - Ky * (gy - 1)) / gy;
-      for (var a = 0; a < gx; a++) for (var b = 0; b < gy; b++)
+      for (var a = 0; a < gx; a++) for (var b = 0; b < gy; b++) {
         s += '<rect x="' + (cx + a*(p + Kx)).toFixed(1) + '" y="' + (cy + b*(q + Ky)).toFixed(1) + '" width="' + p.toFixed(1) + '" height="' + q.toFixed(1) + '" fill="none" stroke="' + stroke + '" stroke-width="0.7" opacity="0.55"/>';
-    }
+        pcbGrid(cx + a*(p + Kx), cy + b*(q + Ky), p, q, rot);
+      }
+    } else pcbGrid(cx, cy, Cl, Cw, rot);
     if (Cl > 26 && Cw > 15) lblW(cx + Cl/2, cy + 8.5, Cl / scale);
     if (Cw > 26 && Cl > 15) lblH(cx + 7.5, cy + Cw/2, Cw / scale);
     if (Cl > 34 && Cw > 22)
@@ -932,12 +952,13 @@ function svgSheetLayout(sl, sw, cl, cw, gx2, gy2, gx, gy, kx, ky, pps, best, mN,
     num = 1; y = y0;
     for (var rN = 0; rN < mN; rN++) { for (i = 0; i < perN; i++) { cell(x0 + i*(cl + Kx), y, cl, cw, num, '#eef2ff', '#6366f1'); num++; } y += cw + Ky; }
     var cl2 = cw, cw2 = cl;
-    for (var rM = 0; rM < mM; rM++) { for (i = 0; i < perR; i++) { cell(x0 + i*(cl2 + Kx), y, cl2, cw2, num, '#fdf4ff', '#c026d3'); num++; } y += cw2 + Ky; }
+    for (var rM = 0; rM < mM; rM++) { for (i = 0; i < perR; i++) { cell(x0 + i*(cl2 + Kx), y, cl2, cw2, num, '#fdf4ff', '#c026d3', true); num++; } y += cw2 + Ky; }
     cap = '1 SHEET ' + fmtNum(sl) + 'x' + fmtNum(sw) + ' mm \u2190 ' + ptype + ' ' + fmtNum(gang ? gl : cl) + 'x' + fmtNum(gang ? gw : cw) +
           ' mm = ' + pps + ' ' + ptype + 'S (' + mN + 'x row ' + perN + ' + ' + mM + 'x row ' + perR + ') = ' + fmtNum(pps * pcsUnit) + ' PCS';
   } else {
     num = 1;
-    for (var ix = 0; ix < gx2; ix++) for (var iy = 0; iy < gy2; iy++) { cell(x0 + ix*(cl + Kx), y0 + iy*(cw + Ky), cl, cw, num, '#eef2ff', '#6366f1'); num++; }
+    var _rotAll = (best === 'rotated');
+    for (var ix = 0; ix < gx2; ix++) for (var iy = 0; iy < gy2; iy++) { cell(x0 + ix*(cl + Kx), y0 + iy*(cw + Ky), cl, cw, num, '#eef2ff', '#6366f1', _rotAll); num++; }
     cap = '1 SHEET ' + fmtNum(sl) + 'x' + fmtNum(sw) + ' mm \u2190 ' + ptype + ' ' + fmtNum(cl) + 'x' + fmtNum(cw) +
           ' mm = ' + gx2 + 'x' + gy2 + ' = ' + pps + ' ' + ptype + 'S x ' + fmtNum(pcsUnit) + ' PCS = ' + fmtNum(pps * pcsUnit) + ' PCS';
   }
@@ -1313,6 +1334,8 @@ function _docInfo(){
   function t(id){ var e = document.getElementById(id); return e ? e.textContent.trim() : ''; }
   function mm(a, b){ return (a > 0 && b > 0) ? (a + ' \u00d7 ' + b + ' mm') : '\u2014'; }
   var px = intNum('pcbs_x'), py = intNum('pcbs_y');
+  var _selSh = document.getElementById('shape_sel');
+  var _shLbl = _selSh ? ({ rect: 'RECTANGLE', square: 'SQUARE', round: 'ROUND (GOL)' }[_selSh.value] || (_selSh.value || 'rect').toUpperCase()) : 'RECTANGLE';
   return {
     model: _modelName97() || '\u2014',
     party: (v('party_name') || '\u2014').toUpperCase(),
@@ -1326,6 +1349,10 @@ function _docInfo(){
     sheets: v('sheets') || '\u2014',
     totPanels: t('statTP') || '\u2014',
     totPcs: t('statTPCS') || '\u2014',
+    thickness: v('sheet_thickness') || '\u2014',
+    shape: _shLbl,
+    desc: (v('note_desc') || '\u2014').toUpperCase(),
+    layout: t('statLayout') || '\u2014',
     cap: 'BORDER: L ' + num('border_l') + ' / R ' + num('border_r') + ' / T ' + num('border_t') + ' / B ' + num('border_b') +
       ' mm \u00b7 PCB DIMS: TOP = LENGTH (X) \u00b7 LEFT = WIDTH (Y) \u00b7 DRAWING NOT TO SCALE'
   };
@@ -1351,9 +1378,11 @@ function _printDocs(list){
       '<table class="pp-info"><tr>' +
       _ppCell('MODEL', inf.model) + _ppCell('PARTY', inf.party) + _ppCell('PANEL SIZE', inf.panel) + _ppCell('PCB SIZE', inf.pcb) +
       '</tr><tr>' +
-      _ppCell('PCBs / PANEL', inf.pcsPanel) + _ppCell('SHEET SIZE', inf.sheet) + _ppCell('PANELS / SHEET', inf.pps) + _ppCell('WASTAGE', inf.waste) +
+      _ppCell('PCB SHAPE', inf.shape) + _ppCell('SHEET THICKNESS', inf.thickness) + _ppCell('PCBs / PANEL', inf.pcsPanel) + _ppCell('SHEET SIZE', inf.sheet) +
       '</tr><tr>' +
-      _ppCell('ORDER QTY (PANELS)', inf.orderQty) + _ppCell('SHEETS NEEDED', inf.sheets) + _ppCell('TOTAL PANELS', inf.totPanels) + _ppCell('TOTAL PCS', inf.totPcs) +
+      _ppCell('PANELS / SHEET', inf.pps) + _ppCell('WASTAGE', inf.waste) + _ppCell('ORDER QTY (PANELS)', inf.orderQty) + _ppCell('SHEETS NEEDED', inf.sheets) +
+      '</tr><tr>' +
+      _ppCell('TOTAL PANELS', inf.totPanels) + _ppCell('TOTAL PCS', inf.totPcs) + _ppCell('LAYOUT', inf.layout) + _ppCell('EXTRA DESCRIPTION', inf.desc) +
       '</tr></table>' +
       '<div class="pp-draw' + (list[i][2] ? ' pp-withstats' : '') + '"><div class="pp-sec">' + list[i][0] + '</div></div>' +
       '<div class="pp-cap">' + inf.cap + '</div>' +

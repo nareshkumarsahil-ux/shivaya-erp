@@ -896,11 +896,11 @@ FIELD_KEYS = ["pcb_len", "pcb_w", "pcbs_x", "pcbs_y", "gap_x", "gap_y",
               "gang_x", "gang_y", "sheet_len", "sheet_w", "kerf_x", "kerf_y", "sheets", "use",
               "panel_len", "panel_w", "panel_base_len", "panel_base_w",
               "per_sq_inch", "pcb_price", "gaps_x", "gaps_y", "pgaps_x", "pgaps_y", "order_qty",
-              "pcb_code", "party_code", "party_name", "model_code", "shape"]
+              "pcb_code", "party_code", "party_name", "model_code", "shape", "sheet_thickness"]
 DEFAULTS = {"pcb_len": "40", "pcb_w": "50", "pcbs_x": "10", "pcbs_y": "5",
             "gap_x": "0", "gap_y": "0",
             "border_l": "0", "border_r": "0", "border_t": "5", "border_b": "5",
-            "gang_x": "1", "gang_y": "1", "sheet_len": "1200", "sheet_w": "1000",
+            "gang_x": "1", "gang_y": "1", "sheet_len": "1000", "sheet_w": "1200",
             "kerf_x": "2", "kerf_y": "2", "sheets": "1", "use": "1",
             "panel_len": "400", "panel_w": "260", "shape": "rect",
             "per_sq_inch": "", "pcb_price": "", "pgaps_x": "", "pgaps_y": ""}
@@ -1349,14 +1349,43 @@ def svg_sheet_layout_preview(r):
         if T - uy > 14 and S > 60:
             s.append(f'<text x="{x0 + S / 2:.1f}" y="{y0 + uy + (T - uy) / 2 + 3:.1f}" text-anchor="middle" font-size="8.5" font-weight="700" fill="#dc2626" font-family="Segoe UI,Arial">WASTE {waste_y:.2f}</text>')
 
-    def _panel_cell(cx, cy, cl, cw, num, fill, stroke, mm_l, mm_w):
+    def _panel_cell(cx, cy, cl, cw, num, fill, stroke, mm_l, mm_w, rot=False):
         s.append(f'<rect x="{cx:.1f}" y="{cy:.1f}" width="{cl:.1f}" height="{cw:.1f}" fill="{fill}" stroke="{stroke}" stroke-width="2" rx="3"/>')
+        _sh = r.get("shape") or "rect"
+        _pl, _pw = (r["pcb_w"] * scale, r["pcb_len"] * scale) if rot else (r["pcb_len"] * scale, r["pcb_w"] * scale)
+        _nx, _ny = (r["pcbs_y"], r["pcbs_x"]) if rot else (r["pcbs_x"], r["pcbs_y"])
+
+        def _pcb_out(x, y, wd, ht):
+            if _sh == "round":
+                s.append(f'<ellipse cx="{x + wd / 2:.1f}" cy="{y + ht / 2:.1f}" rx="{wd / 2:.1f}" ry="{ht / 2:.1f}" '
+                         f'fill="#fbbf24" fill-opacity="0.35" stroke="#f59e0b" stroke-width="0.6"/>')
+            else:
+                s.append(f'<rect x="{x:.1f}" y="{y:.1f}" width="{wd:.1f}" height="{ht:.1f}" '
+                         f'fill="#fbbf24" fill-opacity="0.35" stroke="#f59e0b" stroke-width="0.6"/>')
+
+        def _pcb_grid(x, y, wd, ht, _rot=False):
+            """v3.21 — panel ke andar PCB grid (shape-aware) — sab previews me same shape."""
+            __pl, __pw = (_pw, _pl) if _rot else (_pl, _pw)
+            __nx, __ny = (_ny, _nx) if _rot else (_nx, _ny)
+            if __pl < 4 or __pw < 4 or __nx < 1 or __ny < 1:
+                return
+            if __nx * __pl > wd + 1 or __ny * __pw > ht + 1:
+                return
+            mx = (wd - __nx * __pl) / max(1, __nx - 1)
+            my = (ht - __ny * __pw) / max(1, __ny - 1)
+            for a in range(__nx):
+                for b in range(__ny):
+                    _pcb_out(x + a * (__pl + mx), y + b * (__pw + my), __pl, __pw)
+
         if gx > 1 or gy > 1:
             p = (cl - 2 * kx - kx * (gx - 1)) / gx   # v2.87: cl me CNC margin included
             q = (cw - 2 * ky - ky * (gy - 1)) / gy
             for a in range(gx):
                 for b in range(gy):
                     s.append(f'<rect x="{cx + a * (p + kx):.1f}" y="{cy + b * (q + ky):.1f}" width="{p:.1f}" height="{q:.1f}" fill="none" stroke="{stroke}" stroke-width="0.7" opacity="0.55"/>')
+                    _pcb_grid(cx + a * (p + kx), cy + b * (q + ky), p, q)
+        else:
+            _pcb_grid(cx, cy, cl, cw)
         if cl > 26 and cw > 15:
             _svg_dim_w(s, cx + cl / 2, cy + 8.5, mm_l)
         if cw > 26 and cl > 15:
@@ -1379,7 +1408,7 @@ def svg_sheet_layout_preview(r):
         cl2, cw2 = r["gang_w"] * scale, r["gang_len"] * scale
         for _row in range(r["mixed_m"]):
             for i in range(r["per_rot"]):
-                _panel_cell(x0 + i * (cl2 + kx), y, cl2, cw2, num, "#fdf4ff", "#c026d3", r["gang_w"], r["gang_len"])
+                _panel_cell(x0 + i * (cl2 + kx), y, cl2, cw2, num, "#fdf4ff", "#c026d3", r["gang_w"], r["gang_len"], rot=True)
                 num += 1
             y += cw2 + ky
         if r["gang_active"]:
@@ -1396,7 +1425,7 @@ def svg_sheet_layout_preview(r):
         for i in range(r["grid_x"]):
             for j in range(r["grid_y"]):
                 _panel_cell(x0 + i * (cl + kx), y0 + j * (cw + ky), cl, cw, num, "#eef2ff", "#6366f1",
-                            r["cell_len"], r["cell_w"])
+                            r["cell_len"], r["cell_w"], rot=(r["best"] == "rotated"))
                 num += 1
         if r["gang_active"]:
             cap = (f"1 SHEET {sl:.0f}x{sw:.0f} mm \u2190 GANG PANEL {r['cell_len']:g}x{r['cell_w']:g} mm = "
@@ -1596,7 +1625,7 @@ def cutlist():
                         "border_l=?, border_r=?, border_t=?, border_b=?, gang_x=?, gang_y=?, sheet_len=?, sheet_w=?, "
                         "panel_len=?, panel_w=?, cutting_len=?, cutting_w=?, kerf_x=?, kerf_y=?, orientation=?, "
                         "pcs_panel=?, panels_sheet=?, sheets=?, x_qty=?, y_qty=?, cnc_margin_x=?, cnc_margin_y=?, "
-                        "pcb_price=?, per_sq_inch=?, gaps_x=?, gaps_y=?, " 
+                        "pcb_price=?, per_sq_inch=?, gaps_x=?, gaps_y=?, sheet_thickness=?, note=?, "
                         "pcb_code=COALESCE(NULLIF(?, ''), pcb_code), party_code=COALESCE(NULLIF(?, ''), party_code), "
                         "party_name=COALESCE(NULLIF(?, ''), party_name), "
                         "model_code=COALESCE(NULLIF(?, ''), model_code), shape=? WHERE id=?",
@@ -1612,6 +1641,7 @@ def cutlist():
                          up_price, up_rs,
                          ",".join(f"{g:g}" for g in result["gaps_x"]),
                          ",".join(f"{g:g}" for g in result["gaps_y"]),
+                         (f.get("sheet_thickness") or "").strip(), (f.get("note_desc") or "").strip(),
                          (f.get("pcb_code") or "").strip(), (f.get("party_code") or "").strip(),
                          (f.get("party_name") or "").strip(),
                          (f.get("model_code") or "").strip(), result.get("shape") or "rect", model["id"]))
@@ -1637,8 +1667,8 @@ def cutlist():
                     "border_r, border_t, border_b, gang_x, gang_y, sheet_len, sheet_w, panel_len, panel_w, "
                     "cutting_len, cutting_w, kerf_x, kerf_y, orientation, pcs_panel, panels_sheet, sheets, "
                     "x_qty, y_qty, cnc_margin_x, cnc_margin_y, pcb_price, per_sq_inch, gaps_x, gaps_y, "
-                    "pcb_code, party_code, party_name, model_code, shape, created_on) "
-                    "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    "sheet_thickness, note, pcb_code, party_code, party_name, model_code, shape, created_on) "
+                    "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                     (name, result["pcb_len"], result["pcb_w"], result["pcbs_x"], result["pcbs_y"],
                      result["gap_x"], result["gap_y"],
                      result["border_l"], result["border_r"], result["border_t"], result["border_b"],
@@ -1651,6 +1681,7 @@ def cutlist():
                      pm_price or 0, pm_rs or 0,
                      ",".join(f"{g:g}" for g in result["gaps_x"]),
                      ",".join(f"{g:g}" for g in result["gaps_y"]),
+                     (f.get("sheet_thickness") or "").strip(), (f.get("note_desc") or "").strip(),
                      (f.get("pcb_code") or "").strip(), (f.get("party_code") or "").strip(),
                      (f.get("party_name") or "").strip(), _mc,
                      result.get("shape") or "rect",
@@ -1813,6 +1844,7 @@ def cutlist():
                 _m96 = dict(model)
                 for _c96 in ("pcb_code", "party_code", "party_name"):
                     fields[_c96] = _m96.get(_c96) or ""
+                fields["note_desc"] = _m96.get("note") or ""   # v3.22 EXTRA DESCRIPTION wapas
                 for k in FIELD_KEYS:
                     val = model[k] if k in model.keys() and model[k] is not None else ""
                     # 0 values ko KHAALI chhodo — '0.0' likha user ko blank hi dikhna chahiye
@@ -1867,9 +1899,8 @@ def cutlist():
     if fields:
         result = compute_layout(fields)  # fail ho to None — form mein wahi values dikhengi jo load hui
     else:
-        # NAYA ENTRY = form bilkul BLANK khulega (pehle DEFAULTS me 40/50/10x5/1200x1000
-        # preset bhar jaata tha — user ko har baar purani fixed values milti thi).
-        fields = {}
+        # NAYA ENTRY = form BLANK khulega, SIRF SHEET SIZE default 1000x1200 (v3.22 user ask)
+        fields = {"sheet_len": "1000", "sheet_w": "1200"}
         result = None
 
     # v3.11 — SHEET STOCK POOL compare: har pool sheet par layout compute, best-pehle sort
