@@ -138,6 +138,7 @@ def inject_globals():
         parties = []
     return {"today": today.strftime("%A, %d %B %Y"),
             "today_iso": today.isoformat(),
+            "ui_brand": _ui_brand(),
             "current_user_name": session.get("user_name", ""),
             "current_user_role": session.get("user_role", ""),
             "all_parties": parties,
@@ -588,6 +589,13 @@ def _fl(v):
         return float(v or 0)
     except (TypeError, ValueError):
         return 0.0
+
+
+def _ui_brand():
+    """v3.29 — poore software ka theme color (meta 'ui_theme'), default amber."""
+    r = db.query("SELECT value FROM meta WHERE key='ui_theme'", one=True)
+    v = (r["value"] if r else "") or ""
+    return v if re.match(r"^#[0-9a-fA-F]{6}$", v) else "#f59e0b"
 
 
 def _doc_brand():
@@ -3191,9 +3199,29 @@ def doc_brand():
     color = (request.form.get("color") or "").strip()
     if re.match(r"^#[0-9a-fA-F]{6}$", color):
         db.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('doc_brand', ?)", (color,))
-        flash("Print document ka color update: " + color + " \u2014 ab PI + Invoice dono par yahi lagega.", "success")
+        flash("Print document ka color update: " + color + " \u2014 PI + Invoice dono par yahi lagega.", "success")
     nxt = request.form.get("next") or url_for("proforma")
     return redirect(nxt)
+
+
+@app.route("/ui-brand", methods=["POST"])
+@login_required
+@admin_required
+def ui_brand():
+    color = (request.form.get("color") or "").strip()
+    if re.match(r"^#[0-9a-fA-F]{6}$", color):
+        db.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('ui_theme', ?)", (color,))
+        flash("App theme color update: " + color + " \u2014 poore software par lag gaya.", "success")
+    nxt = request.form.get("next") or url_for("settings")
+    return redirect(nxt)
+
+
+@app.route("/settings")
+@login_required
+@admin_required
+def settings():
+    return render_template("settings.html", active="settings",
+                           ui_brand=_ui_brand(), doc_brand=_doc_brand())
 
 
 # ---------------------------------------------------------------- payments & receipts

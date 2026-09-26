@@ -5,6 +5,17 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{% block title %}Shivaya Circuit{% endblock %} · Smart ERP</title>
 <link rel="stylesheet" href="/static/style.css">
+<style>
+  /* v3.29 app-wide theme color — Settings me badla ja sakta hai */
+  :root { --ui-brand: {{ ui_brand }}; }
+  .sidebar nav a.active { background: var(--ui-brand); color: #fff; box-shadow: 0 4px 12px rgba(0,0,0,.28); }
+  .sidebar nav a.active .live-dot { background: #fff; }
+  .brand .logo { background: linear-gradient(135deg, var(--ui-brand), #192338); color: #fff; }
+  .user-chip .role { background: var(--ui-brand); color: #fff; }
+  .btn-amber { background: var(--ui-brand); color: #fff; }
+  .btn-amber:hover { background: var(--ui-brand); filter: brightness(.88); color: #fff; }
+  .search-box input:focus { outline: 2px solid var(--ui-brand); border-color: var(--ui-brand); }
+</style>
 </head>
 <body>
 {% if session.get('user_id') %}
@@ -41,6 +52,7 @@
     <a href="/material-planning" class="{{'active' if active=='material'}}">🧮 Material Planning</a>
     <a href="/reports" class="{{'active' if active=='reports'}}">📊 Reports</a>
     <a href="/users" class="{{'active' if active=='users'}}">🔐 Users & Access</a>
+    <a href="/settings" class="{{'active' if active=='settings'}}">⚙️ Settings</a>
     {% else %}
     <a href="/" class="{{'active' if active=='dashboard'}}">🏠 Dashboard</a>
     <a href="/orders" class="{{'active' if active=='orders'}}">📋 Job Orders</a>
@@ -53,7 +65,7 @@
   <div class="side-footer">
     <div class="saved-note"><span class="dot"></span> All changes saved</div>
     <div class="user-chip">👤 {{ current_user_name }}<span class="role">{{ current_user_role|upper }}</span></div>
-    <div class="ver-chip" title="App version — agar ye purana dikhe to naya ZIP deploy nahi hua">🛰 App v3.28 · PI/Invoice logo SCPL + Bank right box + COLOR + single-page + HSN</div>
+    <div class="ver-chip" title="App version — agar ye purana dikhe to naya ZIP deploy nahi hua">🛰 App v3.29 · COLOR MIXER + Settings me app theme + PI/Invoice same format + single-page + HSN</div>
     <a class="logout" href="/logout">Logout ↩</a>
   </div>
 </aside>

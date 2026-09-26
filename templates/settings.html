@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}Settings{% endblock %}
+{% block page_title %}⚙️ Settings — Colors{% endblock %}
+{% block content %}
+<div style="max-width:760px">
+
+  <div class="panel">
+    <div class="panel-head"><b>🎨 App Theme Color</b><span style="font-size:12px;color:#8a8f98">Poore software ka color — sidebar, buttons, sab jagah</span></div>
+    <div style="padding:18px">
+      <form method="post" action="/ui-brand" style="display:flex;gap:14px;align-items:center;flex-wrap:wrap">
+        <input type="hidden" name="next" value="/settings">
+        <label class="mixwrap" title="Color mixer — koi bhi color chuno">
+          <input type="color" name="color" value="{{ ui_brand }}" onchange="document.getElementById('pv1').style.background=this.value">
+        </label>
+        <div style="font-size:13px">Round mixer par click karo — <b>koi bhi color</b> (rainbow box me apna color banao)</div>
+        <button class="btn btn-amber" type="submit">💾 Save App Color</button>
+        <span id="pv1" style="width:26px;height:26px;border-radius:8px;background:{{ ui_brand }};display:inline-block;border:2px solid #fff;box-shadow:0 0 0 1px #ddd"></span>
+      </form>
+      <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;align-items:center">
+        <span style="font-size:11px;font-weight:700;color:#8a8f98">QUICK:</span>
+        {% for c, n in [('#f59e0b', 'Amber (default)'), ('#2563eb', 'Blue'), ('#7c3aed', 'Purple'), ('#db2777', 'Pink'), ('#dc2626', 'Red'), ('#059669', 'Green'), ('#0ea5e9', 'Sky'), ('#111827', 'Black')] %}
+        <form method="post" action="/ui-brand" style="display:inline">
+          <input type="hidden" name="next" value="/settings">
+          <button type="submit" title="{{ n }}" style="width:26px;height:26px;border-radius:50%;border:{{ '2.5px solid #111' if c == ui_brand else '1px solid #ccc' }};cursor:pointer;background:{{ c }}"></button>
+        </form>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head"><b>🧾 Print Document Color</b><span style="font-size:12px;color:#8a8f98">PI + Invoice print/PDF ke header band ka color</span></div>
+    <div style="padding:18px">
+      <form method="post" action="/doc-brand" style="display:flex;gap:14px;align-items:center;flex-wrap:wrap">
+        <input type="hidden" name="next" value="/settings">
+        <label class="mixwrap" title="Color mixer — koi bhi color chuno">
+          <input type="color" name="color" value="{{ doc_brand }}" onchange="document.getElementById('pv2').style.background=this.value">
+        </label>
+        <div style="font-size:13px">Print header (PROFORMA INVOICE / INVOICE) ka color</div>
+        <button class="btn btn-amber" type="submit">💾 Save Print Color</button>
+        <span id="pv2" style="width:26px;height:26px;border-radius:8px;background:{{ doc_brand }};display:inline-block;border:2px solid #fff;box-shadow:0 0 0 1px #ddd"></span>
+      </form>
+      <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;align-items:center">
+        <span style="font-size:11px;font-weight:700;color:#8a8f98">QUICK:</span>
+        {% for c, n in [('#1d4ed8', 'Blue (default)'), ('#0e7490', 'Teal'), ('#047857', 'Green'), ('#b91c1c', 'Red'), ('#7c3aed', 'Purple'), ('#c2410c', 'Orange'), ('#111827', 'Black')] %}
+        <form method="post" action="/doc-brand" style="display:inline">
+          <input type="hidden" name="next" value="/settings">
+          <button type="submit" title="{{ n }}" style="width:26px;height:26px;border-radius:50%;border:{{ '2.5px solid #111' if c == doc_brand else '1px solid #ccc' }};cursor:pointer;background:{{ c }}"></button>
+        </form>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head"><b>👀 Live Preview</b></div>
+    <div style="padding:18px;display:flex;gap:14px;align-items:center;flex-wrap:wrap">
+      <div style="width:120px;border-radius:10px;overflow:hidden;border:1px solid #e5e5e5">
+        <div style="background:#192338;padding:10px"><div id="pvSide" style="width:40px;height:12px;border-radius:4px;background:{{ ui_brand }}"></div></div>
+        <div style="padding:8px"><div id="pvBtn" style="width:60px;height:16px;border-radius:5px;background:{{ ui_brand }}"></div></div>
+      </div>
+      <div style="flex:1;min-width:220px;border-radius:10px;overflow:hidden;border:1px solid #e5e5e5">
+        <div id="pvBand" style="background:{{ doc_brand }};color:#fff;padding:12px 14px;font-weight:800;letter-spacing:1px">PROFORMA INVOICE</div>
+        <div style="padding:8px;font-size:11px;color:#8a8f98">Print header preview</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+<style>
+  .mixwrap { position: relative; width: 46px; height: 46px; border-radius: 50%; cursor: pointer; flex: 0 0 auto;
+    background: conic-gradient(#ef4444,#f59e0b,#84cc16,#06b6d4,#6366f1,#d946ef,#ef4444);
+    box-shadow: 0 2px 8px rgba(0,0,0,.25); }
+  .mixwrap input { position: absolute; inset: 6px; opacity: 0; cursor: pointer; padding: 0; }
+</style>
+<script>
+  var i1 = document.querySelector('form[action="/ui-brand"] input[type=color]');
+  if (i1) i1.addEventListener('input', function(){ var p=document.getElementById('pvSide'),b=document.getElementById('pvBtn'); if(p)p.style.background=this.value; if(b)b.style.background=this.value; });
+  var i2 = document.querySelector('form[action="/doc-brand"] input[type=color]');
+  if (i2) i2.addEventListener('input', function(){ var p=document.getElementById('pvBand'); if(p)p.style.background=this.value; });
+</script>
+{% endblock %}
