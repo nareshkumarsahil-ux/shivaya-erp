@@ -59,6 +59,7 @@
   .st-paid { color: #15803d; border-color: #15803d; }
   .st-overdue { color: #b91c1c; border-color: #b91c1c; }
   .footer-note { margin-top: 22px; text-align: center; font-size: 10.5px; color: #888; border-top: 1px solid #e2e8f0; padding-top: 10px; }
+  .keep { page-break-inside: avoid; break-inside: avoid; }
   @media print {
     body { background: #fff; padding: 0; }
     .toolbar { display: none; }
@@ -140,11 +141,11 @@
       </table>
     </div>
 
-    <div class="words">💰 Amount in words: <b>{{ grand_words }}</b></div>
+    <div class="words keep">💰 Amount in words: <b>{{ grand_words }}</b></div>
 
     {% if inv.note %}<div class="note-box">📝 <b>Note:</b> {{ inv.note }}</div>{% endif %}
 
-    <div class="sign">
+    <div class="sign keep">
       <div class="box"><div class="line">FOR {{ comp.name|upper }}<br>(Authorised Signatory)</div></div>
       <div class="box"><div class="line">RECEIVED BY (PARTY SIGNATURE)</div></div>
     </div>
@@ -155,5 +156,35 @@
 
     <div class="footer-note">{{ comp.name }} · Invoice {{ inv.invoice_no }} · Generated {{ inv.date }} · Ye computer generated document hai</div>
   </div>
+  <script>
+  /* v3.23 — SINGLE PAGE PRINT (PI jaisa hi): content A4 me auto-fit */
+  (function () {
+    var PRINT_W = 651, PRINT_H = 1010;
+    function fit() {
+      var sheet = document.querySelector('.po-sheet');
+      if (!sheet) return;
+      sheet.style.transform = ''; sheet.style.width = '';
+      var oldMax = sheet.style.maxWidth;
+      sheet.style.maxWidth = PRINT_W + 'px';
+      var h = sheet.scrollHeight;
+      sheet.style.maxWidth = oldMax;
+      if (!h) return;
+      var k = h > PRINT_H ? PRINT_H / h : 1;
+      if (k < 0.55) k = 0.55;
+      if (k < 1) {
+        sheet.style.transformOrigin = 'top left';
+        sheet.style.transform = 'scale(' + k.toFixed(4) + ')';
+        sheet.style.width = (100 / k).toFixed(2) + '%';
+      }
+    }
+    window.addEventListener('beforeprint', fit);
+    window.addEventListener('afterprint', function () {
+      var sheet = document.querySelector('.po-sheet');
+      if (sheet) { sheet.style.transform = ''; sheet.style.width = ''; }
+    });
+    var b = document.querySelector('.btn-print');
+    if (b) b.addEventListener('click', fit);
+  })();
+  </script>
 </body>
 </html>
