@@ -691,6 +691,7 @@ function computeLive(){
     if (gh) gh.textContent = '🔗 GANG PANEL PREVIEW — ' + gx + '×' + gy + ' MULTIPLIER = ' + pcsUnit + ' PCS';
     document.getElementById('svgGangPanel').innerHTML =
       svgGangPanel(pcbL, pcbW, px, py, gapXs, gapYs, bl, br, bt, bb, pL, pW, pcsPanel, gx, gy, kx, ky, pgXs, pgYs);
+    _zApply('svgGangPanel');
   } else {
     gpEl.style.display = 'none';
   }
@@ -718,6 +719,7 @@ function computeLive(){
     if (slh) slh.textContent = gangActive ? '📐 GANG PANEL IN SHEET — 1 SHEET ME KITNE GANG PANELS' : '📐 PANEL IN SHEET — 1 SHEET ME KITNE PANELS';
     document.getElementById('svgSheetLayout').innerHTML =
       svgSheetLayout(sl, sw, cl, cw, gx2, gy2, gx, gy, kx, ky, pps, best, mN, mM, perN, perR, gl, gw, pcsUnit);
+    _zApply('svgSheetLayout');
   }
 
   /* --- orientation cards --- */
@@ -742,6 +744,7 @@ function computeLive(){
   /* --- SVG previews --- */
 
   document.getElementById('svgPanel').innerHTML = svgPanel(pcbL, pcbW, px, py, gapXs, gapYs, bl, br, bt, bb, pL, pW, pcsPanel, gx, gy, kx, ky, pgXs, pgYs);
+  _zApply('svgPanel');
   var sheetHead = document.getElementById('sheetPreviewHead');
   if (sheetHead) sheetHead.innerHTML = (best === 'mixed')
     ? '🔲 <span style="color:#16a34a;font-weight:700">Normal rows</span> · <span style="color:#2563eb;font-weight:700">Rotated rows</span> — <span style="display:inline-flex;gap:4px;align-items:center"><span style="width:10px;height:10px;background:#dcfce7;border:1.5px solid #16a34a;border-radius:2px;display:inline-block"></span>Gang</span> <span style="display:inline-flex;gap:4px;align-items:center"><span style="width:10px;height:10px;background:#bfdbfe;border:1.5px solid #2563eb;border-radius:2px;display:inline-block"></span>Panel</span>'
@@ -1127,63 +1130,140 @@ function calcClPrice(){
 })();
 calcClPrice();
 
-/* ============ v2.93 PRINT / PDF — POORA SECTION print hota hai (heading + stats + note + legend + svg)
-   bilkul screen jaisa. Overlay-first (koi popup nahi · har jagah chalta hai) + A4 landscape.
-   [FIX-HISTORY: v2.86-89 print fns computeLive() ke andar the = onclick global nahi milta = ASLI BUG;
-   v2.92 tak print me sirf SVG jata tha — ab poora section] ============ */
+/* ============ v3.14 PROFESSIONAL PRINT + ZOOM —
+   (a) teeno previews (panel/gang/sheet) me ZOOM IN/OUT (40%-300%, scroll, reset)
+   (b) PRINT/PDF ab PROPER DOCUMENT: letterhead + DOC NO/DATE/PAGE + 12-cell info
+       table + framed drawing + BORDER caption + Prepared/Checked/Approved
+       signatures — A4 landscape; overlay me jo dikhta hai WAHI print hota hai
+   [v2.93-94: section-clone print — screen jaisa par professional nahi] ============ */
 (function(){
   var st = document.createElement('style');
-  st.textContent = '#prevPrintSheet{display:none}' +
+  st.textContent =
+    '.zoomvp{overflow:auto;max-height:600px;border:1px dashed #cbd5e1;border-radius:10px;padding:6px;background:#fff}' +
+    '.zoomvp::-webkit-scrollbar{height:10px;width:10px}.zoomvp::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:6px}' +
+    '.zoombar{display:flex;gap:6px;align-items:center;justify-content:center;margin:0 0 8px;flex-wrap:wrap}' +
+    '.zoombar button{border:1.5px solid #cbd5e1;background:#fff;border-radius:8px;font:800 14px Segoe UI,Arial;cursor:pointer;color:#192338;padding:3px 11px}' +
+    '.zoombar button:hover{background:#f1f5f9;border-color:#94a3b8}' +
+    '.zoombar .zpct{font:800 12.5px Segoe UI,Arial;color:#192338;min-width:48px;text-align:center;background:#f1f5f9;border-radius:7px;padding:4px 6px;cursor:pointer}' +
+    '#prevPrintSheet{display:none}' +
     'body.prevshow{overflow:hidden}' +
-    'body.prevshow #prevPrintSheet{display:block!important;position:fixed;top:0;left:0;right:0;bottom:0;z-index:99999;background:#fff;overflow:auto;padding:12px}' +
-    '#prevPrintSheet .pp-tools{position:sticky;top:0;background:#fff;border-bottom:2px solid #192338;padding:8px 6px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;z-index:2}' +
+    'body.prevshow #prevPrintSheet{display:block!important;position:fixed;top:0;left:0;right:0;bottom:0;z-index:99999;background:#dbe1ea;overflow:auto;padding:12px}' +
+    '#prevPrintSheet .pp-tools{position:sticky;top:0;background:#192338;padding:9px 8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;z-index:2}' +
+    '#prevPrintSheet .pp-block{width:1080px;max-width:97vw;margin:0 auto 14px;background:#fff;box-sizing:border-box}' +
+    '#prevPrintSheet .pp-doc{border:2.5px solid #192338;padding:6mm 7mm;display:flex;flex-direction:column;box-sizing:border-box;min-height:740px;background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
+    '#prevPrintSheet .pp-head{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px double #192338;padding-bottom:2.5mm;margin-bottom:2.5mm}' +
+    '#prevPrintSheet .pp-co{font:800 19px Georgia,"Times New Roman",serif;letter-spacing:2.5px;color:#192338}' +
+    '#prevPrintSheet .pp-tag{font:700 8.5px Segoe UI,Arial;letter-spacing:2.5px;color:#b45309;margin-top:1mm}' +
+    '#prevPrintSheet .pp-docmeta{text-align:right;font:600 9.5px Segoe UI,Arial;color:#475569;line-height:1.8}' +
+    '#prevPrintSheet .pp-docmeta b{color:#192338;font-size:10.5px}' +
+    '#prevPrintSheet .pp-sectitle{font:800 11.5px Segoe UI,Arial;letter-spacing:2px;color:#fff;background:#192338;display:inline-block;padding:1.5mm 4mm;border-radius:3px;margin-bottom:2.5mm}' +
+    '#prevPrintSheet .pp-info{width:100%;border-collapse:collapse;margin-bottom:2.5mm}' +
+    '#prevPrintSheet .pp-info td{border:1px solid #cbd5e1;padding:1.4mm 2.5mm;width:25%}' +
+    '#prevPrintSheet .pp-info .l{font:700 7.5px Segoe UI,Arial;letter-spacing:1px;color:#64748b;text-transform:uppercase}' +
+    '#prevPrintSheet .pp-info .v{font:800 11px Segoe UI,Arial;color:#192338;margin-top:.4mm}' +
+    '#prevPrintSheet .pp-draw{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;border:1.5px dashed #94a3b8;border-radius:6px;padding:2mm;margin-bottom:2mm;background:#fdfdfb}' +
+    '#prevPrintSheet .pp-draw .pp-sec{width:100%}' +
+    '#prevPrintSheet .pp-draw .panel-head{display:none!important}' +
+    '#prevPrintSheet .pp-draw .pp-sec .panel{border:0!important;padding:0!important;margin:0!important;box-shadow:none!important;max-width:100%!important;background:transparent!important}' +
+    '#prevPrintSheet .pp-draw .pp-sec .panel-body{padding:0!important}' +
+    '#prevPrintSheet .pp-draw svg{width:auto!important;height:auto!important;max-width:100%!important;max-height:100mm!important;display:block!important;margin:0 auto!important}' +
+    '#prevPrintSheet .pp-draw.pp-withstats svg{max-height:82mm!important}' +
+    '#prevPrintSheet .pp-draw .zoomvp{overflow:visible!important;max-height:none!important;border:0!important;padding:0!important}' +
+    '#prevPrintSheet .pp-draw .zoombar{display:none!important}' +
+    '#prevPrintSheet .pp-cap{font:700 8.5px Segoe UI,Arial;color:#92400e;text-align:center;margin-bottom:2mm}' +
+    '#prevPrintSheet .pp-foot{display:flex;justify-content:space-between;gap:8mm;border-top:1.5px solid #192338;padding-top:2.5mm;margin-top:auto;font:700 9.5px Segoe UI,Arial;color:#334155}' +
+    '#prevPrintSheet .pp-foot span{flex:1;text-align:center}' +
+    '#prevPrintSheet .pp-gen{font:600 7.5px Segoe UI,Arial;color:#94a3b8;text-align:center;margin-top:1.5mm}' +
+    '#prevPrintSheet .pp-draw .gstat{padding:1.5mm 2.5mm!important}' +
+    '#prevPrintSheet .pp-draw .gstat .glbl{font-size:7.5px!important}' +
+    '#prevPrintSheet .pp-draw .gstat .gnum{font-size:11px!important}' +
+    '#prevPrintSheet .pp-screen{background:#fff;border-bottom:2px solid #192338;padding:5px;margin:0 0 8px;text-align:center;font:800 14px Segoe UI,Arial;color:#192338}' +
     '@media print{' +
-    '@page{size:A4 landscape;margin:10mm}' +
-    '#prevPrintSheet svg{max-width:100%;height:auto}' +
+    '@page{size:A4 landscape;margin:8mm}' +
+    'html,body{background:#fff!important}' +
     'body.prevprint .sidebar,body.prevprint .topbar,body.prevprint .content>*:not(#prevPrintSheet){display:none!important}' +
     'body.prevprint #prevPrintSheet{display:block!important}' +
     'body.prevshow .sidebar,body.prevshow .topbar,body.prevshow .content>*:not(#prevPrintSheet){display:none!important}' +
-    'body.prevshow #prevPrintSheet{display:block!important;position:static;padding:0}' +
+    'body.prevshow #prevPrintSheet{display:block!important;position:static;padding:0;background:#fff}' +
     '#prevPrintSheet .pp-tools,#prevPrintSheet .pp-screen{display:none!important}' +
-    '#prevPrintSheet .pp-block{page-break-after:always;padding:0;height:176mm;overflow:hidden;display:flex;flex-direction:column}' +
+    '#prevPrintSheet .pp-block{width:281mm;height:194mm;max-width:none;margin:0;page-break-after:always;overflow:hidden}' +
     '#prevPrintSheet .pp-block:last-child{page-break-after:auto}' +
-    '#prevPrintSheet .pp-top{border-bottom:2.5px solid #192338;padding-bottom:2mm;margin-bottom:2.5mm;text-align:center}' +
-    '#prevPrintSheet .pp-co{font:800 13.5px Segoe UI,Arial;letter-spacing:1.5px;color:#192338}' +
-    '#prevPrintSheet .pp-title{font:700 10.5px Segoe UI,Arial;color:#334155;margin-top:1mm}' +
-    '#prevPrintSheet .pp-meta{font:600 8.5px Segoe UI,Arial;color:#94a3b8;margin-top:.5mm}' +
-    '.pp-sec .panel{max-width:100%!important;margin:0 auto!important;padding:3mm 5mm!important;border:1.5px solid #192338;border-radius:8px;box-shadow:none}' +
-    '.pp-sec .panel-head{padding:0 0 1.5mm!important;border-bottom:1px solid #cbd5e1}' +
-    '.pp-sec .panel-head h3{font-size:12.5px!important;margin:0}' +
-    '.pp-sec .panel-head button{display:none!important}' +
-    '.pp-sec .panel-body{padding:2mm 3mm!important}' +
-    '.pp-sec .gstat{padding:2mm 3mm!important}' +
-    '.pp-sec .gstat .glbl{font-size:8px!important}.pp-sec .gstat .gnum{font-size:12px!important}' +
-    '#prevPrintSheet .pp-sec [id^="svg"]{max-width:100%!important;margin:2mm auto 0!important}' +
-    '#prevPrintSheet .pp-sec svg{width:auto!important;max-width:100%!important;height:auto!important;max-height:120mm!important;display:block;margin:0 auto}}';
+    '#prevPrintSheet .pp-doc{min-height:0;height:100%;padding:4mm 5mm}' +
+    '#prevPrintSheet .pp-draw svg{max-height:96mm!important}' +
+    '#prevPrintSheet .pp-draw.pp-withstats svg{max-height:78mm!important}' +
+    '}';
   document.head.appendChild(st);
 })();
-/* POORA SECTION clone: heading + stats boxes + note + legend + svg (buttons hata ke) */
+/* --- v3.14 ZOOM: state + buttons (svg width % par — viewBox ratio safe) --- */
+if (!window._ZOOM) window._ZOOM = { svgPanel: 1, svgGangPanel: 1, svgSheetLayout: 1 };
+function _zApply(id){
+  if (!window._ZOOM) window._ZOOM = { svgPanel: 1, svgGangPanel: 1, svgSheetLayout: 1 };
+  var c = document.getElementById(id);
+  if (!c) return;
+  var z = Math.round((_ZOOM[id] || 1) * 100);
+  var lb = document.getElementById(id + 'ZPct');
+  if (lb) lb.textContent = z + '%';
+  var svg = c.querySelector('svg');
+  if (!svg) return;
+  svg.style.width = z + '%';
+  svg.style.height = 'auto';
+  var vp = document.getElementById(id + 'ZVp');
+  if (vp){ vp.scrollTop = 0; vp.scrollLeft = z > 100 ? (vp.scrollWidth - vp.clientWidth) / 2 : 0; }
+}
+function _zoomStep(id, dir){
+  var z = _ZOOM[id] || 1;
+  z = Math.round(Math.min(3, Math.max(0.4, z + dir * 0.2)) * 100) / 100;
+  _ZOOM[id] = z;
+  _zApply(id);
+}
+function _zoomReset(id){ _ZOOM[id] = 1; _zApply(id); }
+function _zoomify(id){
+  var c = document.getElementById(id);
+  if (!c || c.dataset.zinit) return;
+  c.dataset.zinit = '1';
+  var vp = document.createElement('div');
+  vp.id = id + 'ZVp';
+  vp.className = 'zoomvp';
+  c.parentNode.insertBefore(vp, c);
+  vp.appendChild(c);
+  var bar = document.createElement('div');
+  bar.className = 'zoombar';
+  bar.innerHTML =
+    '<span style="font:800 10px Segoe UI,Arial;color:#64748b;letter-spacing:1.5px">ZOOM</span>' +
+    '<button type="button" title="Zoom out" onclick="_zoomStep(\'' + id + '\',-1)">\u2212</button>' +
+    '<span class="zpct" id="' + id + 'ZPct" title="Reset to 100%" onclick="_zoomReset(\'' + id + '\')">100%</span>' +
+    '<button type="button" title="Zoom in" onclick="_zoomStep(\'' + id + '\',1)">+</button>' +
+    '<button type="button" title="Reset" style="font-size:11px" onclick="_zoomReset(\'' + id + '\')">\u27f3 RESET</button>' +
+    '<span style="font:600 10px Segoe UI,Arial;color:#94a3b8">40%\u2013300% \u00b7 zoom par scroll karo</span>';
+  vp.parentNode.insertBefore(bar, vp);
+}
+_zoomify('svgPanel'); _zoomify('svgGangPanel'); _zoomify('svgSheetLayout');
+/* POORA SECTION clone (buttons/zoom-bar hatke) — print doc ke drawing area me jata hai */
 function _collectSection(sel){
   var el = document.getElementById(sel);
   if (!el) return '';
   var clone = el.cloneNode(true);
   if (!clone.querySelector('svg')) return '';
+  var zb = clone.querySelectorAll('.zoombar');
+  for (var k = 0; k < zb.length; k++) zb[k].remove();
   var btns = clone.querySelectorAll('button');
   for (var i = 0; i < btns.length; i++) btns[i].remove();
+  var sv = clone.querySelectorAll('svg');
+  for (var j = 0; j < sv.length; j++){ sv[j].style.width = '100%'; sv[j].style.height = 'auto'; }
   clone.style.display = 'block';
   clone.style.margin = '0 auto';
-  clone.style.maxWidth = '100%';   /* v2.94: poori chaudai \u2014 screen + print dono */
+  clone.style.maxWidth = '100%';
   return '<div class="pp-sec">' + clone.outerHTML + '</div>';
 }
 function _showOverlay(body){
   var sh = document.getElementById('prevPrintSheet');
   if (!sh) { alert('Print sheet nahi mila \u2014 page reload karke try karo.'); return; }
   sh.innerHTML = '<div class="pp-tools">' +
-    '<button type="button" onclick="_doPrint()" style="background:#192338;color:#fff;border:0;padding:8px 16px;border-radius:8px;font-weight:800;cursor:pointer;font-size:13px">🖨️ PRINT / SAVE PDF</button>' +
-    '<button type="button" onclick="_closePrev()" style="background:#e2e8f0;color:#192338;border:0;padding:8px 16px;border-radius:8px;font-weight:800;cursor:pointer;font-size:13px">\u2715 BAND KARO</button>' +
-    '<span style="color:#64748b;font-size:11.5px;font-weight:600">Print dialog na dikhe to Ctrl+P (Mac: Cmd+P) dabao \u2014 print/PDF me sirf previews hi aayenge (A4 landscape)</span></div>' +
-    '<div class="pp-screen" style="text-align:center;font:800 14px Segoe UI,Arial;color:#192338;border-bottom:2px solid #192338;padding-bottom:4px;margin:0 0 8px">SHIVAYA CIRCUIT PVT. LTD. \u2014 CUT LIST PREVIEW' +
-    '<div style="font:600 9.5px Segoe UI,Arial;color:#64748b;margin-top:2px">PCB SIZE: TOP = LENGTH (X) \u00b7 LEFT = WIDTH (Y) \u00b7 1 PREVIEW = 1 FULL A4 PAGE</div></div>' + body;
+    '<button type="button" onclick="_doPrint()" style="background:#fff;color:#192338;border:0;padding:8px 18px;border-radius:8px;font-weight:800;cursor:pointer;font-size:13px">\ud83d\udda8\ufe0f PRINT / SAVE PDF</button>' +
+    '<button type="button" onclick="_closePrev()" style="background:#475569;color:#fff;border:0;padding:8px 16px;border-radius:8px;font-weight:800;cursor:pointer;font-size:13px">\u2715 BAND KARO</button>' +
+    '<span style="color:#cbd5e1;font-size:11.5px;font-weight:600">Print dialog na dikhe to Ctrl+P dabao \u2014 jo preview me dikh raha hai WAHI A4 landscape par print hoga</span></div>' +
+    '<div class="pp-screen">PRINT PREVIEW \u2014 YEHI PAGE PAR JAYEGA' +
+    '<div style="font:600 9.5px Segoe UI,Arial;color:#64748b;margin-top:2px">PROFESSIONAL DOCUMENT \u00b7 LETTERHEAD + DETAILS + DRAWING + SIGNATURES \u00b7 A4 LANDSCAPE</div></div>' + body;
   document.body.classList.add('prevshow');
 }
 function _doPrint(){
@@ -1203,32 +1283,79 @@ function _modelName97(){
   var hn = document.getElementById('printModelName');
   return hn ? hn.textContent.trim() : '';
 }
+/* --- v3.14 doc helpers: values form inputs + stat cards se live read hote hain --- */
+function _docDate(){
+  var d = new Date(), M = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+  return ('0' + d.getDate()).slice(-2) + '-' + M[d.getMonth()] + '-' + d.getFullYear();
+}
+function _docSeq(){
+  var m = (_modelName97() || 'NA').replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+  var d = new Date();
+  return m + '/' + ('0' + d.getDate()).slice(-2) + ('0' + (d.getMonth() + 1)).slice(-2) + String(d.getFullYear()).slice(-2);
+}
+function _docInfo(){
+  function v(id){ var e = document.getElementById(id); return e && e.value && e.value.trim() ? e.value.trim() : ''; }
+  function t(id){ var e = document.getElementById(id); return e ? e.textContent.trim() : ''; }
+  function mm(a, b){ return (a > 0 && b > 0) ? (a + ' \u00d7 ' + b + ' mm') : '\u2014'; }
+  var px = intNum('pcbs_x'), py = intNum('pcbs_y');
+  return {
+    model: _modelName97() || '\u2014',
+    party: (v('party_name') || '\u2014').toUpperCase(),
+    panel: mm(num('panel_len'), num('panel_w')),
+    pcb: mm(num('pcb_len'), num('pcb_w')),
+    pcsPanel: (px > 0 && py > 0) ? (px + ' \u00d7 ' + py + ' = ' + (px * py) + ' PCS') : '\u2014',
+    sheet: mm(num('sheet_len'), num('sheet_w')),
+    pps: t('statPPS') || '\u2014',
+    waste: t('statWaste') || '\u2014',
+    orderQty: v('order_qty') || '\u2014',
+    sheets: v('sheets') || '\u2014',
+    totPanels: t('statTP') || '\u2014',
+    totPcs: t('statTPCS') || '\u2014',
+    cap: 'BORDER: L ' + num('border_l') + ' / R ' + num('border_r') + ' / T ' + num('border_t') + ' / B ' + num('border_b') +
+      ' mm \u00b7 PCB DIMS: TOP = LENGTH (X) \u00b7 LEFT = WIDTH (Y) \u00b7 DRAWING NOT TO SCALE'
+  };
+}
+function _ppCell(l, vv){ return '<td><div class="l">' + l + '</div><div class="v">' + vv + '</div></td>'; }
 function _printDocs(list){
-  var body = '', tot = 0, n = 0;
-  for (var i = 0; i < list.length; i++) if (list[i][0]) tot++;
-  for (var i = 0; i < list.length; i++){
-    if (!list[i][0]) continue;
-    n++;
-    body += '<div class="pp-block"><div class="pp-top">' +
-      '<div class="pp-co">SHIVAYA CIRCUIT PVT. LTD.</div>' +
-      '<div class="pp-title">' + list[i][1] + '</div>' +
-      '<div class="pp-meta">MODEL: ' + (_modelName97() || '\u2014') + ' · PCB: TOP = LENGTH (X) · LEFT = WIDTH (Y) · A4 LANDSCAPE' + (tot > 1 ? ' · PAGE ' + n + '/' + tot : '') + '</div>' +
-      '</div>' + list[i][0] + '</div>';
-  }
-  if (!body) {
+  var inf = _docInfo(), tot = 0, n = 0, i;
+  for (i = 0; i < list.length; i++) if (list[i][0]) tot++;
+  if (!tot) {
     _showOverlay('<div style="text-align:center;padding:46px 10px"><div style="font:800 19px Segoe UI,Arial;color:#b91c1c">KOI PREVIEW NAHI MILA</div><div style="margin-top:10px;font:600 14px Segoe UI,Arial;color:#334155">Pehle values bharke CALCULATE dabao \u2014 previews ban jayenge, phir PRINT/PDF chal jayega.</div></div>');
     return;
   }
-  _showOverlay(body);   /* overlay me POORA section — PRINT button ya Ctrl+P se A4 landscape print */
+  var body = '';
+  for (i = 0; i < list.length; i++){
+    if (!list[i][0]) continue;
+    n++;
+    body += '<div class="pp-block"><div class="pp-doc">' +
+      '<div class="pp-head"><div><div class="pp-co">SHIVAYA CIRCUIT PVT. LTD.</div>' +
+      '<div class="pp-tag">PCB MANUFACTURING \u00b7 CUT LIST DOCUMENT</div></div>' +
+      '<div class="pp-docmeta">DOC NO: <b>CL/' + _docSeq() + '</b><br>DATE: <b>' + _docDate() + '</b>' +
+      (tot > 1 ? '<br>PAGE: <b>' + n + ' / ' + tot + '</b>' : '') + '</div></div>' +
+      '<div><span class="pp-sectitle">' + list[i][1] + '</span></div>' +
+      '<table class="pp-info"><tr>' +
+      _ppCell('MODEL', inf.model) + _ppCell('PARTY', inf.party) + _ppCell('PANEL SIZE', inf.panel) + _ppCell('PCB SIZE', inf.pcb) +
+      '</tr><tr>' +
+      _ppCell('PCBs / PANEL', inf.pcsPanel) + _ppCell('SHEET SIZE', inf.sheet) + _ppCell('PANELS / SHEET', inf.pps) + _ppCell('WASTAGE', inf.waste) +
+      '</tr><tr>' +
+      _ppCell('ORDER QTY (PANELS)', inf.orderQty) + _ppCell('SHEETS NEEDED', inf.sheets) + _ppCell('TOTAL PANELS', inf.totPanels) + _ppCell('TOTAL PCS', inf.totPcs) +
+      '</tr></table>' +
+      '<div class="pp-draw' + (list[i][2] ? ' pp-withstats' : '') + '"><div class="pp-sec">' + list[i][0] + '</div></div>' +
+      '<div class="pp-cap">' + inf.cap + '</div>' +
+      '<div class="pp-foot"><span>Prepared By: ____________________</span><span>Checked By: ____________________</span><span>Approved By: ____________________</span></div>' +
+      '<div class="pp-gen">Generated: ' + _docDate() + ' \u00b7 Shivaya ERP v3.14 \u00b7 Computer generated cut list</div>' +
+      '</div></div>';
+  }
+  _showOverlay(body);
 }
 function printPreviews(){
-  _printDocs([[_collectSection('panelPreviewBox'), 'PANEL PREVIEW'],
-              [_collectSection('gangPanel'), 'GANG PANEL PREVIEW'],
-              [_collectSection('sheetLayoutPanel'), 'PANEL IN SHEET']]);
+  _printDocs([[_collectSection('panelPreviewBox'), 'PANEL PREVIEW', false],
+              [_collectSection('gangPanel'), 'GANG PANEL PREVIEW', true],
+              [_collectSection('sheetLayoutPanel'), 'PANEL IN SHEET', true]]);
 }
-function printPanelPreview(){ _printDocs([[_collectSection('panelPreviewBox'), 'PANEL PREVIEW']]); }
-function printGangPreview(){ _printDocs([[_collectSection('gangPanel'), 'GANG PANEL PREVIEW']]); }
-function printSheetPreview(){ _printDocs([[_collectSection('sheetLayoutPanel'), 'PANEL IN SHEET']]); }
+function printPanelPreview(){ _printDocs([[_collectSection('panelPreviewBox'), 'PANEL PREVIEW', false]]); }
+function printGangPreview(){ _printDocs([[_collectSection('gangPanel'), 'GANG PANEL PREVIEW', true]]); }
+function printSheetPreview(){ _printDocs([[_collectSection('sheetLayoutPanel'), 'PANEL IN SHEET', true]]); }
 window.printPreviews = printPreviews;
 window.printPanelPreview = printPanelPreview;
 window.printGangPreview = printGangPreview;

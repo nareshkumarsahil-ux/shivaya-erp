@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>{{ inv.invoice_no }} — Shivaya Circuit</title>
+<title>{{ inv.pi_no }} — Proforma — Shivaya Circuit</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: 'Segoe UI', Arial, sans-serif; background: #e2e8f0; color: #111; padding: 24px; }
@@ -27,7 +27,7 @@
   .po-title .t1 { font-size: 23px; font-weight: 800; letter-spacing: 2.5px; }
   .po-title .t2 { font-size: 12.5px; color: #333; margin-top: 4px; }
   .po-title .t2 b { font-size: 14px; }
-  .meta { display: grid; grid-template-columns: 1fr 1fr; margin: 16px 0 4px; }
+  .meta { display: grid; grid-template-columns: 1fr; margin: 16px 0 4px; }
   .cell { border: 1px solid #d4d4d4; padding: 9px 12px; font-size: 12px; background: #fff; }
   .cell .lbl { font-size: 9.5px; text-transform: uppercase; letter-spacing: 1px; color: #777; display: block; margin-bottom: 3px; }
   .cell .val { font-size: 13.5px; font-weight: 700; }
@@ -49,15 +49,6 @@
   .sign { margin-top: 40px; display: flex; justify-content: space-between; gap: 30px; }
   .sign .box { flex: 1; }
   .sign .line { border-top: 1.5px solid #333; margin-top: 50px; padding-top: 6px; font-size: 11px; color: #555; text-align: center; }
-  .status-band { margin-top: 20px; border-radius: 8px; padding: 10px 14px; font-size: 13px; font-weight: 700; }
-  .stamp {
-    position: absolute; top: 100px; right: 28px; transform: rotate(-8deg);
-    border: 3px solid; border-radius: 8px; padding: 6px 14px;
-    font-size: 16px; font-weight: 800; letter-spacing: 2px; opacity: .9; text-transform: uppercase;
-  }
-  .st-pending { color: #b45309; border-color: #b45309; }
-  .st-paid { color: #15803d; border-color: #15803d; }
-  .st-overdue { color: #b91c1c; border-color: #b91c1c; }
   .footer-note { margin-top: 22px; text-align: center; font-size: 10.5px; color: #888; border-top: 1px solid #e2e8f0; padding-top: 10px; }
   @media print {
     body { background: #fff; padding: 0; }
@@ -73,16 +64,8 @@
     <a class="btn-back" href="/billing{% if request.args.get('token') %}?token={{ request.args.get('token') }}{% endif %}">← Wapas Billing</a>
   </div>
 
-  {% set st_map = {'pending': ('PENDING', 'st-pending', '#b45309'),
-                    'paid': ('PAID', 'st-paid', '#15803d'),
-                    'overdue': ('OVERDUE', 'st-overdue', '#b91c1c')} %}
-  {% set st = st_map.get(inv.status, st_map['pending']) %}
-  {% set st_txt = {'pending': 'Payment abhi baaki hai',
-                   'paid': 'Payment received ho chuka hai',
-                   'overdue': 'Payment overdue hai'} %}
 
   <div class="po-sheet">
-    <div class="stamp {{ st[1] }}">{{ st[0] }}</div>
 
     <div class="hd">
       <div class="co">
@@ -97,14 +80,13 @@
         </div>
       </div>
       <div class="po-title">
-        <div class="t1">INVOICE</div>
-        <div class="t2">Invoice No. <b>{{ inv.invoice_no }}</b><br>Date: <b>{{ inv.date }}</b></div>
+        <div class="t1">PROFORMA INVOICE</div>
+        <div class="t2">Proforma No. <b>{{ inv.pi_no }}</b><br>Date: <b>{{ inv.date }}</b>{% if order_no %}<br>Ref Job Order: <b>{{ order_no }}</b>{% endif %}</div>
       </div>
     </div>
 
     <div class="meta">
       <div class="cell"><span class="lbl">Bill To (Party)</span><span class="val">{{ inv.party }}</span></div>
-      <div class="cell"><span class="lbl">Payment Status</span><span class="val" style="color:{{ st[2] }}">{{ st[0] }} — {{ st_txt.get(inv.status, '') }}</span></div>
     </div>
 
     <table class="items">
@@ -140,20 +122,36 @@
       </table>
     </div>
 
-    <div class="words">💰 Amount in words: <b>{{ grand_words }}</b></div>
+    <div class="words">💰 Amount in words: <b>{{ grand_words }}</b><span style="float:right;font-style:italic;font-weight:400;font-size:11px">E. &amp; O. E.</span></div>
 
-    {% if inv.note %}<div class="note-box">📝 <b>Note:</b> {{ inv.note }}</div>{% endif %}
+    {% if inv.payment_terms or inv.delivery_time or inv.other_terms %}
+    <div style="margin-top:10px;font-size:12.5px;border:1px solid #d4d4d4;padding:9px 12px;line-height:1.7">
+      {% if inv.payment_terms %}<div><b>Payment Terms :-</b> {{ inv.payment_terms }}</div>{% endif %}
+      {% if inv.delivery_time %}<div><b>Delivery Time :-</b> {{ inv.delivery_time }}</div>{% endif %}
+      {% for ln in (inv.other_terms or '').split('\n') %}{% if ln.strip() %}<div><b>•</b> {{ ln }}</div>{% endif %}{% endfor %}
+    </div>
+    {% endif %}
+
+    <div style="display:grid;grid-template-columns:1fr 1.1fr;gap:12px;margin-top:10px;align-items:stretch">
+      <div style="border:1px solid #d4d4d4;padding:9px 12px;font-size:11.5px;line-height:1.5">
+        <u style="font-weight:700">Declaration</u><br>
+        We declare that this invoice shows the actual price of the goods described and that all particulars are true and correct.
+      </div>
+      {% if inv.bank_details %}
+      <div style="border:1px solid #d4d4d4;padding:9px 12px;font-size:12px;line-height:1.7">
+        {% for ln in inv.bank_details.split('\n') %}{% if ln.strip() %}<div{% if loop.first %} style="font-weight:800;margin-bottom:2px"{% endif %}>{{ ln }}</div>{% endif %}{% endfor %}
+      </div>
+      {% endif %}
+    </div>
+
+    {% if inv.note %}<div class="note-box">📝 <b>Terms / Note:</b> {{ inv.note }}</div>{% endif %}
 
     <div class="sign">
       <div class="box"><div class="line">FOR {{ comp.name|upper }}<br>(Authorised Signatory)</div></div>
       <div class="box"><div class="line">RECEIVED BY (PARTY SIGNATURE)</div></div>
     </div>
 
-    <div class="status-band" style="color:{{ st[2] }};background:{{ st[2] }}14;border:1px solid {{ st[2] }}55">
-      💳 PAYMENT STATUS: {{ st[0] }} — {{ st_txt.get(inv.status, '') }}
-    </div>
-
-    <div class="footer-note">{{ comp.name }} · Invoice {{ inv.invoice_no }} · Generated {{ inv.date }} · Ye computer generated document hai</div>
+    <div class="footer-note">{{ comp.name }} · Performa Invoice · Generated {{ generated }} · Ye computer generated document hai</div>
   </div>
 </body>
 </html>

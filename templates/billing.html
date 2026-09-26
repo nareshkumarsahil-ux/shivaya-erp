@@ -33,11 +33,12 @@
         <div class="full">
           <label style="font-size:11px;color:var(--muted);font-weight:700">ITEMS — bill ke line items</label>
           <table class="po-items-table" style="width:100%">
-            <thead><tr><th>Item / Description</th><th style="width:90px">Qty</th><th style="width:100px">Rate (₹)</th><th style="width:110px">Amount (₹)</th><th style="width:36px"></th></tr></thead>
+            <thead><tr><th>Item / Description</th><th style="width:100px">HSN/SAC</th><th style="width:90px">Qty</th><th style="width:100px">Rate (₹)</th><th style="width:110px">Amount (₹)</th><th style="width:36px"></th></tr></thead>
             <tbody id="bill_items">
               {% for it in eitems %}
               <tr class="bill-row">
                 <td><input name="item_n" value="{{ it.item }}" placeholder="e.g. 1000 PCBs RM 603 8W"></td>
+                <td><input name="hsn_n" value="{{ it.hsn or '85340000' }}"></td>
                 <td><input name="qty_n" class="bill-qty" value="{{ it.qty }}" placeholder="Qty"></td>
                 <td><input name="rate_n" class="bill-rate" type="number" step="0.01" value="{{ it.rate if it.rate else '' }}" placeholder="Rate"></td>
                 <td><input name="amt_n" class="bill-amt" type="number" step="0.01" value="{{ it.amount if it.amount else '' }}" placeholder="Amount"></td>
@@ -75,10 +76,11 @@
         <div class="full">
           <label style="font-size:11px;color:var(--muted);font-weight:700">ITEMS — bill ke line items</label>
           <table class="po-items-table" style="width:100%">
-            <thead><tr><th>Item / Description</th><th style="width:90px">Qty</th><th style="width:100px">Rate (₹)</th><th style="width:110px">Amount (₹)</th><th style="width:36px"></th></tr></thead>
+            <thead><tr><th>Item / Description</th><th style="width:100px">HSN/SAC</th><th style="width:90px">Qty</th><th style="width:100px">Rate (₹)</th><th style="width:110px">Amount (₹)</th><th style="width:36px"></th></tr></thead>
             <tbody id="bill_items">
               <tr class="bill-row">
                 <td><input name="item_n" placeholder="e.g. 1000 PCBs RM 603 8W"></td>
+                <td><input name="hsn_n" value="85340000"></td>
                 <td><input name="qty_n" class="bill-qty" placeholder="Qty"></td>
                 <td><input name="rate_n" class="bill-rate" type="number" step="0.01" placeholder="Rate"></td>
                 <td><input name="amt_n" class="bill-amt" type="number" step="0.01" placeholder="Amount"></td>
@@ -205,6 +207,7 @@ function billAddRow(){
   var tr = document.createElement('tr');
   tr.className = 'bill-row';
   tr.innerHTML = '<td></td>' +
+    '<td><input name="hsn_n" value="85340000"></td>' +
     '<td><input name="qty_n" class="bill-qty" placeholder="Qty"></td>' +
     '<td><input name="rate_n" class="bill-rate" type="number" step="0.01" placeholder="Rate"></td>' +
     '<td><input name="amt_n" class="bill-amt" type="number" step="0.01" placeholder="Amount"></td>' +

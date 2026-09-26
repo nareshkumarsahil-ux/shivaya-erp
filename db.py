@@ -15,7 +15,7 @@ import http.client
 import urllib.parse
 
 # Schema version — bump karo jab SCHEMA/migrate badle, taaki agla deploy tables update kare.
-SCHEMA_VERSION = "2026-09-24.14"   # v3.11 bump: sheet_pool table (Turso forced-migrate)
+SCHEMA_VERSION = "2026-09-25.17"   # v3.18 bump: HSN code — products/inventory/machines/PI+billing items
 
 # Entry timestamps IST (Asia/Kolkata) me — server UTC par ho sakta hai (Vercel)
 IST = datetime.timezone(datetime.timedelta(hours=5, minutes=30), "IST")
@@ -233,7 +233,8 @@ CREATE TABLE IF NOT EXISTS billing_items (
     item TEXT DEFAULT '',
     qty TEXT DEFAULT '',
     rate REAL DEFAULT 0,
-    amount REAL DEFAULT 0
+    amount REAL DEFAULT 0,
+    hsn TEXT DEFAULT ''
 );
 
 CREATE TABLE IF NOT EXISTS payments (
@@ -845,7 +846,7 @@ def migrate(conn):
     # BILLING INVOICE: line items + tax/note columns
     conn.execute("CREATE TABLE IF NOT EXISTS billing_items ("
                  "id INTEGER PRIMARY KEY AUTOINCREMENT, bill_id INTEGER, item TEXT DEFAULT '', "
-                 "qty TEXT DEFAULT '', rate REAL DEFAULT 0, amount REAL DEFAULT 0)")
+                 "qty TEXT DEFAULT '', rate REAL DEFAULT 0, amount REAL DEFAULT 0, hsn TEXT DEFAULT '')")
     bcols = [r[1] for r in conn.execute("PRAGMA table_info(billing)")]
     for _col, _dfl in (("tax_percent", "REAL DEFAULT 0"), ("note", "TEXT DEFAULT ''")):
         if bcols and _col not in bcols:
@@ -853,6 +854,29 @@ def migrate(conn):
     jcols = [r[1] for r in conn.execute("PRAGMA table_info(jobcard)")]
     if jcols and "po_no" not in jcols:
         conn.execute("ALTER TABLE jobcard ADD COLUMN po_no TEXT DEFAULT ''")
+    # v3.13 PROFORMA INVOICE (PI) — advance/quotation invoice, baad me final invoice me convert
+    conn.execute("CREATE TABLE IF NOT EXISTS proforma_invoices ("
+                 "id INTEGER PRIMARY KEY AUTOINCREMENT, pi_no TEXT DEFAULT '', party TEXT NOT NULL, "
+                 "amount REAL DEFAULT 0, status TEXT DEFAULT 'open', date TEXT DEFAULT '', "
+                 "tax_percent REAL DEFAULT 0, note TEXT DEFAULT '', order_id INTEGER, "
+                 "converted_bill_id INTEGER, created_on TEXT DEFAULT '', "
+                 "payment_terms TEXT DEFAULT '', delivery_time TEXT DEFAULT '', "
+                 "bank_details TEXT DEFAULT '', other_terms TEXT DEFAULT '')")
+    # v3.17 PI commercial terms — purane PI tables me columns self-heal
+    _picols17 = [r[1] for r in conn.execute("PRAGMA table_info(proforma_invoices)")]
+    for _c17, _d17 in (("payment_terms", "TEXT DEFAULT ''"), ("delivery_time", "TEXT DEFAULT ''"),
+                       ("bank_details", "TEXT DEFAULT ''"), ("other_terms", "TEXT DEFAULT ''")):
+        if _picols17 and _c17 not in _picols17:
+            conn.execute(f"ALTER TABLE proforma_invoices ADD COLUMN {_c17} {_d17}")
+    # v3.18 HSN CODE — sab masters + line items me (PCB default 85340000)
+    for _t18 in ("product_models", "inventory", "machines", "proforma_items", "billing_items"):
+        _tc18 = [r[1] for r in conn.execute(f"PRAGMA table_info({_t18})")]
+        if _tc18 and "hsn" not in _tc18:
+            conn.execute(f"ALTER TABLE {_t18} ADD COLUMN hsn TEXT DEFAULT ''")
+    conn.execute("UPDATE product_models SET hsn='85340000' WHERE hsn IS NULL OR hsn=''")
+    conn.execute("CREATE TABLE IF NOT EXISTS proforma_items ("
+                 "id INTEGER PRIMARY KEY AUTOINCREMENT, pi_id INTEGER, item TEXT DEFAULT '', "
+                 "qty TEXT DEFAULT '', rate REAL DEFAULT 0, amount REAL DEFAULT 0, hsn TEXT DEFAULT '')")
     # v3.11 SHEET STOCK POOL: available sheet sizes — compare karke best chuno
     conn.execute("CREATE TABLE IF NOT EXISTS sheet_pool ("
                  "id INTEGER PRIMARY KEY AUTOINCREMENT, sheet_len REAL DEFAULT 0, sheet_w REAL DEFAULT 0, "
@@ -1146,6 +1170,34 @@ def ensure_db():
                         c.execute("CREATE TABLE IF NOT EXISTS purchase_order_items ("
                                   "id INTEGER PRIMARY KEY AUTOINCREMENT, po_id INTEGER, item TEXT DEFAULT '', "
                                   "qty TEXT DEFAULT '', rate REAL DEFAULT 0, amount REAL DEFAULT 0)")
+                        # v3.13 PROFORMA INVOICE (fast-path self-heal)
+                        c.execute("CREATE TABLE IF NOT EXISTS proforma_invoices ("
+                                  "id INTEGER PRIMARY KEY AUTOINCREMENT, pi_no TEXT DEFAULT '', "
+                                  "party TEXT NOT NULL, amount REAL DEFAULT 0, status TEXT DEFAULT 'open', "
+                                  "date TEXT DEFAULT '', tax_percent REAL DEFAULT 0, note TEXT DEFAULT '', "
+                                  "order_id INTEGER, converted_bill_id INTEGER, created_on TEXT DEFAULT '', "
+                                  "payment_terms TEXT DEFAULT '', delivery_time TEXT DEFAULT '', "
+                                  "bank_details TEXT DEFAULT '', other_terms TEXT DEFAULT '')")
+                        _pc17 = [r[1] for r in c.execute("PRAGMA table_info(proforma_invoices)").fetchall()]
+                        for _c17f, _d17f in (("payment_terms", "TEXT DEFAULT ''"), ("delivery_time", "TEXT DEFAULT ''"),
+                                             ("bank_details", "TEXT DEFAULT ''"), ("other_terms", "TEXT DEFAULT ''")):
+                            if _pc17 and _c17f not in _pc17:
+                                c.execute(f"ALTER TABLE proforma_invoices ADD COLUMN {_c17f} {_d17f}")
+                        # v3.18 HSN CODE (fast-path self-heal)
+                        for _t18f in ("product_models", "inventory", "machines", "proforma_items", "billing_items"):
+                            try:
+                                _tc18f = [x[1] for x in c.execute(f"PRAGMA table_info({_t18f})").fetchall()]
+                                if _tc18f and "hsn" not in _tc18f:
+                                    c.execute(f"ALTER TABLE {_t18f} ADD COLUMN hsn TEXT DEFAULT ''")
+                            except Exception:
+                                pass
+                        try:
+                            c.execute("UPDATE product_models SET hsn='85340000' WHERE hsn IS NULL OR hsn=''")
+                        except Exception:
+                            pass
+                        c.execute("CREATE TABLE IF NOT EXISTS proforma_items ("
+                                  "id INTEGER PRIMARY KEY AUTOINCREMENT, pi_id INTEGER, item TEXT DEFAULT '', "
+                                  "qty TEXT DEFAULT '', rate REAL DEFAULT 0, amount REAL DEFAULT 0, hsn TEXT DEFAULT '')")
                         # v3.11 SHEET STOCK POOL (fast-path self-heal)
                         c.execute("CREATE TABLE IF NOT EXISTS sheet_pool ("
                                   "id INTEGER PRIMARY KEY AUTOINCREMENT, sheet_len REAL DEFAULT 0, "
@@ -1159,7 +1211,7 @@ def ensure_db():
                                   "reject_reason TEXT DEFAULT '')")
                         c.execute("CREATE TABLE IF NOT EXISTS billing_items ("
                                   "id INTEGER PRIMARY KEY AUTOINCREMENT, bill_id INTEGER, item TEXT DEFAULT '', "
-                                  "qty TEXT DEFAULT '', rate REAL DEFAULT 0, amount REAL DEFAULT 0)")
+                                  "qty TEXT DEFAULT '', rate REAL DEFAULT 0, amount REAL DEFAULT 0, hsn TEXT DEFAULT '')")
                         # 💰 PCB COST CALCULATOR history (fast-path self-heal)
                         c.execute("CREATE TABLE IF NOT EXISTS pcb_calc_history ("
                                   "id INTEGER PRIMARY KEY AUTOINCREMENT, mode TEXT DEFAULT 'panel', "

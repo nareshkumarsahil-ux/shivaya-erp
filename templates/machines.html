@@ -9,6 +9,7 @@
     <form method="post" action="/machines/{{ edit_machine.id }}/edit">
       <div class="form-grid">
         <div class="field"><label>Machine Code</label><input name="code" value="{{ edit_machine.code }}"></div>
+        <div class="field"><label>HSN/SAC Code</label><input name="hsn" value="{{ edit_machine.hsn or '' }}" placeholder="jaise 847989"></div>
         <div class="field full"><label>Machine Name *</label><input name="name" required value="{{ edit_machine.name }}"></div>
         <div class="field"><label>Status</label>
           <select name="status">
@@ -30,6 +31,7 @@
     <form method="post">
       <div class="form-grid">
         <div class="field full"><label>Machine Name *</label><input name="name" required placeholder="e.g. Solder Mask Printer"></div>
+        <div class="field"><label>HSN/SAC Code</label><input name="hsn" placeholder="jaise 847989"></div>
         <div class="field"><label>Status</label>
           <select name="status"><option value="idle">Idle</option><option value="running">Running</option><option value="maintenance">Maintenance</option></select>
         </div>
@@ -56,6 +58,7 @@
       <span class="badge {{'b-done' if r.status=='running' else 'b-amber' if r.status=='maintenance' else 'b-gray'}}">{{ r.status|upper }}</span>
     </div>
     <div class="sub">Current job: {{ r.current_job or '—' }}</div>
+    <div class="sub">HSN/SAC: <span class="mono">{{ r.hsn or '—' }}</span></div>
     <form method="post" action="/machines/{{ r.id }}/status" style="display:flex;gap:6px;margin-top:10px">
       <select name="status" style="flex:1;padding:6px 8px;border:1px solid var(--border);border-radius:7px;font-size:12px">
         <option value="running" {{'selected' if r.status=='running'}}>Running</option>

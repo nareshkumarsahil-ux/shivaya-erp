@@ -11,6 +11,7 @@
         <div class="field"><label>Item Code</label><input name="code" value="{{ edit_item.code }}"></div>
         <div class="field"><label>Item Name *</label><input name="name" required value="{{ edit_item.name }}"></div>
         <div class="field"><label>Category</label><input name="category" value="{{ edit_item.category or '' }}"></div>
+        <div class="field"><label>HSN/SAC Code</label><input name="hsn" value="{{ edit_item.hsn or '' }}" placeholder="jaise 85340000"></div>
         <div class="field"><label>Unit</label>
           <select name="unit">
             {% for u in ['pcs','Ltr','kg','set','sheets'] %}<option {{'selected' if edit_item.unit == u}}>{{ u }}</option>{% endfor %}
@@ -31,6 +32,7 @@
       <div class="form-grid">
         <div class="field full"><label>Item Name *</label><input name="name" required placeholder="e.g. FR4 Sheets 1.6mm"></div>
         <div class="field"><label>Category</label><input name="category" placeholder="Laminate / Chemical / Tooling"></div>
+        <div class="field"><label>HSN/SAC Code</label><input name="hsn" placeholder="jaise 392190/853400"></div>
         <div class="field"><label>Unit</label>
           <select name="unit"><option>pcs</option><option>Ltr</option><option>kg</option><option>set</option></select>
         </div>
@@ -49,13 +51,14 @@
   <div class="panel-head"><h3>🗄️ Stock Items ({{ rows|length }})</h3></div>
   <div class="panel-body" style="padding:0;overflow-x:auto">
     <table>
-      <thead><tr><th>Code</th><th>Item</th><th>Category</th><th class="t-right">Stock</th><th class="t-right">Min</th><th>Status</th><th style="min-width:180px">Quick Update</th></tr></thead>
+      <thead><tr><th>Code</th><th>Item</th><th>Category</th><th>HSN/SAC</th><th class="t-right">Stock</th><th class="t-right">Min</th><th>Status</th><th style="min-width:180px">Quick Update</th></tr></thead>
       <tbody>
         {% for r in rows %}
         <tr>
           <td class="mono muted">{{ r.code }}</td>
           <td><b>{{ r.name }}</b></td>
           <td><span class="badge b-gray">{{ r.category or '—' }}</span></td>
+          <td class="mono small">{{ r.hsn or '—' }}</td>
           <td class="t-right mono"><b>{{ r.stock|inr if r.unit=='pcs' else r.stock }} {{ r.unit }}</b></td>
           <td class="t-right mono muted">{{ r.min_stock }} {{ r.unit }}</td>
           <td>
@@ -77,7 +80,7 @@
           </td>
         </tr>
         {% else %}
-        <tr><td colspan="7"><div class="empty">No inventory items</div></td></tr>
+        <tr><td colspan="8"><div class="empty">No inventory items</div></td></tr>
         {% endfor %}
       </tbody>
     </table>

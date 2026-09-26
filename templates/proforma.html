@@ -1,0 +1,218 @@
+{% extends "base.html" %}
+{% block title %}Proforma Invoice{% endblock %}
+{% block page_title %}Proforma Invoice (PI){% endblock %}
+{% block content %}
+<style>
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:16px}
+.stat-card{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:14px 16px}
+.stat-card .num{font-size:24px;font-weight:800;letter-spacing:-.5px}
+.stat-card .lbl{font-size:12px;color:var(--muted);font-weight:600}
+.po-items-table input,.po-items-table select{width:100%;padding:7px 9px;border:1px solid var(--border);border-radius:7px;font-size:12.5px}
+</style>
+
+{% if show_add or edit_pi %}
+<div class="panel">
+  <div class="panel-head"><h3>{% if edit_pi %}✏️ Edit PI {{ edit_pi.pi_no }}{% else %}➕ New Proforma Invoice (PI){% endif %}</h3><a class="btn btn-outline btn-sm" href="/proforma">✕ Close</a></div>
+  <div class="panel-body">
+    <form method="post">
+      <input type="hidden" name="action" value="{% if edit_pi %}edit{% else %}add{% endif %}">
+      {% if edit_pi %}<input type="hidden" name="pi_id" value="{{ edit_pi.id }}">{% endif %}
+      <div class="form-grid">
+        <div class="field"><label>JOB ORDER (optional — order se PI)</label>
+          {% if edit_pi %}
+          <input type="hidden" name="order_id" value="{{ edit_pi.order_id or '' }}">
+          <input type="text" value="{{ 'Order #' ~ edit_pi.order_id if edit_pi.order_id else 'Manual PI (bina order)' }}" disabled style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--bg2)">
+          <div class="muted small" style="margin-top:4px">Edit me order link same rehta hai</div>
+          {% else %}
+          <select name="order_id" id="pi_order">
+            <option value="">— khud items bharo (manual PI) —</option>
+            {% for o in orders %}<option value="{{ o.id }}">#{{ o.order_no }} — {{ o.party }}{% if o.product %} · {{ o.product[:30] }}{% endif %}</option>{% endfor %}
+          </select>
+          <div class="muted small" style="margin-top:4px">Order chuno to PI number me order no. jud jayega (PI-101-#21)</div>
+          {% endif %}
+        </div>
+        <div class="field full"><label>Party *</label>
+          <select name="party" id="pi_party" required>
+            <option value="">— Select party —</option>
+            {% for p in all_parties %}<option value="{{ p.name }}"{% if edit_pi and edit_pi.party == p.name %} selected{% endif %}>{{ p.name }}</option>{% endfor %}
+          </select>
+          <a class="muted small" href="/parties?add=1" style="margin-top:4px;display:inline-block">➕ New Party →</a>
+        </div>
+        <div class="field"><label>GST %</label><input type="number" step="0.1" name="tax_percent" id="pi_tax" value="{{ edit_pi.tax_percent if edit_pi else 18 }}"></div>
+        <div class="full">
+          <label style="font-size:11px;color:var(--muted);font-weight:700">ITEMS — PI ke line items</label>
+          <table class="po-items-table" style="width:100%">
+            <thead><tr><th>Item / Description</th><th style="width:100px">HSN/SAC</th><th style="width:90px">Qty</th><th style="width:110px">Rate (₹)</th><th style="width:120px">Amount (₹)</th><th style="width:36px"></th></tr></thead>
+            <tbody id="pi_items">
+              {% if edit_pi and edit_items %}
+                {% for it in edit_items %}
+              <tr class="pi-row">
+                <td><input name="item_n" value="{{ it.item }}"></td>
+                <td><input name="hsn_n" value="{{ it.hsn or '85340000' }}"></td>
+                <td><input name="qty_n" class="pi-qty" value="{{ it.qty }}"></td>
+                <td><input name="rate_n" class="pi-rate" type="number" step="0.01" value="{{ it.rate }}"></td>
+                <td><input name="amt_n" class="pi-amt" type="number" step="0.01" value="{{ it.amount }}"></td>
+                <td><button type="button" class="btn btn-outline btn-xs" onclick="piDelRow(this)">✖</button></td>
+              </tr>
+                {% endfor %}
+              {% else %}
+              <tr class="pi-row">
+                <td><input name="item_n" placeholder="e.g. 1000 PCBs — SCPL-420"></td>
+                <td><input name="hsn_n" value="85340000"></td>
+                <td><input name="qty_n" class="pi-qty" placeholder="Qty"></td>
+                <td><input name="rate_n" class="pi-rate" type="number" step="0.01" placeholder="Rate"></td>
+                <td><input name="amt_n" class="pi-amt" type="number" step="0.01" placeholder="Amount"></td>
+                <td><button type="button" class="btn btn-outline btn-xs" onclick="piDelRow(this)">✖</button></td>
+              </tr>
+              {% endif %}
+            </tbody>
+          </table>
+          <button type="button" class="btn btn-outline btn-xs" onclick="piAddRow()" style="margin-top:6px">＋ Add Item</button>
+          <div id="pi_totals" class="muted small" style="margin-top:6px"></div>
+        </div>
+        <div class="field"><label>Payment Terms (print par dikhega)</label><input name="payment_terms" value="{{ edit_pi.payment_terms if edit_pi and edit_pi.payment_terms else '50% advance and rest 50% before delivery' }}"></div>
+        <div class="field"><label>Delivery Time</label><input name="delivery_time" value="{{ edit_pi.delivery_time or '' }}" placeholder="e.g. 5-7 working days"></div>
+        <div class="field full"><label>Note / Terms (print par dikhega)</label><input name="note" value="{{ edit_pi.note or '' }}" placeholder="e.g. 50% advance, delivery 7 din"></div>
+        <div class="field full"><label>BANK DETAILS (print par — lines khud edit/add karo)</label><textarea name="bank_details" rows="4" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:12.5px">{{ edit_pi.bank_details if edit_pi and edit_pi.bank_details else bank_default }}</textarea></div>
+        <div class="field full"><label>OTHER TERMS (jaise packing, validity, freight — har line print par alag dikhegi)</label><textarea name="other_terms" rows="3" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:12.5px" placeholder="jaise: Prices basis Ex-Ghaziabad&#10;Validity: 15 days">{{ edit_pi.other_terms or '' }}</textarea></div>
+        <div class="full"><button class="btn" type="submit">{% if edit_pi %}Update PI{% else %}Create PI{% endif %}</button></div>
+      </div>
+    </form>
+  </div>
+</div>
+{% else %}
+<div class="stat-grid">
+  <div class="stat-card c-total"><div class="num">{{ totals.total or 0 }}</div><div class="lbl">TOTAL PI</div></div>
+  <div class="stat-card c-present"><div class="num">{{ totals.total - (totals.converted or 0) }}</div><div class="lbl">OPEN (convert baki)</div></div>
+  <div class="stat-card c-leave"><div class="num">{{ totals.converted or 0 }}</div><div class="lbl">CONVERTED → INVOICE</div></div>
+  <div class="stat-card"><div class="num">₹{{ (totals.open_amt or 0)|inr0 }}</div><div class="lbl">OPEN VALUE</div></div>
+</div>
+
+<div class="toolbar" style="justify-content:flex-end"><a class="btn" href="/proforma?add=1">＋ New PI</a></div>
+
+<div class="panel">
+  <div class="panel-head"><h3>📄 PROFORMA INVOICES ({{ rows|length }})</h3></div>
+  <div class="panel-body" style="padding:0;overflow-x:auto">
+    <table style="width:100%;font-size:12.5px">
+      <thead><tr><th>PI No.</th><th>Party</th><th class="t-right">Items</th><th class="t-right">GST</th><th class="t-right">Amount</th><th>Date</th><th>Status</th><th>Note</th><th></th></tr></thead>
+      <tbody>
+        {% for r in rows %}
+        <tr>
+          <td><b class="mono">{{ r.pi_no }}</b>{% if r.order_id %}<div class="muted small">order #{{ r.order_id }}</div>{% endif %}</td>
+          <td><b>{{ r.party }}</b></td>
+          <td class="t-right mono small">{{ items_by_pi.get(r.id, [])|length }}</td>
+          <td class="t-right mono small">{{ r.tax_percent|gfmt }}%</td>
+          <td class="t-right mono"><b>₹{{ r.amount|inr0 }}</b></td>
+          <td class="small muted">{{ r.date }}</td>
+          <td>{% if r.status == 'converted' %}<span class="badge b-done">✅ Converted → INV</span>{% else %}<span class="badge b-amber">Open</span>{% endif %}</td>
+          <td class="small muted">{{ r.note or '—' }}</td>
+          <td style="white-space:nowrap">
+            <a class="btn btn-xs" style="background:#2563eb;color:#fff" href="/proforma/{{ r.id }}/print">🖨 Print</a>
+            {% if r.status != 'converted' %}
+            <a class="btn btn-outline btn-xs" style="color:#92400e;border-color:#d97706" href="/proforma?edit={{ r.id }}" title="Edit PI — items + terms sab">✏️ Edit</a>
+            <form method="post" style="display:inline" onsubmit="return confirm('PI {{ r.pi_no }} ko final INVOICE me convert karein?')">
+              <input type="hidden" name="action" value="convert"><input type="hidden" name="pi_id" value="{{ r.id }}">
+              <button class="btn btn-xs" style="background:#16a34a;color:#fff" type="submit">➡ Convert to Invoice</button>
+            </form>
+            <form method="post" style="display:inline" onsubmit="return confirm('PI {{ r.pi_no }} delete karein?')">
+              <input type="hidden" name="action" value="del"><input type="hidden" name="pi_id" value="{{ r.id }}">
+              <button class="btn btn-danger btn-xs" type="submit" title="Delete">🗑</button>
+            </form>
+            {% else %}
+            <a class="btn btn-outline btn-xs" href="/billing?edit={{ r.converted_bill_id }}">🧾 Invoice kholo</a>
+            {% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="9"><div class="empty">Koi PI nahi — "＋ New PI" dabao. Order se ya manual, dono tarike chalte hain.</div></td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+<script>
+var piModels = [{% for m in bill_models %}{id:{{ m.id }}, name:{{ (m.name ~ ' ' ~ (m.pcb_len|gfmt) ~ '×' ~ (m.pcb_w|gfmt) ~ 'mm')|tojson }}, price:{{ m.pcb_price or 0 }}}{% if not loop.last %},{% endif %}{% endfor %}];
+function piOpts(cur){
+  var h = '<option value="">— item —</option>';
+  piModels.forEach(function(m){
+    var sel = (m.name === cur) ? ' selected' : '';
+    h += '<option value="' + m.name + '" data-price="' + m.price + '"' + sel + '>' + m.name + (m.price ? ' — ₹' + m.price : '') + '</option>';
+  });
+  return h;
+}
+function piCalc(){
+  var total = 0;
+  document.querySelectorAll('#pi_items .pi-row').forEach(function(tr){
+    total += parseFloat((tr.querySelector('.pi-amt')||{}).value) || 0;
+  });
+  var tax = parseFloat((document.getElementById('pi_tax')||{}).value) || 0;
+  var gt = total + Math.round(total * tax) / 100;
+  var el = document.getElementById('pi_totals');
+  if (el) el.innerHTML = 'Subtotal <b>₹' + total.toFixed(2) + '</b>' +
+    (tax ? ' + GST ' + tax + '% = <b style="color:#16a34a">₹' + gt.toFixed(2) + '</b>' : '');
+}
+function piBind(tr){
+  var q = tr.querySelector('.pi-qty'), r = tr.querySelector('.pi-rate'), a = tr.querySelector('.pi-amt');
+  function calc(){ if (q && r && a) { var v = parseFloat(q.value)||0, rr = parseFloat(r.value)||0; if (v>0&&rr>0) a.value = Math.round(v*rr*100)/100; } piCalc(); }
+  [q, r, a].forEach(function(el){ if (el) el.addEventListener('input', calc); });
+}
+function piAddRow(){
+  var tb = document.getElementById('pi_items');
+  var tr = document.createElement('tr');
+  tr.className = 'pi-row';
+  tr.innerHTML = '<td></td>' +
+    '<td><input name="hsn_n" value="85340000"></td>' +
+    '<td><input name="qty_n" class="pi-qty" placeholder="Qty"></td>' +
+    '<td><input name="rate_n" class="pi-rate" type="number" step="0.01" placeholder="Rate"></td>' +
+    '<td><input name="amt_n" class="pi-amt" type="number" step="0.01" placeholder="Amount"></td>' +
+    '<td><button type="button" class="btn btn-outline btn-xs" onclick="piDelRow(this)">✖</button></td>';
+  tb.appendChild(tr);
+  var td = tr.querySelector('td');
+  var sel = document.createElement('select');
+  sel.name = 'item_n'; sel.className = 'pi-item-sel';
+  sel.innerHTML = piOpts('');
+  sel.addEventListener('change', function(){
+    var o = sel.options[sel.selectedIndex];
+    var p = o ? (parseFloat(o.getAttribute('data-price')) || 0) : 0;
+    if (p > 0) tr.querySelector('.pi-rate').value = p;
+    piBind(tr); piCalc();
+  });
+  td.appendChild(sel);
+  piBind(tr);
+}
+function piDelRow(btn){
+  var tb = document.getElementById('pi_items');
+  var rows = tb.querySelectorAll('.pi-row');
+  if (rows.length <= 1) { rows.forEach(function(tr){ tr.querySelectorAll('input').forEach(function(i){ i.value=''; }); var s=tr.querySelector('select'); if (s) s.selectedIndex=0; }); }
+  else btn.closest('.pi-row').remove();
+  piCalc();
+}
+/* pehli row me model dropdown bharo */
+(function(){
+  var tb = document.getElementById('pi_items');
+  if (!tb) return;
+  var tr = tb.querySelector('.pi-row');
+  if (tr && piModels.length) {
+    var td = tr.querySelector('td');
+    var inp = td.querySelector('input[name="item_n"]');
+    var sel = document.createElement('select');
+    sel.name = 'item_n'; sel.className = 'pi-item-sel';
+    sel.innerHTML = piOpts(inp ? inp.value : '');
+    td.innerHTML = '';
+    td.appendChild(sel);
+    sel.addEventListener('change', function(){
+      var o = sel.options[sel.selectedIndex];
+      var p = o ? (parseFloat(o.getAttribute('data-price')) || 0) : 0;
+      if (p > 0) tr.querySelector('.pi-rate').value = p;
+      piBind(tr); piCalc();
+    });
+  }
+  tb.querySelectorAll('.pi-row').forEach(piBind);
+  var t = document.getElementById('pi_tax');
+  if (t) t.addEventListener('input', piCalc);
+  piCalc();
+})();
+</script>
+{% endblock %}

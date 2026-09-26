@@ -671,6 +671,17 @@ def _items_from_form(f):
     return rows
 
 
+def _hsn_aligned(f):
+    """v3.18 — hsn_n inputs ko item_n jaisa hi align karo (khali item skip, PCB default 85340000)."""
+    hs = [(x or "").strip() for x in f.getlist("hsn_n")]
+    out = []
+    for i, it in enumerate(f.getlist("item_n")):
+        if not (it or "").strip():
+            continue
+        out.append((hs[i] if i < len(hs) else "") or "85340000")
+    return out
+
+
 def _totals(items, tax):
     subtotal = round(sum(r[3] for r in items), 2)
     tax_amt = round(subtotal * (float(tax or 0)) / 100, 2)
@@ -2010,6 +2021,8 @@ def products():
                     "pcb_code=COALESCE(NULLIF(?, \'\'), pcb_code), party_code=COALESCE(NULLIF(?, \'\'), party_code), "
                     "party_name=COALESCE(NULLIF(?, \'\'), party_name) WHERE id=?",
                     vals + (edit_id,))
+                db.execute("UPDATE product_models SET hsn=? WHERE id=?",
+                           ((f.get("hsn") or "").strip() or "85340000", edit_id))
                 flash(f"Finished product '{name}' update ho gaya ✅ (cut list layout + price ke saath)", "success")
             else:
                 dup = db.query("SELECT COUNT(*) c FROM product_models WHERE name=?", (name,), one=True)["c"]
@@ -2024,11 +2037,16 @@ def products():
                     "pcb_code, party_code, party_name, order_id, created_on) "
                     "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                     vals + (None, _today_ist().isoformat()))
+                db.execute("UPDATE product_models SET hsn=? WHERE id=?",
+                           ((f.get("hsn") or "").strip() or "85340000", db.query(
+                               "SELECT id FROM product_models WHERE name=? ORDER BY id DESC LIMIT 1", (name,), one=True)["id"]))
                 flash(f"Finished product '{name}' manually add ho gaya ✅ — BOM set karne ke liye 🧪 BOM button dabao.", "success")
         except Exception as e:
             flash(f"Save failed: {e}", "error")
         return redirect_with_token(url_for("products"))
     rows = db.query("SELECT m.*, o.order_no FROM product_models m LEFT JOIN orders o ON o.id=m.order_id ORDER BY m.id DESC")
+    # v3.18 HSN sweep — koi bhi naya model (apply-order/import) bina HSN na rahe (PCB default 85340000)
+    db.execute("UPDATE product_models SET hsn='85340000' WHERE hsn IS NULL OR hsn=''")
     # 3 queries -> 1 round trip (turso batch) — 12 alag calls ki jagah 2
     bom_lines, prods, cons_lines = db.multi([
         ("SELECT b.model_id, b.qty_per, b.unit_pcs, i.name, i.unit FROM bom b "
@@ -2755,9 +2773,10 @@ def inventory():
         if f.get("name", "").strip():
             count = db.query("SELECT COUNT(*) c FROM inventory", one=True)["c"]
             db.execute(
-                "INSERT INTO inventory (code, name, category, stock, min_stock, unit) VALUES (?,?,?,?,?,?)",
+                "INSERT INTO inventory (code, name, category, stock, min_stock, unit, hsn) VALUES (?,?,?,?,?,?,?)",
                 (f"INV-{7 + count:02d}", f.get("name").strip(), f.get("category", "").strip(),
-                 float(f.get("stock", 0) or 0), float(f.get("min_stock", 0) or 0), f.get("unit", "pcs")))
+                 float(f.get("stock", 0) or 0), float(f.get("min_stock", 0) or 0), f.get("unit", "pcs"),
+                 (f.get("hsn") or "").strip()))
             flash("Item added.", "success")
         return redirect_with_token(url_for("inventory"))
     rows = db.query("SELECT * FROM inventory ORDER BY CASE WHEN stock<=min_stock THEN 0 ELSE 1 END, name")
@@ -2799,10 +2818,10 @@ def inventory_edit(item_id):
         flash("Item name zaroori hai.", "error")
         return redirect_with_token(url_for("inventory", edit=item_id))
     try:
-        db.execute("UPDATE inventory SET code=?, name=?, category=?, stock=?, min_stock=?, unit=? WHERE id=?",
+        db.execute("UPDATE inventory SET code=?, name=?, category=?, stock=?, min_stock=?, unit=?, hsn=? WHERE id=?",
                    ((f.get("code") or "").strip(), name, (f.get("category") or "").strip(),
                     float(f.get("stock", 0) or 0), float(f.get("min_stock", 0) or 0),
-                    (f.get("unit") or "pcs").strip(), item_id))
+                    (f.get("unit") or "pcs").strip(), (f.get("hsn") or "").strip(), item_id))
         flash(f"'{name}' update ho gaya ✅", "success")
     except Exception as e:
         flash(f"Update failed: {e}", "error")
@@ -2846,9 +2865,9 @@ def billing():
                 (f"INV-{105 + count}", party, grand, f.get("status", "pending"),
                  _today_ist().isoformat(), _fl(f.get("tax_percent")), (f.get("note") or "").strip(),
                  _now_dt()))
-            for r in rows:
-                db.execute("INSERT INTO billing_items (bill_id, item, qty, rate, amount) "
-                           "VALUES (?,?,?,?,?)", (inv_id, r[0], r[1], r[2], r[3]))
+            for r, _h18 in zip(rows, _hsn_aligned(f) or ["85340000"] * len(rows)):
+                db.execute("INSERT INTO billing_items (bill_id, item, qty, rate, amount, hsn) "
+                           "VALUES (?,?,?,?,?,?)", (inv_id, r[0], r[1], r[2], r[3], _h18))
             flash("Invoice created.", "success")
         return redirect_with_token(url_for("billing"))
     rows = db.query("SELECT * FROM billing ORDER BY id DESC")
@@ -2901,9 +2920,9 @@ def billing_edit(inv_id):
                     f.get("date") or _today_ist().isoformat(),
                     _fl(f.get("tax_percent")), (f.get("note") or "").strip(), inv_id))
         db.execute("DELETE FROM billing_items WHERE bill_id=?", (inv_id,))
-        for r in rows:
-            db.execute("INSERT INTO billing_items (bill_id, item, qty, rate, amount) "
-                       "VALUES (?,?,?,?,?)", (inv_id, r[0], r[1], r[2], r[3]))
+        for r, _h18 in zip(rows, _hsn_aligned(f) or ["85340000"] * len(rows)):
+            db.execute("INSERT INTO billing_items (bill_id, item, qty, rate, amount, hsn) "
+                       "VALUES (?,?,?,?,?,?)", (inv_id, r[0], r[1], r[2], r[3], _h18))
         flash(f"Invoice {invoice_no} update ho gaya ✅", "success")
     except Exception as e:
         flash(f"Update failed: {e}", "error")
@@ -2939,6 +2958,166 @@ def billing_print(inv_id):
     return render_template("bill_print.html", inv=inv, items=items, active="billing",
                            comp=_po_company(), subtotal=subtotal, tax=float(inv["tax_percent"] or 0),
                            tax_amt=tax_amt, grand=grand, grand_words=_amt_words(grand))
+
+
+# ---------------------------------------------------------------- proforma invoices (PI) — v3.13
+@app.route("/proforma", methods=["GET", "POST"])
+@login_required
+def proforma():
+    """v3.13 — PI list + naya PI (manual ya order se) + print + convert-to-invoice."""
+    if request.method == "POST":
+        f = request.form
+        action = f.get("action", "add")
+        if action == "del":
+            try:
+                _pid = int(f.get("pi_id", 0) or 0)
+                db.execute("DELETE FROM proforma_items WHERE pi_id=?", (_pid,))
+                db.execute("DELETE FROM proforma_invoices WHERE id=? AND status='open'", (_pid,))
+                flash("PI delete ho gaya (sirf OPEN PI hi delete hote hain).", "success")
+            except ValueError:
+                pass
+            return redirect_with_token(url_for("proforma"))
+        if action == "convert":
+            try:
+                _pid = int(f.get("pi_id", 0) or 0)
+            except ValueError:
+                _pid = 0
+            pi = db.query("SELECT * FROM proforma_invoices WHERE id=?", (_pid,), one=True) if _pid else None
+            if not pi:
+                flash("PI nahi mila.", "error")
+                return redirect_with_token(url_for("proforma"))
+            if pi["converted_bill_id"]:
+                flash("Ye PI pehle hi convert ho chuka hai (Invoice #" + str(pi["converted_bill_id"]) + ").", "error")
+                return redirect_with_token(url_for("proforma"))
+            _pitems = db.query("SELECT * FROM proforma_items WHERE pi_id=?", (_pid,))
+            rows = [(it["item"], it["qty"], it["rate"], it["amount"], (it["hsn"] or "85340000")) for it in _pitems]
+            if not rows:
+                rows = [("", "", 0.0, pi["amount"] or 0, "85340000")]
+            subtotal, tax_amt, grand = _totals(rows, pi["tax_percent"])
+            count = db.query("SELECT COUNT(*) c FROM billing", one=True)["c"]
+            inv_id = db.execute(
+                "INSERT INTO billing (invoice_no, party, amount, status, date, tax_percent, note, created_on) "
+                "VALUES (?,?,?,?,?,?,?,?)",
+                ("INV-PI-" + (pi["pi_no"] or str(_pid)), pi["party"], grand, "pending",
+                 _today_ist().isoformat(), pi["tax_percent"] or 0,
+                 "PI " + (pi["pi_no"] or str(_pid)) + " se convert hua" +
+                 ((" — " + (pi["note"]) if pi["note"] else "")), _now_dt()))
+            for r in rows:
+                db.execute("INSERT INTO billing_items (bill_id, item, qty, rate, amount, hsn) VALUES (?,?,?,?,?,?)",
+                           (inv_id, r[0], r[1], r[2], r[3], r[4] if len(r) > 4 else "85340000"))
+            db.execute("UPDATE proforma_invoices SET status='converted', converted_bill_id=? WHERE id=?",
+                       (inv_id, _pid))
+            flash("PI " + (pi["pi_no"] or "") + " INVOICE me convert ho gaya — Billing me khul gaya.", "success")
+            return redirect_with_token(url_for("billing") + f"?edit={inv_id}")
+        if action == "edit":
+            """v3.17 — PI edit (sirf open): party/items/terms sab update."""
+            try:
+                _pid = int(f.get("pi_id", 0) or 0)
+            except ValueError:
+                _pid = 0
+            pi = db.query("SELECT * FROM proforma_invoices WHERE id=?", (_pid,), one=True) if _pid else None
+            if not pi:
+                flash("PI nahi mila.", "error")
+                return redirect_with_token(url_for("proforma"))
+            if pi["status"] == "converted":
+                flash("Converted PI edit nahi hota — uske Invoice me changes Billing me karo.", "error")
+                return redirect_with_token(url_for("proforma"))
+            party = (f.get("party") or "").strip()
+            if not party:
+                flash("PI ke liye party zaroori hai.", "error")
+                return redirect_with_token(url_for("proforma"))
+            rows = _items_from_form(f)
+            if not rows:
+                rows = [("", "", 0.0, _fl(f.get("amount")))]
+            subtotal, tax_amt, grand = _totals(rows, f.get("tax_percent"))
+            db.execute("UPDATE proforma_invoices SET party=?, amount=?, tax_percent=?, note=?, "
+                       "payment_terms=?, delivery_time=?, bank_details=?, other_terms=? WHERE id=?",
+                       (party, grand, _fl(f.get("tax_percent")), (f.get("note") or "").strip(),
+                        (f.get("payment_terms") or "").strip(), (f.get("delivery_time") or "").strip(),
+                        (f.get("bank_details") or "").strip(), (f.get("other_terms") or "").strip(), _pid))
+            db.execute("DELETE FROM proforma_items WHERE pi_id=?", (_pid,))
+            for r, _h18 in zip(rows, _hsn_aligned(f) or ["85340000"] * len(rows)):
+                db.execute("INSERT INTO proforma_items (pi_id, item, qty, rate, amount, hsn) VALUES (?,?,?,?,?,?)",
+                           (_pid, r[0], r[1], r[2], r[3], _h18))
+            flash("PI " + (pi["pi_no"] or "") + " update ho gaya — print dobara nikalo.", "success")
+            return redirect_with_token(url_for("proforma"))
+        # action == add
+        party = (f.get("party") or "").strip()
+        if not party:
+            flash("PI ke liye party zaroori hai.", "error")
+            return redirect_with_token(url_for("proforma"))
+        rows = _items_from_form(f)
+        if not rows:
+            rows = [("", "", 0.0, _fl(f.get("amount")))]
+        subtotal, tax_amt, grand = _totals(rows, f.get("tax_percent"))
+        count = db.query("SELECT COUNT(*) c FROM proforma_invoices", one=True)["c"]
+        order_id = int(f.get("order_id", 0) or 0)
+        pi_no = f"PI-{101 + count}"
+        if order_id:
+            oo = db.query("SELECT order_no FROM orders WHERE id=?", (order_id,), one=True)
+            if oo:
+                pi_no += "-" + (oo["order_no"] or "").lstrip("#")
+        pi_id = db.execute(
+            "INSERT INTO proforma_invoices (pi_no, party, amount, status, date, tax_percent, note, order_id, created_on, "
+            "payment_terms, delivery_time, bank_details, other_terms) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            (pi_no, party, grand, "open", _today_ist().isoformat(), _fl(f.get("tax_percent")),
+             (f.get("note") or "").strip(), order_id or None, _now_dt(),
+             (f.get("payment_terms") or "").strip(), (f.get("delivery_time") or "").strip(),
+             (f.get("bank_details") or "").strip(), (f.get("other_terms") or "").strip()))
+        for r, _h18 in zip(rows, _hsn_aligned(f) or ["85340000"] * len(rows)):
+            db.execute("INSERT INTO proforma_items (pi_id, item, qty, rate, amount, hsn) VALUES (?,?,?,?,?,?)",
+                       (pi_id, r[0], r[1], r[2], r[3], _h18))
+        flash("PI " + pi_no + " ban gaya — print/PDF nikalo ya baad me Invoice me convert karo.", "success")
+        return redirect_with_token(url_for("proforma"))
+    rows = db.query("SELECT * FROM proforma_invoices ORDER BY id DESC")
+    totals = db.query("SELECT COALESCE(SUM(CASE WHEN status='open' THEN amount END),0) open_amt, "
+                      "COUNT(*) total, SUM(CASE WHEN status='converted' THEN 1 ELSE 0 END) converted "
+                      "FROM proforma_invoices", one=True)
+    items_by_pi = {}
+    for it in db.query("SELECT * FROM proforma_items ORDER BY id"):
+        items_by_pi.setdefault(it["pi_id"], []).append(it)
+    edit_pi = None
+    edit_items = []
+    try:
+        _eid = int(request.args.get("edit", 0) or 0)
+    except ValueError:
+        _eid = 0
+    if _eid:
+        edit_pi = db.query("SELECT * FROM proforma_invoices WHERE id=?", (_eid,), one=True)
+        if edit_pi:
+            edit_items = db.query("SELECT * FROM proforma_items WHERE pi_id=? ORDER BY id", (_eid,))
+    return render_template("proforma.html", active="proforma", rows=rows, totals=totals,
+                           items_by_pi=items_by_pi, all_parties=db.query("SELECT * FROM parties ORDER BY name"),
+                           orders=db.query("SELECT id, order_no, party, product FROM orders ORDER BY id DESC LIMIT 100"),
+                           bill_models=db.query("SELECT * FROM product_models ORDER BY name"),
+                           show_add=request.args.get("add"), comp=_po_company(),
+                           edit_pi=edit_pi, edit_items=edit_items,
+                           bank_default="Company's Bank Details\nA/c Holder's Name : SHIVAYA CIRCUIT PRIVATE LIMITED\n"
+                                        "Bank Name : HDFC BANK\nA/c No. : 50200117041601\n"
+                                        "Branch & IFS Code : HARGOVIND ENCLAVE & HDFC0000481")
+
+
+@app.route("/proforma/<int:pi_id>/print")
+@login_required
+def proforma_print(pi_id):
+    """v3.13 — PI print sheet (PROFORMA INVOICE title + status stamp)."""
+    pi = db.query("SELECT * FROM proforma_invoices WHERE id=?", (pi_id,), one=True)
+    if not pi:
+        flash("PI nahi mila.", "error")
+        return redirect_with_token(url_for("proforma"))
+    items = db.query("SELECT * FROM proforma_items WHERE pi_id=? ORDER BY id", (pi_id,))
+    if not items:
+        items = [{"item": "", "qty": "", "rate": 0, "amount": pi["amount"]}]
+    subtotal, tax_amt, grand = _totals([(i["item"], i["qty"], i["rate"], i["amount"]) for i in items],
+                                       pi["tax_percent"])
+    _order_no = ""
+    if pi["order_id"]:
+        _oo = db.query("SELECT order_no FROM orders WHERE id=?", (pi["order_id"],), one=True)
+        _order_no = _oo["order_no"] if _oo else ""
+    return render_template("pi_print.html", inv=pi, items=items, active="proforma",
+                           comp=_po_company(), subtotal=subtotal, tax=float(pi["tax_percent"] or 0),
+                           tax_amt=tax_amt, grand=grand, grand_words=_amt_words(grand), order_no=_order_no,
+                           generated=_today_ist().isoformat())
 
 
 # ---------------------------------------------------------------- payments & receipts
@@ -3514,8 +3693,9 @@ def machines():
         f = request.form
         if f.get("name", "").strip():
             count = db.query("SELECT COUNT(*) c FROM machines", one=True)["c"]
-            db.execute("INSERT INTO machines (code, name, status, current_job) VALUES (?,?,?,?)",
-                       (f"M{7 + count}", f.get("name").strip(), f.get("status", "idle"), f.get("current_job", "").strip()))
+            db.execute("INSERT INTO machines (code, name, status, current_job, hsn) VALUES (?,?,?,?,?)",
+                       (f"M{7 + count}", f.get("name").strip(), f.get("status", "idle"), f.get("current_job", "").strip(),
+                        (f.get("hsn") or "").strip()))
             flash("Machine added.", "success")
         return redirect_with_token(url_for("machines"))
     rows = db.query("SELECT * FROM machines ORDER BY id")
@@ -3546,9 +3726,9 @@ def machine_edit(m_id):
         flash("Machine name zaroori hai.", "error")
         return redirect_with_token(url_for("machines", edit=m_id))
     try:
-        db.execute("UPDATE machines SET code=?, name=?, status=?, current_job=? WHERE id=?",
+        db.execute("UPDATE machines SET code=?, name=?, status=?, current_job=?, hsn=? WHERE id=?",
                    ((f.get("code") or "").strip(), name, f.get("status", "idle"),
-                    (f.get("current_job") or "").strip(), m_id))
+                    (f.get("current_job") or "").strip(), (f.get("hsn") or "").strip(), m_id))
         flash(f"Machine '{name}' update ho gaya ✅", "success")
     except Exception as e:
         flash(f"Update failed: {e}", "error")
