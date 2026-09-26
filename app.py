@@ -590,16 +590,32 @@ def _fl(v):
         return 0.0
 
 
+def _doc_brand():
+    """v3.25 — PI/Invoice print ka brand color (meta 'doc_brand'), default blue."""
+    r = db.query("SELECT value FROM meta WHERE key='doc_brand'", one=True)
+    v = (r["value"] if r else "") or ""
+    return v if re.match(r"^#[0-9a-fA-F]{6}$", v) else "#1d4ed8"
+
+
+_BANK_DEFAULT = ("Company's Bank Details\nA/c Holder's Name : SHIVAYA CIRCUIT PRIVATE LIMITED\n"
+                 "Bank Name : HDFC BANK\nA/c No. : 50200117041601\n"
+                 "Branch & IFS Code : HARGOVIND ENCLAVE & HDFC0000481")
+
+
 def _po_company():
     """PO/Invoice print ka company header — Purchase Orders page se editable (meta me save)."""
     import json as _json
+    def _clean(v):
+        # v3.26: kabhi-kabhi meta me unrendered jinja literal save ho gaye the — unhe blank maano
+        v = (v or "").strip() if isinstance(v, str) else ""
+        return "" if ("{{" in v or "}}" in v) else v
     row = db.query("SELECT value FROM meta WHERE key='po_company'", one=True)
     if row and row["value"]:
         try:
             d = _json.loads(row["value"])
-            return {"name": d.get("name") or "Shivaya Circuit Pvt. Ltd.",
-                    "address": d.get("address") or "", "phone": d.get("phone") or "",
-                    "gstin": d.get("gstin") or ""}
+            return {"name": _clean(d.get("name")) or "Shivaya Circuit Pvt. Ltd.",
+                    "address": _clean(d.get("address")), "phone": _clean(d.get("phone")),
+                    "gstin": _clean(d.get("gstin"))}
         except Exception:
             pass
     return {"name": "Shivaya Circuit Pvt. Ltd.", "address": "", "phone": "", "gstin": ""}
@@ -2999,7 +3015,9 @@ def billing_print(inv_id):
                                        inv["tax_percent"])
     return render_template("bill_print.html", inv=inv, items=items, active="billing",
                            comp=_po_company(), subtotal=subtotal, tax=float(inv["tax_percent"] or 0),
-                           tax_amt=tax_amt, grand=grand, grand_words=_amt_words(grand))
+                           tax_amt=tax_amt, grand=grand, grand_words=_amt_words(grand),
+                           brand=_doc_brand(), bank_default=_BANK_DEFAULT,
+                           generated=_today_ist().isoformat())
 
 
 # ---------------------------------------------------------------- proforma invoices (PI) — v3.13
@@ -3163,7 +3181,19 @@ def proforma_print(pi_id):
     return render_template("pi_print.html", inv=pi, items=items, active="proforma",
                            comp=_po_company(), subtotal=subtotal, tax=float(pi["tax_percent"] or 0),
                            tax_amt=tax_amt, grand=grand, grand_words=_amt_words(grand), order_no=_order_no,
-                           generated=_today_ist().isoformat())
+                           generated=_today_ist().isoformat(), brand=_doc_brand(), bank_default=_BANK_DEFAULT)
+
+
+# ---------------------------------------------------------------- v3.25 document brand color
+@app.route("/doc-brand", methods=["POST"])
+@login_required
+def doc_brand():
+    color = (request.form.get("color") or "").strip()
+    if re.match(r"^#[0-9a-fA-F]{6}$", color):
+        db.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('doc_brand', ?)", (color,))
+        flash("Print document ka color update: " + color + " \u2014 ab PI + Invoice dono par yahi lagega.", "success")
+    nxt = request.form.get("next") or url_for("proforma")
+    return redirect(nxt)
 
 
 # ---------------------------------------------------------------- payments & receipts
