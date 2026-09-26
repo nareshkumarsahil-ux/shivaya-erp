@@ -156,38 +156,41 @@
   </div>
 
   <script>
-  /* v3.23 — SINGLE PAGE PRINT: preview jitna dikh raha hai, print bhi WAHI 1 page.
-     Print se pehle content ko print-width par measure karke A4 me fit karta hai (auto scale).
-     Bahut lambi list ho to scale min 0.55 tak — usse bhi nahi sama to declaration + bank
-     details + signature ek saath rehte hain (page-break-inside: avoid), toot kar nahi jaate. */
+  /* v3.24 — SINGLE PAGE PRINT (asli fix): zoom LAYOUT shrink karta hai (transform sirf dikhawa
+     tha — layout page count nahi badalta, isliye 2-page problem aayi thi).
+     Chrome/Edge/Safari: zoom + width-compensation → exactly 1 page.
+     Purane Firefox (zoom nahi): scale + negative margin-bottom (leftover layout khatam). */
   (function () {
-    var PRINT_W = 651;     /* A4 186mm content - sheet padding ~ px */
-    var PRINT_H = 1010;    /* A4 273mm printable - sheet padding ~ px */
+    var PRINT_W = 702;   /* A4 186mm printable width @96dpi */
+    var PRINT_H = 1020;  /* A4 273mm printable height @96dpi (thoda slack) */
     function fit() {
       var sheet = document.querySelector('.po-sheet');
       if (!sheet) return;
-      sheet.style.transform = '';
-      sheet.style.width = '';
+      sheet.style.zoom = ''; sheet.style.transform = '';
+      sheet.style.width = ''; sheet.style.marginBottom = '';
       var oldMax = sheet.style.maxWidth;
       sheet.style.maxWidth = PRINT_W + 'px';
       var h = sheet.scrollHeight;
       sheet.style.maxWidth = oldMax;
-      if (!h) return;
-      var k = h > PRINT_H ? PRINT_H / h : 1;
-      if (k < 0.55) k = 0.55;
-      if (k < 1) {
+      if (!h || h <= PRINT_H) return;          /* pehle hi fit — koi scaling nahi */
+      var k = PRINT_H / h;
+      if (k < 0.55) k = 0.55;                  /* bahut lambi list — cap */
+      sheet.style.width = (100 / k).toFixed(2) + '%';
+      if (typeof sheet.style.zoom !== 'undefined' && sheet.style.zoom !== undefined) {
+        sheet.style.zoom = k;                  /* asli layout shrink → 1 page */
+      } else {
         sheet.style.transformOrigin = 'top left';
         sheet.style.transform = 'scale(' + k.toFixed(4) + ')';
-        sheet.style.width = (100 / k).toFixed(2) + '%';
+        sheet.style.marginBottom = '-' + Math.round(h * (1 - k)) + 'px';
       }
     }
     window.addEventListener('beforeprint', fit);
     window.addEventListener('afterprint', function () {
       var sheet = document.querySelector('.po-sheet');
-      if (sheet) { sheet.style.transform = ''; sheet.style.width = ''; }
+      if (sheet) { sheet.style.zoom = ''; sheet.style.transform = ''; sheet.style.width = ''; sheet.style.marginBottom = ''; }
     });
     var b = document.querySelector('.btn-print');
-    if (b) b.addEventListener('click', fit);
+    if (b) b.addEventListener('click', function () { fit(); setTimeout(fit, 80); });
   })();
   </script>
 </body>
