@@ -53,19 +53,27 @@
       </form>
       <script>(function(){var tk=new URLSearchParams(window.location.search).get('token');if(!tk){try{tk=localStorage.getItem('jcToken');}catch(e){}}var h=document.getElementById('pdfTok');if(tk&&h&&!h.value)h.value=tk;})();</script>
     </div>
-    <div style="padding:0;overflow-x:auto">
-      <table>
-        <thead><tr><th>Model</th><th>File</th><th>Size</th><th>Uploaded</th><th></th><th></th></tr></thead>
+    <div style="padding:0">
+      <table style="width:100%;table-layout:fixed">
+        <thead><tr>
+          <th style="width:16%">Model</th>
+          <th style="width:38%">File</th>
+          <th style="width:8%">Size</th>
+          <th style="width:12%">Uploaded</th>
+          <th style="width:13%"></th><th style="width:13%"></th>
+        </tr></thead>
         <tbody>
           {% for p in rows %}
           <tr>
-            <td><b>{{ p.model_name }}</b></td>
-            <td>{{ p.filename }}</td>
-            <td>{{ (p.sz or 0) // 1024 }} KB</td>
-            <td>{{ p.uploaded_on or '' }}</td>
-            <td><button type="button" class="btn btn-outline btn-xs" onclick="openPdfOv('{{ p.id }}', this.dataset.fn)" data-fn="{{ p.filename }}">👁 View</button></td>
-            <td>{% if current_user_role == 'admin' %}
-              <form method="post" action="/model-pdf/{{ p.id }}/delete" onsubmit="return confirm('Ye PDF delete karni hai?')">
+            <td style="word-break:break-word;line-height:1.45"><b>{{ p.model_name }}</b></td>
+            <td style="word-break:break-word;line-height:1.45;color:#334155">{{ p.filename }}</td>
+            <td style="white-space:nowrap">{{ (p.sz or 0) // 1024 }} KB</td>
+            <td style="white-space:nowrap">{{ p.uploaded_on or '' }}</td>
+            <td style="white-space:nowrap"><button type="button" class="btn btn-outline btn-xs" onclick="openPdfOv('{{ p.id }}', this.dataset.fn)" data-fn="{{ p.filename }}">👁 View</button></td>
+            <td style="white-space:nowrap">{% if current_user_role == 'admin' %}
+              <button type="button" class="btn btn-outline btn-xs" title="Doosre model se link karo"
+                      onclick="openPdfEdit({{ p.id }}, {{ p.model_id }}, this.dataset.fn)" data-fn="{{ p.filename }}">✎</button>
+              <form method="post" action="/model-pdf/{{ p.id }}/delete" style="display:inline" onsubmit="return confirm('Ye PDF delete karni hai?')">
                 <button class="btn btn-outline btn-xs" type="submit">🗑</button>
               </form>{% endif %}</td>
           </tr>
@@ -79,6 +87,23 @@
 
 </div>
 
+<div id="pdfEditOv" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(15,23,42,.55)" onclick="if(event.target===this)this.style.display='none'">
+  <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:min(460px,92vw);background:#fff;border-radius:14px;box-shadow:0 24px 70px rgba(0,0,0,.4);overflow:hidden">
+    <div style="padding:12px 16px;font-weight:800;background:#f8fafc;border-bottom:1px solid #e2e8f0;font-size:13.5px" id="pdfEditTitle">✎ PDF Link Edit</div>
+    <form method="post" action="" id="pdfEditForm" style="padding:16px">
+      <div style="font-size:12px;color:#64748b;margin-bottom:10px">Ye PDF kis <b>Finished Product</b> se link ho? Chuno — Cutlist + Products me wahin dikhegi.</div>
+      <select name="model_id" id="pdfEditSel" required style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:13px;margin-bottom:14px">
+        <option value="">— Finished Product chuno —</option>
+        {% for m in models %}<option value="{{ m.id }}">{{ m.name }}</option>{% endfor %}
+      </select>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button type="button" class="btn btn-outline btn-sm" onclick="document.getElementById('pdfEditOv').style.display='none'">Cancel</button>
+        <button type="submit" class="btn btn-sm" style="background:var(--ui-brand,#f59e0b);color:#fff">💾 Link Save karo</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <div id="pdfOv" style="display:none;position:fixed;inset:0;z-index:99998;background:rgba(15,23,42,.62)" onclick="if(event.target===this)this.style.display='none'">
   <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:min(900px,94vw);height:min(700px,90vh);background:#fff;border-radius:14px;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 24px 70px rgba(0,0,0,.4)">
     <div style="padding:10px 14px;font-weight:800;display:flex;gap:10px;align-items:center;background:#f8fafc;border-bottom:1px solid #e2e8f0">
@@ -90,6 +115,21 @@
   </div>
 </div>
 <script>
+function openPdfEdit(id, curModelId, name){
+  var f = document.getElementById('pdfEditForm');
+  f.action = '/model-pdf/' + id + '/edit';
+  var tk = new URLSearchParams(window.location.search).get('token');
+  if (!tk) { try { tk = localStorage.getItem('jcToken'); } catch (e) {} }
+  if (tk) {
+    var h = document.createElement('input');
+    h.type = 'hidden'; h.name = 'token'; h.value = tk;
+    f.appendChild(h);
+  }
+  document.getElementById('pdfEditTitle').textContent = '✎ ' + (name || 'PDF') + ' — model link edit';
+  var sel = document.getElementById('pdfEditSel');
+  sel.value = curModelId ? String(curModelId) : '';
+  document.getElementById('pdfEditOv').style.display = 'block';
+}
 function openPdfOv(id, name){
   var t = new URLSearchParams(window.location.search).get('token');
   if (!t) { try { t = localStorage.getItem('jcToken'); } catch (e) {} }

@@ -3391,6 +3391,29 @@ def model_pdf_view(pdf_id):
         return "PDF kholne me server-dikkat aayi (log me likha gaya) — dobara upload try karo.", 500
 
 
+@app.route("/model-pdf/<int:pdf_id>/edit", methods=["POST"])
+@login_required
+@admin_required
+def model_pdf_edit(pdf_id):
+    """v3.39 — PDF ko doosre Finished Product se link karo (move/re-link)."""
+    _pdf_ensure()
+    row = db.query("SELECT id, filename FROM model_pdfs WHERE id=?", (pdf_id,), one=True)
+    if not row:
+        flash("PDF nahi mili (delete ho gayi?).", "error")
+        return redirect_with_token(url_for("pdf_library"))
+    try:
+        mid = int(request.form.get("model_id") or 0)
+    except ValueError:
+        mid = 0
+    m = db.query("SELECT id, name FROM product_models WHERE id=?", (mid,), one=True) if mid else None
+    if not m:
+        flash("Naya model chuno — PDF kis Finished Product se link karni hai?", "error")
+        return redirect_with_token(url_for("pdf_library"))
+    db.execute("UPDATE model_pdfs SET model_id=?, model_name=? WHERE id=?", (m["id"], m["name"], pdf_id))
+    flash("'" + (row["filename"] or "PDF") + "' ab " + m["name"] + " se link ho gayi — Cutlist + Products me wahin dikhegi.", "success")
+    return redirect_with_token(url_for("pdf_library"))
+
+
 @app.route("/model-pdf/<int:pdf_id>/delete", methods=["POST"])
 @login_required
 @admin_required
