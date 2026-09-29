@@ -330,10 +330,16 @@ function pmThickRate(){
     })();
     </script>
   </div>
-  <div class="panel-body" style="padding:0;overflow-x:auto">
-    <table id="modelsTable">
+  <div class="panel-body" style="padding:0">
+    <table id="modelsTable" style="width:100%;table-layout:fixed">
+      <colgroup>
+        <col style="width:13%"><col style="width:6.5%"><col style="width:8%"><col style="width:5.5%">
+        <col style="width:7%"><col style="width:4%"><col style="width:12.5%"><col style="width:4.5%">
+        <col style="width:4.5%"><col style="width:4.5%"><col style="width:8%"><col style="width:6%">
+        <col style="width:7%"><col style="width:8.5%">
+      </colgroup>
       <thead>
-        <tr><th>Model</th><th>HSN/SAC</th><th>PCB / PARTY CODES</th><th>Sheet Thickness</th><th>PCB (mm)</th><th>PCBs</th><th>PANEL & CUTTING PANEL</th><th class="t-right">PCS/Panel</th><th class="t-right">Panels/Sheet</th><th class="t-right">FG Stock</th><th class="t-right">Current / Last Price</th><th>Created</th><th>PDF</th><th></th></tr>
+        <tr><th>Model</th><th>HSN/SAC</th><th>PCB / PARTY CODES</th><th>Sheet Thickness</th><th>PCB (mm)</th><th>PCBs</th><th>PANEL &amp; CUTTING PANEL</th><th class="t-right">PCS/Panel</th><th class="t-right">Panels/Sheet</th><th class="t-right">FG Stock</th><th class="t-right">Current / Last Price</th><th>Created</th><th>PDF</th><th></th></tr>
       </thead>
       <tbody>
         {% for m in models %}
@@ -569,6 +575,10 @@ function rcCancel(id, rate){
 <style>
 /* FINISHED PRODUCT table header — CSS fallback (container overflow ke andar kam kar sakta hai,
    isliye neeche JS clone se pakka freeze kiya hai) */
+/* v3.41 — table ek page me fit: lamba text wrap hota hai, row vertically badhti hai */
+#modelsTable td { word-break:break-word; overflow-wrap:anywhere; line-height:1.45;
+  vertical-align:top; padding:8px; font-size:12px; white-space:normal; }
+#modelsTable thead th { white-space:normal; }
 #modelsTable thead th {
   position: sticky;
   top: 0;
