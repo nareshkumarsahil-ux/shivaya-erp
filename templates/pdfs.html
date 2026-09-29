@@ -40,7 +40,8 @@
   </div>
 
   <div class="panel">
-    <div class="panel-head"><b>🗂️ Saari PDFs ({{ rows|length }})</b></div>
+    <div class="panel-head"><b>🗂️ Saari PDFs ({{ rows|length }})</b>
+      <span style="font-size:11.5px"><b style="color:#16a34a">● Green</b> = Finished Product se LINK hai &nbsp;·&nbsp; <b style="color:#dc2626">● Red</b> = link nahi (✎ se link karo)</span></div>
     <div style="padding:10px 14px;border-bottom:1px solid var(--border);background:#fbfaf7">
       <form method="get" action="/pdfs" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
         <input type="hidden" name="token" value="{{ request.args.get('token','') }}" id="pdfTok">
@@ -64,8 +65,12 @@
         </tr></thead>
         <tbody>
           {% for p in rows %}
+          {% set p_linked = p.model_id and (models | selectattr('id', 'equalto', p.model_id) | list | length > 0) %}
           <tr>
-            <td style="word-break:break-word;line-height:1.45"><b>{{ p.model_name }}</b></td>
+            <td style="word-break:break-word;line-height:1.45">
+              {% if p_linked %}<b style="color:#16a34a" title="Finished Product se link ho gayi — Cutlist + Products me dikhegi">● {{ p.model_name }}</b>
+              {% else %}<b style="color:#dc2626" title="Kisi Finished Product se link NAHI — ✎ se link karo">● {{ p.model_name or '(model delete ho gaya)' }}</b>{% endif %}
+            </td>
             <td style="word-break:break-word;line-height:1.45;color:#334155">{{ p.filename }}</td>
             <td style="white-space:nowrap">{{ (p.sz or 0) // 1024 }} KB</td>
             <td style="white-space:nowrap">{{ p.uploaded_on or '' }}</td>

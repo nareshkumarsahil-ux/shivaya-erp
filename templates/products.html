@@ -304,7 +304,25 @@ function pmThickRate(){
 </div>
 
 <div class="panel">
-  <div class="panel-head"><h3>🗂️ Saved Models ({{ models|length }}{% if total_models and total_models != models|length %} of {{ total_models }}{% endif %})</h3></div>
+  <div class="panel-head"><h3>🗂️ Saved Models ({{ models|length }}{% if total_models and total_models != models|length %} of {{ total_models }}{% endif %})</h3>
+    <div style="position:relative" id="colSetWrap">
+      <button type="button" class="btn btn-outline btn-sm" onclick="var d=document.getElementById('colSetDrop');d.style.display=d.style.display==='none'?'block':'none'">⚙ Columns</button>
+      <div id="colSetDrop" style="display:none;position:absolute;right:0;top:100%;z-index:999;background:#fff;border:1px solid var(--border);border-radius:10px;box-shadow:0 12px 34px rgba(0,0,0,.2);padding:10px 12px;width:230px;max-height:340px;overflow-y:auto">
+        <div style="font-size:10.5px;font-weight:800;letter-spacing:1px;color:#94a3b8;margin-bottom:6px">COLUMN DIKHAO / CHUPAO</div>
+        <label style="display:flex;gap:7px;align-items:center;font-size:12.5px;padding:3px 0;cursor:pointer"><input type="checkbox" class="colTog" data-col="0" checked> Model</label>
+        <label style="display:flex;gap:7px;align-items:center;font-size:12.5px;padding:3px 0;cursor:pointer"><input type="checkbox" class="colTog" data-col="1" checked> HSN/SAC</label>
+        <label style="display:flex;gap:7px;align-items:center;font-size:12.5px;padding:3px 0;cursor:pointer"><input type="checkbox" class="colTog" data-col="2" checked> Thickness</label>
+        <label style="display:flex;gap:7px;align-items:center;font-size:12.5px;padding:3px 0;cursor:pointer"><input type="checkbox" class="colTog" data-col="3" checked> PCB &amp; PANEL</label>
+        <label style="display:flex;gap:7px;align-items:center;font-size:12.5px;padding:3px 0;cursor:pointer"><input type="checkbox" class="colTog" data-col="4" checked> FG Stock</label>
+        <label style="display:flex;gap:7px;align-items:center;font-size:12.5px;padding:3px 0;cursor:pointer"><input type="checkbox" class="colTog" data-col="5" checked> Price</label>
+        <label style="display:flex;gap:7px;align-items:center;font-size:12.5px;padding:3px 0;cursor:pointer"><input type="checkbox" class="colTog" data-col="6" checked> Created</label>
+        <label style="display:flex;gap:7px;align-items:center;font-size:12.5px;padding:3px 0;cursor:pointer"><input type="checkbox" class="colTog" data-col="7" checked> PDF</label>
+        <label style="display:flex;gap:7px;align-items:center;font-size:12.5px;padding:3px 0;cursor:pointer"><input type="checkbox" class="colTog" data-col="8" checked> Actions</label>
+        <button type="button" class="btn btn-outline btn-xs" style="width:100%;margin-top:8px" onclick="colReset()">↺ Sab wapas</button>
+        <div style="font-size:10px;color:#94a3b8;margin-top:6px">Setting yaad rehti hai (isi browser me)</div>
+      </div>
+    </div>
+  </div>
   <div style="padding:10px 14px;border-bottom:1px solid var(--border);background:#fbfaf7">
     <form method="get" action="/products" id="fltForm" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
       <input type="hidden" name="token" value="{{ request.args.get('token','') }}" id="fltTok">
@@ -333,49 +351,39 @@ function pmThickRate(){
   <div class="panel-body" style="padding:0">
     <table id="modelsTable" style="width:100%;table-layout:fixed">
       <colgroup>
-        <col style="width:13%"><col style="width:6.5%"><col style="width:8%"><col style="width:5.5%">
-        <col style="width:7%"><col style="width:4%"><col style="width:12.5%"><col style="width:4.5%">
-        <col style="width:4.5%"><col style="width:4.5%"><col style="width:8%"><col style="width:6%">
-        <col style="width:7%"><col style="width:8.5%">
+        <col style="width:14.5%"><col style="width:7%"><col style="width:6%"><col style="width:26%">
+        <col style="width:6.5%"><col style="width:10.5%"><col style="width:8.5%"><col style="width:8%">
+        <col style="width:13%">
       </colgroup>
       <thead>
-        <tr><th>Model</th><th>HSN/SAC</th><th>PCB / PARTY CODES</th><th>Sheet Thickness</th><th>PCB (mm)</th><th>PCBs</th><th>PANEL &amp; CUTTING PANEL</th><th class="t-right">PCS/Panel</th><th class="t-right">Panels/Sheet</th><th class="t-right">FG Stock</th><th class="t-right">Current / Last Price</th><th>Created</th><th>PDF</th><th></th></tr>
+        <tr><th>Model (Code + Type)</th><th>HSN/SAC</th><th>Thick</th><th>PCB &amp; PANEL</th><th class="t-right">FG Stock</th><th class="t-right">Current / Last Price</th><th>Created</th><th>PDF</th><th></th></tr>
       </thead>
       <tbody>
         {% for m in models %}
         <tr>
-          <td><b>{{ m.name }}</b>{% if m.attachment_data %}<span title="{{ m.attachment_name or 'attachment hai' }}" style="cursor:default"> 📎</span>{% endif %}{% if m.party %}<div class="muted" style="font-size:10px">👤 {{ m.party }}</div>{% endif %}{% if m.note %}<div class="muted" style="font-size:10px">📝 {{ m.note }}</div>{% endif %}</td>
+          <td>
+            {% set nt41 = (m.note or '')|upper %}
+            {% if m.pcb_code %}<div style="margin-bottom:3px"><span class="badge b-blue" style="font-size:10px">{{ m.pcb_code }}</span>{% if 'TOOL' in nt41 %} <span class="badge" style="background:#7c3aed;color:#fff;font-size:9px">TOOL</span>{% elif 'CNC' in nt41 %} <span class="badge" style="background:#0e7490;color:#fff;font-size:9px">CNC</span>{% endif %}</div>
+            {% else %}<div style="margin-bottom:3px"><b style="font-size:11.5px">{{ m.name }}</b></div>{% endif %}
+            {% if m.attachment_data %}<span title="{{ m.attachment_name or 'attachment hai' }}" style="cursor:default;font-size:10px">📎</span>{% endif %}
+          </td>
           <td class="mono small">{{ m.hsn or '85340000' }}</td>
-          <td class="mono small" style="white-space:nowrap">
-            {% if m.model_code %}<div><span class="badge" style="background:#192338;color:#fff;font-size:9px">NO: {{ m.model_code }}</span></div>{% endif %}
-            {% if m.pcb_code %}<div><span class="badge b-blue" style="font-size:9px">PCB: {{ m.pcb_code }}</span></div>{% endif %}
-            {% if m.party_code %}<div><span class="badge b-amber" style="font-size:9px">PTY: {{ m.party_code }}</span></div>{% endif %}
-            {% if m.party_name %}<div class="muted" style="font-size:10px">👤 {{ m.party_name }}</div>{% endif %}
-            {% if not m.model_code and not m.pcb_code and not m.party_code and not m.party_name %}<span class="muted">—</span>{% endif %}
-          </td>
           <td class="small mono" style="white-space:nowrap">{% if m.sheet_thickness %}<span class="badge b-blue">{{ m.sheet_thickness }}</span>{% else %}<span class="muted">—</span>{% endif %}</td>
-          <td class="mono small">{{ m.pcb_len|gfmt }}×{{ m.pcb_w|gfmt }}</td>
-          <td class="mono small">{{ m.pcbs_x }}×{{ m.pcbs_y }}</td>
-          <td class="mono small" style="white-space:nowrap">
-            {% set pl = m.panel_len|gfmt %}{% set pw = m.panel_w|gfmt %}
-            <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:7px;padding:3px 8px;margin:1px 0;display:inline-block">
-              <span style="font-size:9px;font-weight:800;color:#1d4ed8">PANEL</span>
-              <b style="color:#1d4ed8">{{ pl }}×{{ pw }}</b>
-              <span class="muted" style="font-size:10px">· {{ m.pcbs_x }}×{{ m.pcbs_y }} = <b>{{ m.pcs_panel }} PCB</b></span>
+          <td>
+            <div style="white-space:nowrap"><b>{{ m.pcb_len|gfmt }}×{{ m.pcb_w|gfmt }}</b> MM
+              <span class="badge b-blue" style="font-size:8.5px">{% if m.shape == 'round' %}RD{% elif m.shape == 'square' %}SQ{% else %}RECT{% endif %}</span>
+              <b style="color:#334155">— 1 PC</b>
             </div>
-            {% if m.cutting_len %}
-            <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:7px;padding:3px 8px;margin:1px 0;display:inline-block">
-              <span style="font-size:9px;font-weight:800;color:#166534">CUTTING PANEL</span>
-              <b style="color:#166534">{{ m.cutting_len|gfmt }}×{{ m.cutting_w|gfmt }}</b>
-              <span class="muted" style="font-size:10px">· {{ m.gang_x }}×{{ m.gang_y }} = <b>{{ (m.pcs_panel or 0) * (m.gang_x or 1) * (m.gang_y or 1) }} PCS</b></span>
-            </div>
-            {% else %}
-            <div class="muted" style="font-size:10px">gang nahi (single panel)</div>
+            {% if m.pcbs_x and m.pcbs_y and (m.pcbs_x|int > 1 or m.pcbs_y|int > 1) %}
+            <div style="white-space:nowrap;color:#1d4ed8;font-weight:700;font-size:11.5px">{{ m.pcbs_x }}×{{ m.pcbs_y }} = {{ m.panel_len|gfmt }}×{{ m.panel_w|gfmt }}MM <span style="font-weight:800">— {{ m.pcs_panel }} PC</span></div>
             {% endif %}
-            {% if m.note %}<div class="muted" style="font-size:10px">🔧 {{ m.note }}</div>{% endif %}
+            {% if m.cutting_len %}
+            <div style="white-space:nowrap;color:#166534;font-weight:700;font-size:11.5px" title="Sheet cutting wala panel (gang)">PANEL: {{ m.cutting_len|gfmt }}×{{ m.cutting_w|gfmt }}MM <span style="font-weight:800">— {{ (m.pcs_panel or 0) * (m.gang_x or 1) * (m.gang_y or 1) }} PC</span></div>
+            {% if m.panels_sheet %}
+            <div class="muted" style="font-size:9.5px;white-space:nowrap">sheet me {{ m.panels_sheet }} panel · gang {{ m.gang_x }}×{{ m.gang_y }}</div>
+            {% endif %}
+            {% endif %}
           </td>
-          <td class="t-right mono">{{ m.pcs_panel }}</td>
-          <td class="t-right mono">{{ m.panels_sheet }}</td>
           <td class="t-right"><span class="badge {{'b-green' if (m.fg_stock or 0) > 0 else 'b-gray'}}">{{ m.fg_stock or 0 }} PCS</span></td>
           <td class="t-right mono small" style="white-space:nowrap">
             <b style="color:#166534">{% if m.pcb_price %}₹{{ m.pcb_price|inr0 }}{% else %}—{% endif %}</b>
@@ -589,6 +597,49 @@ function rcCancel(id, rate){
 #modelsHeadClone th { background: #fbfaf7; }
 </style>
 <script>
+/* ---- v3.44 COLUMN ENABLE/DISABLE (localStorage persist) ---- */
+(function(){
+  var table = document.getElementById('modelsTable');
+  if (!table) return;
+  var KEY = 'fpColsV1';
+  function cols(){
+    try { return JSON.parse(localStorage.getItem(KEY) || '{}'); } catch(e){ return {}; }
+  }
+  function apply(){
+    var st = cols();
+    var thead = table.querySelectorAll('thead th');
+    for (var i = 0; i < thead.length; i++) {
+      var off = st[String(i)] === false;
+      for (var r = 0; r < table.tBodies.length; r++) {
+        var trs = table.tBodies[r].rows;
+        for (var j = 0; j < trs.length; j++) if (trs[j].cells[i]) trs[j].cells[i].style.display = off ? 'none' : '';
+      }
+      thead[i].style.display = off ? 'none' : '';
+    }
+    var cg = table.querySelector('colgroup');
+    if (cg) { var cs = cg.children; for (var k = 0; k < cs.length; k++) cs[k].style.display = (st[String(k)] === false) ? 'none' : ''; }
+  }
+  window.colReset = function(){
+    try { localStorage.removeItem(KEY); } catch(e){}
+    document.querySelectorAll('.colTog').forEach(function(cb){ cb.checked = true; });
+    apply();
+  };
+  document.querySelectorAll('.colTog').forEach(function(cb){
+    var st = cols();
+    if (st[String(cb.dataset.col)] === false) cb.checked = false;
+    cb.addEventListener('change', function(){
+      var s2 = cols();
+      s2[String(cb.dataset.col)] = cb.checked;
+      try { localStorage.setItem(KEY, JSON.stringify(s2)); } catch(e){}
+      apply();
+    });
+  });
+  apply();
+  document.addEventListener('click', function(e){
+    var w = document.getElementById('colSetWrap');
+    if (w && !w.contains(e.target)) { var d = document.getElementById('colSetDrop'); if (d) d.style.display = 'none'; }
+  });
+})();
 /* ---- FINISHED PRODUCT header FREEZE (fixed clone — window scroll + panel scroll dono par) ----
    .panel-body ka overflow-x:auto CSS sticky ko tod deta hai, isliye header ka fixed clone
    banate hain jo scroll karte hi topbar ke neeche chipak jata hai. */
