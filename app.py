@@ -3265,11 +3265,14 @@ def ui_brand():
 
 
 def _pdf_ensure():
-    """v3.35 — Final PDFs per model (BLOB me, Vercel read-only FS ke liye)."""
+    """v3.35/38 — Final PDFs per model. data=BLOB (local) + data64=base64 TEXT (Turso-safe)."""
     db.execute("""CREATE TABLE IF NOT EXISTS model_pdfs (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         model_id INTEGER, model_name TEXT, filename TEXT,
-        data BLOB, uploaded_on TEXT)""")
+        data BLOB, uploaded_on TEXT, data64 TEXT DEFAULT '')""")
+    _cols = [r["name"] for r in db.query("PRAGMA table_info(model_pdfs)")]
+    if "data64" not in _cols:
+        db.execute("ALTER TABLE model_pdfs ADD COLUMN data64 TEXT DEFAULT ''")
 
 
 @app.route("/pdfs")
@@ -3329,20 +3332,63 @@ def model_pdf_upload():
     if not m:
         flash("Model nahi mila.", "error")
         return redirect_with_token(url_for("pdf_library"))
-    db.execute("INSERT INTO model_pdfs (model_id, model_name, filename, data, uploaded_on) VALUES (?,?,?,?,?)",
-               (mid, m["name"], file.filename, data, _today_ist().isoformat()))
+    db.execute("INSERT INTO model_pdfs (model_id, model_name, filename, data, uploaded_on, data64) VALUES (?,?,?,?,?,?)",
+               (mid, m["name"], file.filename, data, _today_ist().isoformat(),
+                base64.b64encode(data).decode("ascii")))
     flash("PDF '" + file.filename + "' \u2192 " + m["name"] + " save ho gayi (Cutlist + Products + Library teeno jagah dikhegi).", "success")
     return redirect_with_token(url_for("pdf_library"))
+
+
+def _pdf_bytes(raw):
+    """v3.38 — PDF bytes ko kisi bhi stored shape se nikaalo (bytes/str/base64/json-envelope)."""
+    if raw is None:
+        return b""
+    if isinstance(raw, (bytes, bytearray, memoryview)):
+        return bytes(raw)
+    if isinstance(raw, str):
+        t = raw.strip()
+        if t.startswith("%PDF"):
+            return t.encode("latin-1", "ignore")
+        try:
+            b = base64.b64decode(t, validate=False)
+            if b.startswith(b"%PDF"):
+                return b
+        except Exception:
+            pass
+        try:
+            j = json.loads(t)
+            if isinstance(j, dict) and j.get("base64"):
+                return base64.b64decode(j["base64"])
+            if isinstance(j, str) and j.startswith("%PDF"):
+                return j.encode("latin-1", "ignore")
+        except Exception:
+            pass
+    return b""
 
 
 @app.route("/model-pdf/<int:pdf_id>/view")
 @login_required
 def model_pdf_view(pdf_id):
-    r = db.query("SELECT filename, data FROM model_pdfs WHERE id=?", (pdf_id,), one=True)
-    if not r or not r["data"]:
-        return "PDF nahi mili.", 404
-    return Response(bytes(r["data"]), mimetype="application/pdf",
-                    headers={"Content-Disposition": "inline; filename=\"" + (r["filename"] or "model.pdf") + "\""})
+    try:
+        r = db.query("SELECT filename, data, data64 FROM model_pdfs WHERE id=?", (pdf_id,), one=True)
+        if not r:
+            return "PDF nahi mili (delete ho gayi?).", 404
+        raw = _pdf_bytes(r["data64"]) if r["data64"] else _pdf_bytes(r["data"])
+        if not raw:
+            raw = _pdf_bytes(r["data"])
+        if not raw:
+            return "PDF data khali/adhoora store hua — isko delete karke dobara upload karo.", 404
+        fname = (r["filename"] or "model.pdf").replace('"', "").replace("\r", "").replace("\n", "")
+        try:
+            fname.encode("ascii")
+            cd = "inline; filename=\"" + fname + "\""
+        except UnicodeEncodeError:
+            from urllib.parse import quote as _q
+            cd = "inline; filename*=UTF-8''" + _q(fname)
+        return Response(raw, mimetype="application/pdf", headers={"Content-Disposition": cd})
+    except Exception as e:
+        app.logger.error("PDF view fail id=%s: %r", pdf_id, e)
+        return "PDF kholne me server-dikkat aayi (log me likha gaya) — dobara upload try karo.", 500
 
 
 @app.route("/model-pdf/<int:pdf_id>/delete", methods=["POST"])
