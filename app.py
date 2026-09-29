@@ -181,6 +181,14 @@ def inr_filter(value):
         return "₹0"
 
 
+@app.template_filter("nosize")
+def nosize_filter(value):
+    # v3.32 — PI/Invoice item text ke aakhir se single-PCB size hatao ("77×77mm", "0×0mm", "82.5×83.4mm").
+    # Sirf trailing "N×N mm" pattern cut hota hai — "BRACKET 50mm" jaise naam untouched rehte hain.
+    return re.sub(r"\s*\d+(?:\.\d+)?\s*[\u00d7xX]\s*\d+(?:\.\d+)?\s*mm\s*$", "", str(value or ""),
+                  flags=re.IGNORECASE)
+
+
 @app.template_filter("dash")
 def dash_filter(value):
     return value or "—"
@@ -1978,11 +1986,21 @@ def cutlist():
             disp_pl, disp_pw = result["cutting_len"], result["cutting_w"]
         else:
             disp_pl, disp_pw = result["panel_len"], result["panel_w"]
+    _cl_pdfs = []
+    try:
+        _cl_mid = int(load_model_id or 0)
+    except (TypeError, ValueError):
+        _cl_mid = 0
+    if _cl_mid:
+        _pdf_ensure()
+        _cl_pdfs = db.query("SELECT id, model_name, filename, uploaded_on FROM model_pdfs "
+                            "WHERE model_id=? ORDER BY id DESC", (_cl_mid,))
     return render_template("cutlist.html", active="cutlist", fields=fields, pool_rows=pool_rows, result=result,
                            models=models, orders=orders, SHEET_PRESETS=SHEET_PRESETS,
                            svg_panel=svg_panel, svg_sheet=svg_sheet, gang_info=gang_info,
                            svg_gang_panel=svg_gang_panel, svg_sheet_layout=svg_sheet_layout,
-                           disp_pl=disp_pl, disp_pw=disp_pw, load_model_name=load_model_name)
+                           disp_pl=disp_pl, disp_pw=disp_pw, load_model_name=load_model_name,
+                           cl_pdfs=_cl_pdfs)
 
 
 # ---------------------------------------------------------------- finished products
@@ -2110,7 +2128,34 @@ def products():
         except Exception as e:
             flash(f"Save failed: {e}", "error")
         return redirect_with_token(url_for("products"))
-    rows = db.query("SELECT m.*, o.order_no FROM product_models m LEFT JOIN orders o ON o.id=m.order_id ORDER BY m.id DESC")
+    # v3.31 — SEARCH + FILTERS: q (model/MODEL NO/order/note), party-wise, date-wise
+    flt_q = (request.args.get("q") or "").strip()
+    flt_party = (request.args.get("party") or "").strip()
+    flt_from = (request.args.get("from") or "").strip()
+    flt_to = (request.args.get("to") or "").strip()
+    _w, _prm = [], []
+    if flt_q:
+        _lk = "%" + flt_q + "%"
+        _w.append("(m.name LIKE ? OR IFNULL(m.model_code,'') LIKE ? OR IFNULL(o.order_no,'') LIKE ? "
+                  "OR IFNULL(m.note,'') LIKE ? OR IFNULL(m.pcb_code,'') LIKE ?)")
+        _prm += [_lk] * 5
+    if flt_party:
+        _w.append("IFNULL(m.party_name,'') = ?")
+        _prm.append(flt_party)
+    if flt_from:
+        _w.append("substr(IFNULL(m.created_on,''),1,10) >= ?")
+        _prm.append(flt_from)
+    if flt_to:
+        _w.append("substr(IFNULL(m.created_on,''),1,10) <= ?")
+        _prm.append(flt_to)
+    _sql = "SELECT m.*, o.order_no FROM product_models m LEFT JOIN orders o ON o.id=m.order_id"
+    if _w:
+        _sql += " WHERE " + " AND ".join(_w)
+    _sql += " ORDER BY m.id DESC"
+    rows = db.query(_sql, _prm)
+    total_models = db.query("SELECT COUNT(*) AS n FROM product_models", one=True)["n"]
+    party_opts = [r["party_name"] for r in
+                  db.query("SELECT DISTINCT party_name FROM product_models WHERE IFNULL(party_name,'')!='' ORDER BY party_name")]
     # v3.18 HSN sweep — koi bhi naya model (apply-order/import) bina HSN na rahe (PCB default 85340000)
     db.execute("UPDATE product_models SET hsn='85340000' WHERE hsn IS NULL OR hsn=''")
     # 3 queries -> 1 round trip (turso batch) — 12 alag calls ki jagah 2
@@ -2156,13 +2201,18 @@ def products():
         else:
             ph_rows = db.query("SELECT * FROM price_history WHERE model_name=? ORDER BY id DESC LIMIT 15",
                                (edit_model["name"],))
-    return render_template("products.html", active="products", models=rows,
+    _pdf_ensure()
+    pdf_counts = {r["model_id"]: r["n"] for r in
+                  db.query("SELECT model_id, COUNT(*) AS n FROM model_pdfs GROUP BY model_id")}
+    return render_template("products.html", active="products", models=rows, pdf_counts=pdf_counts,
                            bom_map=bom_map, history=history,
                            show_add=request.args.get("add"),
                            edit_model=edit_model,
                            lp_map=lp_map, ph_rows=ph_rows,
                            rates=db.query("SELECT * FROM thickness_rates ORDER BY material, thickness"),
-                           import_preview=_import_preview(request.args.get("import_batch")))
+                           import_preview=_import_preview(request.args.get("import_batch")),
+                           flt_q=flt_q, flt_party=flt_party, flt_from=flt_from, flt_to=flt_to,
+                           party_opts=party_opts, total_models=total_models)
 
 
 # ---------------------------------------------------------------- import (excel/csv)
@@ -3212,6 +3262,97 @@ def ui_brand():
         db.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('ui_theme', ?)", (color,))
     nxt = request.form.get("next") or url_for("settings")
     return redirect(nxt)
+
+
+def _pdf_ensure():
+    """v3.35 — Final PDFs per model (BLOB me, Vercel read-only FS ke liye)."""
+    db.execute("""CREATE TABLE IF NOT EXISTS model_pdfs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        model_id INTEGER, model_name TEXT, filename TEXT,
+        data BLOB, uploaded_on TEXT)""")
+
+
+@app.route("/pdfs")
+@login_required
+def pdf_library():
+    _pdf_ensure()
+    q = (request.args.get("q") or "").strip()
+    mid = (request.args.get("model") or "").strip()
+    _w, _p = [], []
+    if q:
+        _w.append("(IFNULL(model_name,'') LIKE ? OR IFNULL(filename,'') LIKE ?)")
+        _p += ["%" + q + "%"] * 2
+    if mid:
+        _w.append("model_id=?")
+        _p.append(mid)
+    _sql = ("SELECT id, model_id, model_name, filename, LENGTH(data) AS sz, uploaded_on FROM model_pdfs")
+    if _w:
+        _sql += " WHERE " + " AND ".join(_w)
+    _sql += " ORDER BY id DESC"
+    return render_template("pdfs.html", active="pdfs", rows=db.query(_sql, _p),
+                           models=db.query("SELECT id, name FROM product_models ORDER BY name"),
+                           q=q, sel_model=mid, add_focus=request.args.get("add"))
+
+
+@app.route("/model-pdf", methods=["POST"])
+@login_required
+@admin_required
+def model_pdf_upload():
+    _pdf_ensure()
+    try:
+        mid = int(request.form.get("model_id") or 0)
+    except ValueError:
+        mid = 0
+    # v3.36 — NAYA MODEL: naam likha hai to model_id ki zaroorat nahi
+    new_name = (request.form.get("new_model") or "").strip()
+    if new_name:
+        existing = db.query("SELECT id, name FROM product_models WHERE LOWER(name)=LOWER(?)", (new_name,), one=True)
+        if existing:
+            mid = existing["id"]
+            flash("Model '" + existing["name"] + "' pehle se tha — usi me PDF save ki.", "success")
+        else:
+            mid = db.execute("INSERT INTO product_models (name, hsn, created_on) VALUES (?,?,?)",
+                             (new_name, "85340000", _today_ist().isoformat()))
+            flash("Naya model '" + new_name + "' ban gaya (HSN 85340000 default) — Finished Products me bhi dikhega.", "success")
+    file = request.files.get("pdf_file")
+    if not mid or file is None or not file.filename:
+        flash("Model chuno YA naya model ka naam likho + PDF file dono chahiye.", "error")
+        return redirect_with_token(url_for("pdf_library"))
+    if not file.filename.lower().endswith(".pdf"):
+        flash("Sirf PDF file upload karo (.pdf).", "error")
+        return redirect_with_token(url_for("pdf_library"))
+    data = file.read()
+    if len(data) > 4 * 1024 * 1024:
+        flash("PDF 4MB se chhoti honi chahiye (server limit).", "error")
+        return redirect_with_token(url_for("pdf_library"))
+    m = db.query("SELECT name FROM product_models WHERE id=?", (mid,), one=True)
+    if not m:
+        flash("Model nahi mila.", "error")
+        return redirect_with_token(url_for("pdf_library"))
+    db.execute("INSERT INTO model_pdfs (model_id, model_name, filename, data, uploaded_on) VALUES (?,?,?,?,?)",
+               (mid, m["name"], file.filename, data, _today_ist().isoformat()))
+    flash("PDF '" + file.filename + "' \u2192 " + m["name"] + " save ho gayi (Cutlist + Products + Library teeno jagah dikhegi).", "success")
+    return redirect_with_token(url_for("pdf_library"))
+
+
+@app.route("/model-pdf/<int:pdf_id>/view")
+@login_required
+def model_pdf_view(pdf_id):
+    r = db.query("SELECT filename, data FROM model_pdfs WHERE id=?", (pdf_id,), one=True)
+    if not r or not r["data"]:
+        return "PDF nahi mili.", 404
+    return Response(bytes(r["data"]), mimetype="application/pdf",
+                    headers={"Content-Disposition": "inline; filename=\"" + (r["filename"] or "model.pdf") + "\""})
+
+
+@app.route("/model-pdf/<int:pdf_id>/delete", methods=["POST"])
+@login_required
+@admin_required
+def model_pdf_delete(pdf_id):
+    _pdf_ensure()
+    db.execute("DELETE FROM model_pdfs WHERE id=?", (pdf_id,))
+    flash("PDF delete ho gayi.", "success")
+    return redirect_with_token(url_for("pdf_library"))
 
 
 @app.route("/settings")

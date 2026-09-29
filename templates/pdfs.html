@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% block title %}PDF Library{% endblock %}
+{% block page_title %}📄 PDF Library — Final PDFs{% endblock %}
+{% block content %}
+<div style="max-width:980px">
+
+  <div class="panel">
+    <div class="panel-head"><b>⬆️ Final PDF Upload — kisi model ke liye</b>
+      <span style="font-size:12px;color:#8a8f98">PDF model se link hogi — Cutlist + Finished Products me bhi dikhegi</span></div>
+    <div style="padding:18px">
+      {% if current_user_role == 'admin' %}
+      <form method="post" action="/model-pdf" enctype="multipart/form-data" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center" onsubmit="return pdfUploadOk(this)">
+        <select name="model_id" id="pdfModelSel" style="flex:1;min-width:200px;padding:9px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px">
+          <option value="">— Model chuno (jaise SCPL-406) —</option>
+          {% for m in models %}<option value="{{ m.id }}" {{ 'selected' if sel_model == m.id|string }}>{{ m.name }}</option>{% endfor %}
+        </select>
+        <span class="muted" style="font-weight:800;font-size:12px">YA</span>
+        <input type="text" name="new_model" id="pdfNewModel" placeholder="➕ NAYA MODEL ka naam likho (jaise SCPL-999)"
+               style="flex:1;min-width:200px;padding:9px 12px;border:1.5px dashed var(--ui-brand,#f59e0b);border-radius:8px;font-size:13px;background:#fffdf5">
+        <input type="file" name="pdf_file" accept="application/pdf,.pdf" required {{ 'autofocus' if add_focus }}
+               style="flex:1;min-width:200px;padding:8px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:#fff">
+        <button class="btn" type="submit" style="background:var(--ui-brand,#f59e0b);color:#fff">⬆️ Upload PDF</button>
+      </form>
+      <div style="font-size:11.5px;color:#94a3b8;margin-top:8px">Sirf .pdf · max 4MB · dropdown se model chuno <b>YA</b> naya naam likho (naya model automatic ban jayega) · PDF Cutlist + Products + Library teeno jagah dikhegi</div>
+      <script>
+      function pdfUploadOk(f){
+        var nm = (f.querySelector('#pdfNewModel') || {}).value || '';
+        var sel = f.querySelector('#pdfModelSel');
+        if (!nm.trim() && (!sel || !sel.value)) {
+          alert('Model chuno YA naya model ka naam likho — kuch bhi to chahiye!');
+          return false;
+        }
+        return true;
+      }
+      </script>
+      {% else %}
+      <div style="font-size:13px;color:#8a8f98">🔒 PDF upload sirf admin kar sakta hai — aap dekh sakte ho.</div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head"><b>🗂️ Saari PDFs ({{ rows|length }})</b></div>
+    <div style="padding:10px 14px;border-bottom:1px solid var(--border);background:#fbfaf7">
+      <form method="get" action="/pdfs" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <input type="hidden" name="token" value="{{ request.args.get('token','') }}" id="pdfTok">
+        <input type="text" name="q" value="{{ q }}" placeholder="🔍 Model ya file name search (jaise SCPL-406)..."
+               style="flex:1;min-width:200px;padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:#fff">
+        {% if sel_model %}<input type="hidden" name="model" value="{{ sel_model }}">
+        <span style="font-size:12px;background:#eef0f3;border-radius:20px;padding:4px 12px">ek model ka filter — <a href="/pdfs{% if request.args.get('token') %}?token={{ request.args.get('token') }}{% endif %}">✕ hatao</a></span>{% endif %}
+        <button class="btn btn-sm" type="submit" style="background:var(--ui-brand,#f59e0b);color:#fff">🔍 Search</button>
+        <a class="btn btn-outline btn-sm" href="/pdfs{% if request.args.get('token') %}?token={{ request.args.get('token') }}{% endif %}">✕ Clear</a>
+      </form>
+      <script>(function(){var tk=new URLSearchParams(window.location.search).get('token');if(!tk){try{tk=localStorage.getItem('jcToken');}catch(e){}}var h=document.getElementById('pdfTok');if(tk&&h&&!h.value)h.value=tk;})();</script>
+    </div>
+    <div style="padding:0;overflow-x:auto">
+      <table>
+        <thead><tr><th>Model</th><th>File</th><th>Size</th><th>Uploaded</th><th></th><th></th></tr></thead>
+        <tbody>
+          {% for p in rows %}
+          <tr>
+            <td><b>{{ p.model_name }}</b></td>
+            <td>{{ p.filename }}</td>
+            <td>{{ (p.sz or 0) // 1024 }} KB</td>
+            <td>{{ p.uploaded_on or '' }}</td>
+            <td><button type="button" class="btn btn-outline btn-xs" onclick="openPdfOv('{{ p.id }}', this.dataset.fn)" data-fn="{{ p.filename }}">👁 View</button></td>
+            <td>{% if current_user_role == 'admin' %}
+              <form method="post" action="/model-pdf/{{ p.id }}/delete" onsubmit="return confirm('Ye PDF delete karni hai?')">
+                <button class="btn btn-outline btn-xs" type="submit">🗑</button>
+              </form>{% endif %}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="6" style="text-align:center;color:#8a8f98;padding:22px">Abhi koi PDF nahi — upar se upload karo. Phir ye Cutlist aur Finished Products me bhi dikhegi.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<div id="pdfOv" style="display:none;position:fixed;inset:0;z-index:99998;background:rgba(15,23,42,.62)" onclick="if(event.target===this)this.style.display='none'">
+  <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:min(900px,94vw);height:min(700px,90vh);background:#fff;border-radius:14px;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 24px 70px rgba(0,0,0,.4)">
+    <div style="padding:10px 14px;font-weight:800;display:flex;gap:10px;align-items:center;background:#f8fafc;border-bottom:1px solid #e2e8f0">
+      <span style="flex:1;font-size:13.5px" id="pdfOvName">📄 PDF</span>
+      <a id="pdfOvNew" href="#" target="_blank" rel="noopener" class="btn btn-outline btn-xs" style="text-decoration:none">↗ Nayi tab</a>
+      <button class="btn btn-outline btn-xs" type="button" onclick="document.getElementById('pdfOv').style.display='none';document.getElementById('pdfOvF').src='about:blank'">✕ Band karo</button>
+    </div>
+    <iframe id="pdfOvF" style="flex:1;border:0;width:100%;background:#fff"></iframe>
+  </div>
+</div>
+<script>
+function openPdfOv(id, name){
+  var t = new URLSearchParams(window.location.search).get('token');
+  if (!t) { try { t = localStorage.getItem('jcToken'); } catch (e) {} }
+  var u = '/model-pdf/' + id + '/view' + (t ? ('?token=' + encodeURIComponent(t)) : '');
+  document.getElementById('pdfOvName').textContent = '📄 ' + (name || 'Final PDF');
+  document.getElementById('pdfOvNew').href = u;
+  document.getElementById('pdfOvF').src = u;
+  document.getElementById('pdfOv').style.display = 'block';
+}
+</script>
+{% endblock %}

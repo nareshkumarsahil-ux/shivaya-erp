@@ -138,7 +138,7 @@
           {% for it in items %}
           <tr>
             <td>{{ loop.index }}</td>
-            <td class="d">{{ it.item or '&mdash;' }}<div class="sub">HSN/SAC: {{ it.hsn or '85340000' }}</div></td>
+            <td class="d">{{ it.item|nosize or '&mdash;' }}<div class="sub">HSN/SAC: {{ it.hsn or '85340000' }}</div></td>
             <td class="n">{% if it.rate %}{{ it.rate|gfmt }}{% else %}&mdash;{% endif %}</td>
             <td class="n">{{ it.qty or '&mdash;' }}</td>
             <td class="n"><b>{{ it.amount|inr }}</b></td>

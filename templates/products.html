@@ -304,11 +304,36 @@ function pmThickRate(){
 </div>
 
 <div class="panel">
-  <div class="panel-head"><h3>🗂️ Saved Models ({{ models|length }})</h3></div>
+  <div class="panel-head"><h3>🗂️ Saved Models ({{ models|length }}{% if total_models and total_models != models|length %} of {{ total_models }}{% endif %})</h3></div>
+  <div style="padding:10px 14px;border-bottom:1px solid var(--border);background:#fbfaf7">
+    <form method="get" action="/products" id="fltForm" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <input type="hidden" name="token" value="{{ request.args.get('token','') }}" id="fltTok">
+      <input type="text" name="q" value="{{ flt_q }}" placeholder="🔍 Model / MODEL NO / Order No / Note search..."
+             style="flex:1;min-width:200px;padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:#fff">
+      <select name="party" style="padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:#fff;max-width:190px">
+        <option value="">👥 Sab Parties</option>
+        {% for p in party_opts %}<option value="{{ p }}" {{ 'selected' if p == flt_party }}>{{ p }}</option>{% endfor %}
+      </select>
+      <input type="date" name="from" value="{{ flt_from }}" title="Date se" style="padding:7px 8px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:#fff">
+      <span class="muted small">se</span>
+      <input type="date" name="to" value="{{ flt_to }}" title="Date tak" style="padding:7px 8px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:#fff">
+      <span class="muted small">tak</span>
+      <button class="btn btn-sm" type="submit" style="background:var(--ui-brand,#f59e0b);color:#fff">🔍 Filter</button>
+      <a class="btn btn-outline btn-sm" href="/products{% if request.args.get('token') %}?token={{ request.args.get('token') }}{% endif %}">✕ Clear</a>
+    </form>
+    <script>
+    (function () {
+      var tk = new URLSearchParams(window.location.search).get('token');
+      if (!tk) { try { tk = localStorage.getItem('jcToken'); } catch (e) {} }
+      var h = document.getElementById('fltTok');
+      if (tk && h && !h.value) h.value = tk;
+    })();
+    </script>
+  </div>
   <div class="panel-body" style="padding:0;overflow-x:auto">
     <table id="modelsTable">
       <thead>
-        <tr><th>Model</th><th>HSN/SAC</th><th>PCB / PARTY CODES</th><th>Sheet Thickness</th><th>PCB (mm)</th><th>PCBs</th><th>PANEL & CUTTING PANEL</th><th class="t-right">PCS/Panel</th><th class="t-right">Panels/Sheet</th><th class="t-right">FG Stock</th><th class="t-right">Current / Last Price</th><th>Created</th><th></th></tr>
+        <tr><th>Model</th><th>HSN/SAC</th><th>PCB / PARTY CODES</th><th>Sheet Thickness</th><th>PCB (mm)</th><th>PCBs</th><th>PANEL & CUTTING PANEL</th><th class="t-right">PCS/Panel</th><th class="t-right">Panels/Sheet</th><th class="t-right">FG Stock</th><th class="t-right">Current / Last Price</th><th>Created</th><th>PDF</th><th></th></tr>
       </thead>
       <tbody>
         {% for m in models %}
@@ -364,6 +389,10 @@ function pmThickRate(){
               <button class="btn btn-danger btn-xs" type="submit">🗑</button>
             </form>
           </td>
+            <td style="white-space:nowrap">
+              {% if pdf_counts.get(m.id) %}<a href="/pdfs?model={{ m.id }}{% if request.args.get('token') %}&token={{ request.args.get('token') }}{% endif %}" title="Is model ki PDFs dekho">📄 {{ pdf_counts.get(m.id) }}</a>{% else %}<span style="color:#c0c6cf">—</span>{% endif %}
+              <a class="btn btn-outline btn-xs" href="/pdfs?model={{ m.id }}&add=1{% if request.args.get('token') %}&token={{ request.args.get('token') }}{% endif %}" title="Is model ki Final PDF upload karo">＋</a>
+            </td>
         </tr>
         <tr id="produce-{{ m.id }}" style="display:none">
           <td colspan="12" style="background:#f0fdf4;border-top:1px dashed #bbf7d0">

@@ -9,6 +9,14 @@
   <div>
     <div class="panel" style="display:flex;align-items:center;gap:10px;padding:10px 14px">
       <span class="muted small" style="white-space:nowrap">📂 Load from Finished Product…</span>
+      <span style="position:relative;display:inline-flex;flex-direction:column">
+        <input type="text" id="clSearch" placeholder="🔍 Type karo — s / sc / scp / scpl-…" autocomplete="off"
+               style="width:170px;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px"
+               oninput="clFilterModels(this.value)" onkeydown="return clSearchKey(event)">
+        <span id="clSug" style="display:none;position:fixed;z-index:99997;background:#fff;
+              border:1px solid var(--border);border-radius:10px;box-shadow:0 12px 30px rgba(0,0,0,.18);
+              max-height:260px;overflow-y:auto;text-align:left"></span>
+      </span>
       <select name="model_id" style="flex:1;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px">
         <option value="">— Select saved model —</option>
         {% for m in models %}<option value="{{ m.id }}">{{ m.name }} · {% if m.cutting_len %}Cutting {{ m.cutting_len|gfmt }}×{{ m.cutting_w|gfmt }}mm{% else %}Panel {{ m.panel_len|gfmt }}×{{ m.panel_w|gfmt }}mm{% endif %} · {{ m.pcs_panel }} PCS/panel</option>{% endfor %}
@@ -29,6 +37,83 @@
         if (!t) { try { t = localStorage.getItem('jcToken'); } catch(e){} }
         return t || '';
       }
+      var clAllModels = null;
+      function clFilterModels(v){
+        v = (v || '').trim();
+        var vl = v.toLowerCase();
+        var sel = document.querySelector('select[name="model_id"]');
+        if (!sel) return;
+        if (!clAllModels) {              /* pehli baar poori list yaad rakh lo */
+          clAllModels = [];
+          for (var i = 0; i < sel.options.length; i++)
+            clAllModels.push({ v: sel.options[i].value, t: sel.options[i].textContent });
+        }
+        var keep = [{ v: '', t: '— Select saved model —' }];
+        var sug = [];
+        for (var j = 1; j < clAllModels.length; j++)
+          if (clAllModels[j].t.toLowerCase().indexOf(vl) !== -1) { keep.push(clAllModels[j]); sug.push(clAllModels[j]); }
+        sel.options.length = 0;          /* rebuild — native select me display:none kaam nahi karta */
+        for (var k = 0; k < keep.length; k++) sel.add(new Option(keep[k].t, keep[k].v));
+        /* v3.34 — match hua to dropdown ke box me USI KA NAAM dikhne lage */
+        sel.selectedIndex = sug.length ? 1 : 0;
+        /* live suggestions — type karte hi naam samne */
+        var box = document.getElementById('clSug');
+        if (box) {
+          if (!v) { box.style.display = 'none'; box.innerHTML = ''; }
+          else {
+            box.innerHTML = sug.length
+              ? sug.slice(0, 8).map(function (m, ix) {
+                  return '<button type="button" data-v="' + m.v + '" style="display:block;width:100%;text-align:left;' +
+                    'padding:8px 12px;border:0;background:' + (ix === 0 ? '#f1f5f9' : '#fff') + ';cursor:pointer;' +
+                    'font-size:12.5px;border-bottom:1px solid #f1f5f9"' +
+                    ' onmouseenter="this.style.background=\'#f8fafc\'" onmouseleave="this.style.background=\'\'"' +
+                    ' onclick="clGoModel(\'' + m.v + '\')">' + m.t + '</button>';
+                }).join('') + (sug.length > 8 ? '<div style="padding:6px 12px;font-size:11px;color:#94a3b8">+' + (sug.length - 8) + ' more — aur type karo…</div>' : '')
+              : '<div style="padding:10px 12px;font-size:12px;color:#94a3b8">koi model nahi mila</div>';
+            box.style.display = 'block';
+          }
+        }
+        var btn = document.getElementById('clSearch');
+        if (btn) {
+          btn.placeholder = v ? ('🔍 ' + sug.length + ' models mile — Enter = pehla load') : '🔍 Type karo — s / sc / scp / scpl-…';
+          var r = btn.getBoundingClientRect();      /* FIXED position — panel ka overflow:hidden ab clip nahi karta */
+          box.style.left = r.left + 'px';
+          box.style.top = (r.bottom + 6) + 'px';
+          box.style.width = Math.max(r.width, 340) + 'px';
+        }
+      }
+      function clGoModel(id){
+        var u = '/cutlist?model=' + encodeURIComponent(id);
+        var t = clToken();
+        if (t) u += '&token=' + encodeURIComponent(t);
+        window.location.href = u;
+      }
+      function clSearchKey(e){
+        if (e.keyCode === 13) {            /* Enter = pehla match seedha load */
+          e.preventDefault();
+          var sel = document.querySelector('select[name="model_id"]');
+          if (sel && sel.value) clGoModel(sel.value);
+          return false;
+        }
+        if (e.keyCode === 27) {            /* Esc = suggestions band */
+          var b = document.getElementById('clSug');
+          if (b) b.style.display = 'none';
+        }
+        return true;
+      }
+      document.addEventListener('click', function (e) {
+        var b = document.getElementById('clSug');
+        if (b && !e.target.closest('#clSug') && e.target.id !== 'clSearch') b.style.display = 'none';
+      });
+      function openPdfOv(id, name){
+        var t = clToken();
+        var u = '/model-pdf/' + id + '/view' + (t ? ('?token=' + encodeURIComponent(t)) : '');
+        var ov = document.getElementById('pdfOv');
+        document.getElementById('pdfOvName').textContent = '📄 ' + (name || 'Final PDF');
+        document.getElementById('pdfOvNew').href = u;
+        document.getElementById('pdfOvF').src = u;
+        ov.style.display = 'block';
+      }
       function clLoadModel(btn){
         var sel = btn.parentElement.querySelector('select[name="model_id"]');
         if (!sel || !sel.value) { alert('Pehle model chuno — dropdown se Finished Product select karo.'); return; }
@@ -39,6 +124,26 @@
       }
       </script>
     </div>
+
+    {% if load_model_name %}
+    <div class="panel" style="margin-top:10px;padding:12px 14px;border-left:4px solid {% if cl_pdfs %}#16a34a{% else %}#f59e0b{% endif %}">
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <b style="font-size:13px">📄 Final PDF — {{ load_model_name }}</b>
+        {% if cl_pdfs %}
+          {% for p in cl_pdfs %}<button type="button" class="btn btn-outline btn-xs" onclick="openPdfOv('{{ p.id }}', this.dataset.fn)" data-fn="{{ p.filename }}">👁 {{ p.filename }}</button>{% endfor %}
+          <a class="btn btn-outline btn-xs" href="/pdfs?model={{ load_model_id }}&add=1{% if request.args.get('token') %}&token={{ request.args.get('token') }}{% endif %}">＋ aur upload</a>
+        {% else %}
+          <span style="font-size:12px;color:#8a8f98">is model ki koi Final PDF nahi —</span>
+          <a class="btn btn-outline btn-xs" href="/pdfs?model={{ load_model_id }}&add=1{% if request.args.get('token') %}&token={{ request.args.get('token') }}{% endif %}">⬆️ Upload karo</a>
+        {% endif %}
+      </div>
+      {% if cl_pdfs %}
+      <iframe src="/model-pdf/{{ cl_pdfs[0].id }}/view{% if request.args.get('token') %}?token={{ request.args.get('token') }}{% endif %}"
+              style="width:100%;height:420px;border:1px solid var(--border);border-radius:10px;margin-top:10px;background:#fff"></iframe>
+      <div style="font-size:11px;color:#94a3b8;margin-top:5px">Agar yahan preview na dikhe to upar 👁 View button se nayi tab me khul jayegi.</div>
+      {% endif %}
+    </div>
+    {% endif %}
 
     <div class="panel">
       <div class="panel-head"><h3>🔲 PCB-PANELBUILDER</h3></div>
@@ -1406,5 +1511,17 @@ window.printGangPreview = printGangPreview;
 window.printSheetPreview = printSheetPreview;
 </script>
 <div id="printModelName" style="display:none">{{ load_model_name or '' }}</div>
+
+<!-- v3.37 PDF overlay — target=_blank sandbox me block hota hai, isliye in-page viewer -->
+<div id="pdfOv" style="display:none;position:fixed;inset:0;z-index:99998;background:rgba(15,23,42,.62)" onclick="if(event.target===this)this.style.display='none';else if(event.target.id==='pdfOvF')return;">
+  <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:min(900px,94vw);height:min(700px,90vh);background:#fff;border-radius:14px;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 24px 70px rgba(0,0,0,.4)">
+    <div style="padding:10px 14px;font-weight:800;display:flex;gap:10px;align-items:center;background:#f8fafc;border-bottom:1px solid #e2e8f0">
+      <span style="flex:1;font-size:13.5px" id="pdfOvName">📄 PDF</span>
+      <a id="pdfOvNew" href="#" target="_blank" rel="noopener" class="btn btn-outline btn-xs" style="text-decoration:none">↗ Nayi tab</a>
+      <button class="btn btn-outline btn-xs" type="button" onclick="document.getElementById('pdfOv').style.display='none';document.getElementById('pdfOvF').src='about:blank'">✕ Band karo</button>
+    </div>
+    <iframe id="pdfOvF" style="flex:1;border:0;width:100%;background:#fff"></iframe>
+  </div>
+</div>
 <div id="prevPrintSheet"></div>
 {% endblock %}

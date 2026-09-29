@@ -133,7 +133,8 @@
 {% endif %}
 
 <script>
-var piModels = [{% for m in bill_models %}{id:{{ m.id }}, name:{{ (m.name ~ ' ' ~ (m.pcb_len|gfmt) ~ '×' ~ (m.pcb_w|gfmt) ~ 'mm')|tojson }}, price:{{ m.pcb_price or 0 }}}{% if not loop.last %},{% endif %}{% endfor %}];
+/* v3.32 — VALUE me sirf model name (PI me size nahi jata), size sirf dropdown hint */
+var piModels = [{% for m in bill_models %}{id:{{ m.id }}, name:{{ (m.name or '')|tojson }}, size:{{ ((m.pcb_len|gfmt) ~ '×' ~ (m.pcb_w|gfmt) ~ 'mm')|tojson }}, price:{{ m.pcb_price or 0 }}}{% if not loop.last %},{% endif %}{% endfor %}];
 /* v3.19 — JOB ORDER auto-fill data: order chuno → party + pehli item (desc/qty/rate/HSN) auto */
 var piOrdersData = [{% for o in orders %}{id:{{ o.id }}, no:{{ (o.order_no ~ '')|tojson }}, party:{{ (o.party or '')|tojson }}, product:{{ ((o.m_name or o.product) or '')|tojson }}, qty:{{ (o.qty or 0) + 0 }}, rate:{{ (o.m_price or 0) + 0 }}, val:{{ (o.value or 0) + 0 }}, hsn:{{ ((o.m_hsn or '') or '85340000')|tojson }} }{% if not loop.last %},{% endif %}{% endfor %}];
 (function(){
@@ -173,7 +174,8 @@ function piOpts(cur){
   var h = '<option value="">— item —</option>';
   piModels.forEach(function(m){
     var sel = (m.name === cur) ? ' selected' : '';
-    h += '<option value="' + m.name + '" data-price="' + m.price + '"' + sel + '>' + m.name + (m.price ? ' — ₹' + m.price : '') + '</option>';
+    var sz = (m.size && m.size.indexOf('0×0') !== 0) ? ' (' + m.size + ')' : '';
+    h += '<option value="' + m.name + '" data-price="' + m.price + '"' + sel + '>' + m.name + sz + (m.price ? ' — ₹' + m.price : '') + '</option>';
   });
   return h;
 }
