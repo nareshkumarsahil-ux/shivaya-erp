@@ -209,7 +209,7 @@
           <div class="field" style="flex:1"><label>X Multiplier</label><input type="number" name="gang_x" id="gang_x" value="{{ fields.get('gang_x') if fields.get('gang_x') not in (None, '') else 1 }}" min="1"></div>
           <div class="field" style="flex:1"><label>Y Multiplier</label><input type="number" name="gang_y" id="gang_y" value="{{ fields.get('gang_y') if fields.get('gang_y') not in (None, '') else 1 }}" min="1"></div>
         </div>
-        <p class="muted small" style="margin-top:8px">💡 CNC MARGIN cutting size me ADD hota hai (har side + margin). Multiplier = kitne panels ek saath gang-cut honge.</p>
+        <p class="muted small" style="margin-top:8px">💡 CNC MARGIN gang panel ke FINAL size me ADD hota hai (left-right-top-bottom, har side + margin) — aur YAHI final size sheet me fit hota hai. Multiplier = kitne panels ek saath gang-cut honge.</p>
         <div style="margin-top:10px;background:#f8fafc;border:1px solid var(--border);border-radius:9px;padding:9px 12px">
           <div class="small" style="font-weight:800;color:#334155">🔹 PANEL-TO-PANEL GAP — KAHIN BHI: koi bhi joint me gap rakho ya hatao</div>
           <div id="pgapx_cells" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px"></div>
@@ -649,8 +649,9 @@ function computeLive(){
   var pgXs = pGapList('x', gx, kx), pgYs = pGapList('y', gy, ky);
   if (gangActive) {
     if (useLocked) {
-      unitL = pL * gx + _sumArr(pgXs);
-      unitW = pW * gy + _sumArr(pgYs);
+      /* v3.50 \u2014 CNC MARGIN FINAL size me hi (left-right-top-bottom) — locked == manual same */
+      unitL = pL * gx + _sumArr(pgXs) + 2 * kx;
+      unitW = pW * gy + _sumArr(pgYs) + 2 * ky;
     } else {
       /* v2.87 — visible PANEL field = PANEL size; CUTTING = panels + joints + 2×CNC MARGIN
          (panel_base ho to wahi base — recalc par double-add na ho) */
@@ -692,7 +693,7 @@ function computeLive(){
 
   function fits(ul, uw){
     if (ul <= 0 || uw <= 0) return [0, 0];
-    return [Math.floor((sl + kx) / (ul + kx)), Math.floor((sw + ky) / (uw + ky))];
+    return [Math.floor(sl / ul), Math.floor(sw / uw)];   /* v3.50 \u2014 margin unit ke andar, extra kerf nahi */
   }
 
   var nx = fits(gl, gw)[0], ny = fits(gl, gw)[1];
@@ -701,16 +702,16 @@ function computeLive(){
   var rotated = rx * ry;
 
   /* --- mixed rows: normal rows + rotated rows on one sheet --- */
-  var perN = Math.floor((sl + kx) / (gl + kx));
-  var perR = Math.floor((sl + kx) / (gw + kx));
-  var hN = gw + ky, hR = gl + ky;
-  var maxN = hN > 0 ? Math.floor((sw + ky) / hN) : 0;
-  var maxM = hR > 0 ? Math.floor((sw + ky) / hR) : 0;
+  var perN = Math.floor(sl / gl);
+  var perR = Math.floor(sl / gw);
+  var hN = gw, hR = gl;   /* v3.50 \u2014 margin cutting size ke andar */
+  var maxN = hN > 0 ? Math.floor(sw / hN) : 0;
+  var maxM = hR > 0 ? Math.floor(sw / hR) : 0;
   var mixed = 0, mN = 0, mM = 0;
   for (var n = 0; n <= maxN; n++)
     for (var m = 0; m <= maxM; m++) {
       if (n === 0 && m === 0) continue;
-      var hh = n * hN + m * hR - ky;
+      var hh = n * hN + m * hR;
       if (hh <= sw + 1e-9) {
         var p = n * perN + m * perR;
         if (p > mixed) { mixed = p; mN = n; mM = m; }
@@ -750,7 +751,8 @@ function computeLive(){
     cutLine.style.display = 'block';
     cutLine.innerHTML = '✂ <b>Cutting Size: ' + fmtNum(gl) + ' × ' + fmtNum(gw) + 'mm - PCS/Unit: ' + pcsUnit + '</b>' +
       '<div class="muted small" style="margin-top:3px">(' + fmtNum(pL) + ' x ' + gx + ' + gaps ' + pgStr(pgXs) +
-      ' = ' + fmtNum(gl) + 'mm, ' + fmtNum(pW) + ' x ' + gy + ' + gaps ' + pgStr(pgYs) + ' = ' + fmtNum(gw) + 'mm)</div>';
+      ' + CNC ' + fmtNum(2 * kx) + ' = ' + fmtNum(gl) + 'mm, ' + fmtNum(pW) + ' x ' + gy + ' + gaps ' + pgStr(pgYs) +
+      ' + CNC ' + fmtNum(2 * ky) + ' = ' + fmtNum(gw) + 'mm)</div>';
   } else {
     cutLine.style.display = 'none';
   }
@@ -798,7 +800,7 @@ function computeLive(){
     document.getElementById('gangPcsSheet').innerHTML = pcsSheet + ' <span class="u">PCS</span>';
     document.getElementById('gangNote').innerHTML =
       '💡 Panel ' + fmtNum(pL) + '×' + fmtNum(pW) + ' mm (' + pcsPanel + ' PCS) × ' + gx + '×' + gy +
-      ' multiplier + ' + fmtNum(kx) + '/' + fmtNum(ky) + ' mm CNC MARGIN = CUTTING SIZE ' + fmtNum(gl) + '×' + fmtNum(gw) +
+      ' multiplier + joints + ' + fmtNum(2 * kx) + '/' + fmtNum(2 * ky) + ' mm CNC MARGIN (left-right-top-bottom) = FINAL CUTTING SIZE ' + fmtNum(gl) + '×' + fmtNum(gw) +
       ' mm (' + pcsUnit + ' PCS/unit). Sheet ' + fmtNum(sl) + '×' + fmtNum(sw) + ' mm me <b>' + layTxt.toLowerCase() +
       '</b> fit hoti hai — calculation isi ke hisaab se: ' + gangCount + ' × ' + pcsUnit + ' PCS = ' +
       '<b>' + pcsSheet + ' PCS per sheet</b>.';
@@ -947,13 +949,13 @@ function svgSheet(sl, sw, cl, cw, gx2, gy2, gx, gy, kx, ky, pps, waste, best, mN
     var y = y0;
     var Cl = gl * scale, Cw = gw * scale;
     for (i = 0; i < mN; i++) {
-      for (j = 0; j < perN; j++) gangCell(x0 + j * (Cl + Kx), y, Cl, Cw, '#dcfce7', '#16a34a');
-      y += Cw + Ky;
+      for (j = 0; j < perN; j++) gangCell(x0 + j * Cl, y, Cl, Cw, '#dcfce7', '#16a34a');
+      y += Cw;
     }
     var Cl2 = gw * scale, Cw2 = gl * scale;
     for (i = 0; i < mM; i++) {
-      for (j = 0; j < perR; j++) gangCell(x0 + j * (Cl2 + Kx), y, Cl2, Cw2, '#bfdbfe', '#2563eb');
-      y += Cw2 + Ky;
+      for (j = 0; j < perR; j++) gangCell(x0 + j * Cl2, y, Cl2, Cw2, '#bfdbfe', '#2563eb');
+      y += Cw2;
     }
     s += '<text x="' + (W/2) + '" y="' + (H-6) + '" text-anchor="middle" font-size="12.5" fill="#8a8f98" font-family="Segoe UI,Arial"><tspan fill="#16a34a" font-weight="700">Normal rows</tspan> · <tspan fill="#2563eb" font-weight="700">Rotated rows</tspan> — ' +
          mN + '× row of ' + perN + ' + ' + mM + '× row of ' + perR + ' = ' + pps + ' panels · ' + waste + '% waste</text>';
@@ -961,7 +963,7 @@ function svgSheet(sl, sw, cl, cw, gx2, gy2, gx, gy, kx, ky, pps, waste, best, mN
     var Cl = cl * scale, Cw = cw * scale;
     for (i = 0; i < gx2; i++)
       for (j = 0; j < gy2; j++)
-        gangCell(x0 + i * (Cl + Kx), y0 + j * (Cw + Ky), Cl, Cw, '#dcfce7', '#16a34a');
+        gangCell(x0 + i * Cl, y0 + j * Cw, Cl, Cw, '#dcfce7', '#16a34a');
     var gangCap = '';
     if (gx > 1 || gy > 1)
       gangCap = gx2 + '×' + gy2 + ' GANG × ' + (pcsPanel*gx*gy) + ' PCS = ' + (pps*pcsPanel*gx*gy) + ' PCS · ';
@@ -988,14 +990,14 @@ function svgSheetLayout(sl, sw, cl, cw, gx2, gy2, gx, gy, kx, ky, pps, best, mN,
   /* v2.62 \u2014 axis-wise USE + WASTE (mm) \u2014 sheet ke andar kitna use hua, kitna jali */
   var clMM = cl / scale, cwMM = cw / scale, uxMM = 0, uyMM = 0;
   if (best === 'mixed') {
-    var _un = (perN && mN) ? perN * gl + (perN - 1) * kx : 0;
-    var _ur = (perR && mM) ? perR * gw + (perR - 1) * kx : 0;
+    var _un = (perN && mN) ? perN * gl : 0;
+    var _ur = (perR && mM) ? perR * gw : 0;
     uxMM = Math.max(_un, _ur);
     var _rows = mN + mM;
-    uyMM = _rows ? (mN * gw + mM * gl + (_rows - 1) * ky) : 0;
+    uyMM = _rows ? (mN * gw + mM * gl) : 0;   /* v3.50 — margin unit ke andar */
   } else {
-    uxMM = gx2 ? gx2 * clMM + (gx2 - 1) * kx : 0;
-    uyMM = gy2 ? gy2 * cwMM + (gy2 - 1) * ky : 0;
+    uxMM = gx2 ? gx2 * clMM : 0;
+    uyMM = gy2 ? gy2 * cwMM : 0;
   }
   var wxMM = Math.max(sl - uxMM, 0), wyMM = Math.max(sw - uyMM, 0);
   var S = sl * scale, T = sw * scale;
@@ -1055,15 +1057,15 @@ function svgSheetLayout(sl, sw, cl, cw, gx2, gy2, gx, gy, kx, ky, pps, best, mN,
   var cap, num, y, i;
   if (best === 'mixed') {
     num = 1; y = y0;
-    for (var rN = 0; rN < mN; rN++) { for (i = 0; i < perN; i++) { cell(x0 + i*(cl + Kx), y, cl, cw, num, '#eef2ff', '#6366f1'); num++; } y += cw + Ky; }
+    for (var rN = 0; rN < mN; rN++) { for (i = 0; i < perN; i++) { cell(x0 + i*cl, y, cl, cw, num, '#eef2ff', '#6366f1'); num++; } y += cw; }
     var cl2 = cw, cw2 = cl;
-    for (var rM = 0; rM < mM; rM++) { for (i = 0; i < perR; i++) { cell(x0 + i*(cl2 + Kx), y, cl2, cw2, num, '#fdf4ff', '#c026d3', true); num++; } y += cw2 + Ky; }
+    for (var rM = 0; rM < mM; rM++) { for (i = 0; i < perR; i++) { cell(x0 + i*cl2, y, cl2, cw2, num, '#fdf4ff', '#c026d3', true); num++; } y += cw2; }
     cap = '1 SHEET ' + fmtNum(sl) + 'x' + fmtNum(sw) + ' mm \u2190 ' + ptype + ' ' + fmtNum(gang ? gl : cl) + 'x' + fmtNum(gang ? gw : cw) +
           ' mm = ' + pps + ' ' + ptype + 'S (' + mN + 'x row ' + perN + ' + ' + mM + 'x row ' + perR + ') = ' + fmtNum(pps * pcsUnit) + ' PCS';
   } else {
     num = 1;
     var _rotAll = (best === 'rotated');
-    for (var ix = 0; ix < gx2; ix++) for (var iy = 0; iy < gy2; iy++) { cell(x0 + ix*(cl + Kx), y0 + iy*(cw + Ky), cl, cw, num, '#eef2ff', '#6366f1', _rotAll); num++; }
+    for (var ix = 0; ix < gx2; ix++) for (var iy = 0; iy < gy2; iy++) { cell(x0 + ix*cl, y0 + iy*cw, cl, cw, num, '#eef2ff', '#6366f1', _rotAll); num++; }
     cap = '1 SHEET ' + fmtNum(sl) + 'x' + fmtNum(sw) + ' mm \u2190 ' + ptype + ' ' + fmtNum(cl) + 'x' + fmtNum(cw) +
           ' mm = ' + gx2 + 'x' + gy2 + ' = ' + pps + ' ' + ptype + 'S x ' + fmtNum(pcsUnit) + ' PCS = ' + fmtNum(pps * pcsUnit) + ' PCS';
   }

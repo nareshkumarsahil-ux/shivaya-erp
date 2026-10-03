@@ -472,18 +472,18 @@ function calcPps(){
     return {px: px, py: py, sl: sl, sw: sw, kx: kx, ky: ky, xq: _xq, yq: _yq,
             pps: selM.pps || (_xq * _yq), best: 'normal', perN: 0, perR: 0, mN: 0, mM: 0};
   }
-  function fx(ul){ return Math.floor((sl + kx) / (ul + kx)); }
-  function fy(uw){ return Math.floor((sw + ky) / (uw + ky)); }
+  function fx(ul){ return Math.floor(sl / ul); }   /* v3.50 — CNC margin cutting size me included, extra kerf nahi */
+  function fy(uw){ return Math.floor(sw / uw); }
   var nx = fx(px), ny = fy(py), normal = nx * ny;
   var rx = fx(py), ry = fy(px), rotated = rx * ry;
-  var perN = nx, perR = rx, hN = py + ky, hR = px + ky;
-  var maxN = hN > 0 ? Math.floor((sw + ky) / hN) : 0;
-  var maxM = hR > 0 ? Math.floor((sw + ky) / hR) : 0;
+  var perN = nx, perR = rx, hN = py, hR = px;
+  var maxN = hN > 0 ? Math.floor(sw / hN) : 0;
+  var maxM = hR > 0 ? Math.floor(sw / hR) : 0;
   var mixed = 0, mN = 0, mM = 0;
   for (var n = 0; n <= maxN; n++)
     for (var m = 0; m <= maxM; m++) {
       if (n === 0 && m === 0) continue;
-      var hh = n * hN + m * hR - ky;
+      var hh = n * hN + m * hR;
       if (hh <= sw + 1e-9) {
         var p = n * perN + m * perR;
         if (p > mixed) { mixed = p; mN = n; mM = m; }

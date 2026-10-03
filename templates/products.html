@@ -358,10 +358,11 @@ function pmThickRate(){
         <tr>
           <td>
             {% set nt41 = (m.note or '')|upper %}
+            {% set toolsize49 = (m.note|toolmm) or (m.name|toolmm) %}
             <div style="display:flex;flex-direction:column;gap:3px;align-items:flex-start">
               {% if m.pcb_code %}
               <span class="badge b-blue" style="font-size:10.5px;letter-spacing:.3px;box-shadow:0 1px 3px rgba(29,78,216,.25)">{{ m.pcb_code }}
-                {% if 'TOOL' in nt41 %}<span style="background:#7c3aed;color:#fff;font-size:8.5px;border-radius:6px;padding:1px 5px;margin-left:4px;font-weight:800">TOOL</span>
+                {% if 'TOOL' in nt41 %}<span style="background:#7c3aed;color:#fff;font-size:8.5px;border-radius:6px;padding:1px 5px;margin-left:4px;font-weight:800">TOOL{% if toolsize49 %} · {{ toolsize49 }}{% endif %}</span>
                 {% elif 'CNC' in nt41 %}<span style="background:#0e7490;color:#fff;font-size:8.5px;border-radius:6px;padding:1px 5px;margin-left:4px;font-weight:800">CNC</span>{% endif %}
               </span>
               {% else %}

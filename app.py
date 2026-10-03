@@ -206,6 +206,14 @@ def gfmt_filter(value):
 def modelname_filter(value):
     return _model_name(value) if value is not None else "—"
 
+@app.template_filter("toolmm")
+def toolmm_filter(value):
+    """TOOL model ka naam/size nikalta hai — 'TOOL 78MM' ya '105 MM TOOL PCB' se '78MM'/'105MM'."""
+    if not value:
+        return ""
+    mm = re.search(r"(\d{1,4}(?:\.\d+)?)\s*MM\b", str(value).upper())
+    return f"{mm.group(1)}MM" if mm else ""
+
 
 # ---------------------------------------------------------------- login
 @app.route("/ping")
@@ -1038,8 +1046,9 @@ def compute_layout(p):
     def fits(unit_l, unit_w):
         if unit_l <= 0 or unit_w <= 0:
             return 0, 0
-        nx = int((sheet_len + kerf_x) // (unit_l + kerf_x))
-        ny = int((sheet_w + kerf_y) // (unit_w + kerf_y))
+        # v3.50 \u2014 CNC MARGIN cutting size ke ANDAR hai: units edge-to-edge fit (extra kerf spacing nahi)
+        nx = int(sheet_len // unit_l)
+        ny = int(sheet_w // unit_w)
         return nx, ny
 
     # sheet fitting unit = cutting size (gang); counts = gang units
@@ -1049,18 +1058,19 @@ def compute_layout(p):
     rotated_panels = rx * ry
 
     # --- mixed rows: normal rows + rotated rows on one sheet ---
-    per_normal = int((sheet_len + kerf_x) // (gang_len + kerf_x))
-    per_rot = int((sheet_len + kerf_x) // (gang_w + kerf_x))
-    h_n, h_r = gang_w + kerf_y, gang_len + kerf_y
-    max_n = int((sheet_w + kerf_y) // h_n) if h_n > 0 else 0
-    max_m = int((sheet_w + kerf_y) // h_r) if h_r > 0 else 0
+    # v3.50 \u2014 margin cutting size ke andar: pitch = cutting size khud (kerf spacing double nahi)
+    per_normal = int(sheet_len // gang_len) if gang_len > 0 else 0
+    per_rot = int(sheet_len // gang_w) if gang_w > 0 else 0
+    h_n, h_r = gang_w, gang_len
+    max_n = int(sheet_w // h_n) if h_n > 0 else 0
+    max_m = int(sheet_w // h_r) if h_r > 0 else 0
     mixed_n = mixed_m = 0
     mixed_panels = 0
     for n in range(max_n + 1):
         for m in range(max_m + 1):
             if n == 0 and m == 0:
                 continue
-            height = n * h_n + m * h_r - kerf_y
+            height = n * h_n + m * h_r
             if height <= sheet_w + 1e-9:
                 panels = n * per_normal + m * per_rot
                 if panels > mixed_panels:
@@ -1192,13 +1202,13 @@ def svg_sheet_preview(r):
         for _row in range(r["mixed_n"]):
             cl, cw = r["gang_len"] * scale, r["gang_w"] * scale
             for i in range(r["per_normal"]):
-                _svg_gang(s, x0 + i * (cl + kx), y, cl, cw, gx, gy, kx, ky, "#dcfce7", "#16a34a", 1.4)
-            y += cw + ky
+                _svg_gang(s, x0 + i * cl, y, cl, cw, gx, gy, kx, ky, "#dcfce7", "#16a34a", 1.4)
+            y += cw
         for _row in range(r["mixed_m"]):
-            cl, cw = r["gang_w"] * scale, r["gang_len"] * scale
+            cl2p, cw2p = r["gang_w"] * scale, r["gang_len"] * scale
             for i in range(r["per_rot"]):
-                _svg_gang(s, x0 + i * (cl + kx), y, cl, cw, gx, gy, kx, ky, "#bfdbfe", "#2563eb", 1.4)
-            y += cw + ky
+                _svg_gang(s, x0 + i * cl2p, y, cl2p, cw2p, gx, gy, kx, ky, "#bfdbfe", "#2563eb", 1.4)
+            y += cw2p
         cap = (f"Sheet {sl:.2f}\u00d7{sw:.2f} mm \u00b7 {r['mixed_n']}\u00d7 row of {r['per_normal']} + "
                f"{r['mixed_m']}\u00d7 row of {r['per_rot']} = {r['panels_per_sheet']} panels \u00b7 "
                f"{r['pcs_per_sheet']} PCS \u00b7 {r['wastage']}% waste")
@@ -1206,7 +1216,7 @@ def svg_sheet_preview(r):
         cl, cw = r["cell_len"] * scale, r["cell_w"] * scale
         for i in range(r["grid_x"]):
             for j in range(r["grid_y"]):
-                cx, cy = x0 + i * (cl + kx), y0 + j * (cw + ky)
+                cx, cy = x0 + i * cl, y0 + j * cw
                 _svg_gang(s, cx, cy, cl, cw, gx, gy, kx, ky, "#dcfce7", "#16a34a", 1.4)
         gang_cap = ""
         if gx > 1 or gy > 1:
@@ -1361,14 +1371,14 @@ def svg_sheet_layout_preview(r):
     # v2.62 \u2014 axis-wise USE + WASTE breakdown (red strips + USE/WASTE labels)
     kx_m, ky_m = r["kerf_x"], r["kerf_y"]
     if r["best"] == "mixed":
-        _un = r["per_normal"] * r["gang_len"] + (r["per_normal"] - 1) * kx_m if r["per_normal"] and r["mixed_n"] else 0
-        _ur = r["per_rot"] * r["gang_w"] + (r["per_rot"] - 1) * kx_m if r["per_rot"] and r["mixed_m"] else 0
+        _un = r["per_normal"] * r["gang_len"] if r["per_normal"] and r["mixed_n"] else 0
+        _ur = r["per_rot"] * r["gang_w"] if r["per_rot"] and r["mixed_m"] else 0
         used_x = max(_un, _ur)
         _rows = r["mixed_n"] + r["mixed_m"]
-        used_y = (r["mixed_n"] * r["gang_w"] + r["mixed_m"] * r["gang_len"] + (_rows - 1) * ky_m) if _rows else 0
+        used_y = (r["mixed_n"] * r["gang_w"] + r["mixed_m"] * r["gang_len"]) if _rows else 0
     else:
-        used_x = r["grid_x"] * r["cell_len"] + (r["grid_x"] - 1) * kx_m if r["grid_x"] else 0
-        used_y = r["grid_y"] * r["cell_w"] + (r["grid_y"] - 1) * ky_m if r["grid_y"] else 0
+        used_x = r["grid_x"] * r["cell_len"] if r["grid_x"] else 0
+        used_y = r["grid_y"] * r["cell_w"] if r["grid_y"] else 0
     waste_x, waste_y = max(sl - used_x, 0.0), max(sw - used_y, 0.0)
     ux, uy = used_x * scale, used_y * scale
     if used_x > 0 and waste_x > 0.05:
@@ -1434,15 +1444,15 @@ def svg_sheet_layout_preview(r):
         cl, cw = r["gang_len"] * scale, r["gang_w"] * scale
         for _row in range(r["mixed_n"]):
             for i in range(r["per_normal"]):
-                _panel_cell(x0 + i * (cl + kx), y, cl, cw, num, "#eef2ff", "#6366f1", r["gang_len"], r["gang_w"])
+                _panel_cell(x0 + i * cl, y, cl, cw, num, "#eef2ff", "#6366f1", r["gang_len"], r["gang_w"])
                 num += 1
-            y += cw + ky
+            y += cw
         cl2, cw2 = r["gang_w"] * scale, r["gang_len"] * scale
         for _row in range(r["mixed_m"]):
             for i in range(r["per_rot"]):
-                _panel_cell(x0 + i * (cl2 + kx), y, cl2, cw2, num, "#fdf4ff", "#c026d3", r["gang_w"], r["gang_len"], rot=True)
+                _panel_cell(x0 + i * cl2, y, cl2, cw2, num, "#fdf4ff", "#c026d3", r["gang_w"], r["gang_len"], rot=True)
                 num += 1
-            y += cw2 + ky
+            y += cw2
         if r["gang_active"]:
             cap = (f"1 SHEET {sl:.0f}x{sw:.0f} mm \u2190 GANG PANEL {r['cutting_len']:g}x{r['cutting_w']:g} mm = "
                    f"{r['panels_per_sheet']} GANG PANELS "
@@ -1456,7 +1466,7 @@ def svg_sheet_layout_preview(r):
         num = 1
         for i in range(r["grid_x"]):
             for j in range(r["grid_y"]):
-                _panel_cell(x0 + i * (cl + kx), y0 + j * (cw + ky), cl, cw, num, "#eef2ff", "#6366f1",
+                _panel_cell(x0 + i * cl, y0 + j * cw, cl, cw, num, "#eef2ff", "#6366f1",
                             r["cell_len"], r["cell_w"], rot=(r["best"] == "rotated"))
                 num += 1
         if r["gang_active"]:
@@ -5058,22 +5068,23 @@ def jobcard_new():
         # jis se saved panels/sheet = wizard screen wala number (24 vs 26 mismatch khatam)
         def _fl_div(a, b):
             return int(math.floor(a / b)) if b > 0 else 0
-        nx_ = _fl_div(sheet_len + kfx, px0 + kfx) if px0 > 0 else 0
-        ny_ = _fl_div(sheet_w + kfy, py0 + kfy) if py0 > 0 else 0
+        # v3.50 \u2014 CNC margin cutting size ke andar: edge-to-edge fit (extra kerf spacing nahi)
+        nx_ = _fl_div(sheet_len, px0) if px0 > 0 else 0
+        ny_ = _fl_div(sheet_w, py0) if py0 > 0 else 0
         normal_ = nx_ * ny_
-        rx_ = _fl_div(sheet_w + kfx, py0 + kfx) if py0 > 0 else 0
-        ry_ = _fl_div(sheet_len + kfy, px0 + kfy) if px0 > 0 else 0
+        rx_ = _fl_div(sheet_w, py0) if py0 > 0 else 0
+        ry_ = _fl_div(sheet_len, px0) if px0 > 0 else 0
         rotated_ = rx_ * ry_
         perN_, perR_ = nx_, rx_
-        hN_, hR_ = py0 + kfy, px0 + kfy
-        maxN_ = _fl_div(sheet_w + kfy, hN_)
-        maxM_ = _fl_div(sheet_len + kfx, hR_)
+        hN_, hR_ = py0, px0
+        maxN_ = _fl_div(sheet_w, hN_)
+        maxM_ = _fl_div(sheet_len, hR_)
         mixed_ = mN_ = mM_ = 0
         for _n in range(maxN_ + 1):
             for _m in range(maxM_ + 1):
                 if _n == 0 and _m == 0:
                     continue
-                _hh = _n * hN_ + _m * hR_ - kfy
+                _hh = _n * hN_ + _m * hR_
                 if _hh <= sheet_w + 1e-9:
                     _p = _n * perN_ + _m * perR_
                     if _p > mixed_:
