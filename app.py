@@ -1823,11 +1823,14 @@ def cutlist():
     load_model_id = request.args.get("model") or (request.values.get("model_id") if request.method == "POST" else None)
 
     mix_result = None
+    mix_inputs = None
     if request.method == "POST":
         f = request.form
         action = f.get("action", "calculate")
         if action == "mixplan":
             mix_result = _mix_pack_plan(f)
+            # v3.57 — LAYOUT NIKALO ke baad planner inputs wapas bhare rehne chahiye
+            mix_inputs = {k: f.getlist(k) for k in ("mp_len", "mp_wid", "mp_qty", "mp_sl", "mp_sw")}
         if action == "load" and f.get("model_id"):
             return redirect_with_token(url_for("cutlist", model=f.get("model_id")))
         fields = {k: f.get(k, "") for k in FIELD_KEYS}
@@ -2239,7 +2242,7 @@ def cutlist():
                            svg_panel=svg_panel, svg_sheet=svg_sheet, gang_info=gang_info,
                            svg_gang_panel=svg_gang_panel, svg_sheet_layout=svg_sheet_layout,
                            disp_pl=disp_pl, disp_pw=disp_pw, load_model_name=load_model_name,
-                           cl_pdfs=_cl_pdfs, mix_result=mix_result)
+                           cl_pdfs=_cl_pdfs, mix_result=mix_result, mix_inputs=mix_inputs)
 
 
 # ---------------------------------------------------------------- finished products
