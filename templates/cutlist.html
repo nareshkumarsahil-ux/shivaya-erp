@@ -3,6 +3,89 @@
 {% block page_title %}Cut List Optimizer{% endblock %}
 {% block content %}
 
+<div style="display:flex;gap:9px;align-items:center;margin:0 0 10px;flex-wrap:wrap">
+  <button type="button" id="modeTog" class="btn btn-xs" style="background:#0f172a;color:#fff;font-weight:800">🧩 FULL CUTLIST: ON</button>
+  <span class="muted small" id="modeHint"></span>
+</div>
+
+<!-- ============ v3.51: PANEL→SHEET ONLY MODE — MULTI PANEL × MULTI SHEET PLANNER ============ -->
+<div id="mixPlanner" style="display:none">
+  <div class="panel">
+    <div class="panel-head"><h3>🧮 MULTI PANEL → SHEET PLANNER — alag-alag panel sizes × alag-alag sheet sizes</h3></div>
+    <form method="post" action="/cutlist" data-stay="1">
+      <input type="hidden" name="action" value="mixplan">
+      <div class="section-title">PANEL SIZES (manual) — length × width × qty</div>
+      <div id="mpWrapP">
+        {% for _i in range(4) %}
+        <div class="mpRow" style="display:flex;gap:7px;align-items:center;margin-bottom:6px;flex-wrap:wrap">
+          <input type="number" step="0.01" name="mp_len" placeholder="Panel L (mm)" style="width:130px">
+          <span class="muted">×</span>
+          <input type="number" step="0.01" name="mp_wid" placeholder="Panel W (mm)" style="width:130px">
+          <span class="muted">×</span>
+          <input type="number" name="mp_qty" placeholder="Qty" style="width:90px">
+          <button type="button" class="btn btn-outline btn-xs" onclick="mpDel(this)">❌</button>
+        </div>
+        {% endfor %}
+      </div>
+      <button type="button" class="btn btn-outline btn-xs" onclick="mpAddP()">➕ Panel size jodo</button>
+      <div class="section-title" style="margin-top:12px">SHEET SIZES (manual) — har size ka alag layout banega</div>
+      <div id="mpWrapS">
+        {% for p in SHEET_PRESETS[:3] %}{% set _ps = p.split('x') %}
+        <div class="mpRow" style="display:flex;gap:7px;align-items:center;margin-bottom:6px;flex-wrap:wrap">
+          <input type="number" step="0.01" name="mp_sl" value="{{ _ps[0] }}" style="width:150px">
+          <span class="muted">×</span>
+          <input type="number" step="0.01" name="mp_sw" value="{{ _ps[1] }}" style="width:150px">
+          <button type="button" class="btn btn-outline btn-xs" onclick="mpDel(this)">❌</button>
+        </div>
+        {% endfor %}
+      </div>
+      <button type="button" class="btn btn-outline btn-xs" onclick="mpAddS()">➕ Sheet size jodo</button>
+      <div style="margin-top:14px"><button type="submit" class="btn" style="background:#b45309;color:#fff">🧮 LAYOUT NIKALO</button></div>
+    </form>
+  </div>
+
+  {% if mix_result %}
+  <div class="panel">
+    <div class="panel-head"><h3>📊 PLANNING RESULT — {{ mix_result.panels|length }} panel size × {{ mix_result.sheets|length }} sheet size</h3></div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin:8px 0 12px">
+      {% for p in mix_result.panels %}
+      <span class="badge b-blue">P{{ loop.index }} · {{ p.l|gfmt }}×{{ p.w|gfmt }} · need {{ p.qty }}</span>
+      {% endfor %}
+    </div>
+    {% for sh in mix_result.sheets %}
+    <div style="border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:12px;background:#fff">
+      <div style="font-size:14px;font-weight:800">📐 SHEET {{ sh.sl|gfmt }} × {{ sh.sw|gfmt }} mm
+        {% if sh.complete %}<span class="badge b-green">{{ sh.sheets_needed }} sheets chahiye</span>
+        {% else %}<span class="badge" style="background:#dc2626;color:#fff">sheet me fit NAHI (size bada hai)</span>{% endif %}
+      </div>
+      <table style="border-collapse:collapse;margin:8px 0;font-size:12px">
+        <tr style="background:var(--bg)"><th style="padding:4px 10px;border:1px solid var(--border)">Panel</th><th style="padding:4px 10px;border:1px solid var(--border)">Need</th><th style="padding:4px 10px;border:1px solid var(--border)">1 sheet me</th><th style="padding:4px 10px;border:1px solid var(--border)">Total nikle</th><th style="padding:4px 10px;border:1px solid var(--border)">Status</th></tr>
+        {% for p in mix_result.panels %}
+        <tr><td style="padding:4px 10px;border:1px solid var(--border)"><b>P{{ loop.index }}</b> ({{ p.l|gfmt }}×{{ p.w|gfmt }})</td>
+            <td style="padding:4px 10px;border:1px solid var(--border)">{{ p.qty }}</td>
+            <td style="padding:4px 10px;border:1px solid var(--border)"><b>{{ sh.per_sheet[loop.index0] }}</b></td>
+            <td style="padding:4px 10px;border:1px solid var(--border)">{{ sh.totals[loop.index0] }}</td>
+            <td style="padding:4px 10px;border:1px solid var(--border)">{% if sh.totals[loop.index0] >= p.qty %}✅ pura{% else %}⚠️ {{ p.qty - sh.totals[loop.index0] }} adhura{% endif %}</td></tr>
+        {% endfor %}
+      </table>
+      {% if sh.complete %}
+      <div class="grid2">
+        {% for ly in sh.layouts %}
+        <div>
+          {{ ly.svg|safe }}
+          <div class="muted small" style="margin-top:3px">Layout{% if ly.times > 1 %} <b style="color:#b45309">×{{ ly.times }}</b>{% endif %} — USE {{ ly.use }}% ·
+            {% for r in ly.rows %}P{{ r.pi + 1 }}×{{ r.n }}{% if not loop.last %} + {% endif %}{% endfor %}
+            {% if sh.more %} · +{{ sh.more }} aur layouts{% endif %}</div>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
+
 <form method="post" action="/cutlist" id="clForm">
 <div class="grid2">
   <!-- ============ LEFT: builder forms ============ -->
@@ -458,6 +541,43 @@
 </div>
 </form>
 
+<script>
+(function(){
+  var KEY='clOnly50', tog=document.getElementById('modeTog'), form=document.getElementById('clForm'),
+      pl=document.getElementById('mixPlanner'), hint=document.getElementById('modeHint');
+  function apply(on){
+    form.style.display = on ? 'none' : '';
+    pl.style.display = on ? 'block' : 'none';
+    tog.textContent = on ? '\ud83d\udce6 PANEL\u2192SHEET ONLY: ON' : '\ud83e\udde9 FULL CUTLIST: ON';
+    tog.style.background = on ? '#b45309' : '#0f172a';
+    hint.textContent = on
+      ? 'ONLY mode \u2014 panel + sheet size manual daalo, multi-size layout plan karo (1/multiple sheet).'
+      : 'FULL mode \u2014 poora cutlist (PCB builder + gang + sheet). Sirf PANEL\u2192SHEET chahiye to button dabao.';
+  }
+  var saved='0'; try { saved = localStorage.getItem(KEY) || '0'; } catch(e){}
+  apply(saved === '1');
+  tog.addEventListener('click', function(){
+    var on; try { on = localStorage.getItem(KEY) !== '1'; } catch(e){ on = true; }
+    try { localStorage.setItem(KEY, on ? '1' : '0'); } catch(e){}
+    apply(on);
+  });
+  window.mpAddP = function(){
+    var w = document.getElementById('mpWrapP');
+    var rows = w.querySelectorAll('.mpRow'); var c = rows[rows.length-1].cloneNode(true);
+    c.querySelectorAll('input').forEach(function(i){ i.value=''; }); w.appendChild(c);
+  };
+  window.mpAddS = function(){
+    var w = document.getElementById('mpWrapS');
+    var rows = w.querySelectorAll('.mpRow'); var c = rows[rows.length-1].cloneNode(true);
+    c.querySelectorAll('input').forEach(function(i){ i.value=''; }); w.appendChild(c);
+  };
+  window.mpDel = function(btn){
+    var r = btn.closest('.mpRow');
+    if (r && r.parentNode.querySelectorAll('.mpRow').length > 1) r.parentNode.removeChild(r);
+  };
+})();
+</script>
+
 <style>
 .result-line{background:var(--bg);border:1px solid var(--border);border-radius:9px;padding:10px 13px;font-size:13px;margin-top:14px}
 .section-title{font-size:11px;letter-spacing:1.2px;text-transform:uppercase;color:var(--muted);font-weight:700;margin:4px 2px 10px}
@@ -647,6 +767,12 @@ function computeLive(){
   }
 
   var pgXs = pGapList('x', gx, kx), pgYs = pGapList('y', gy, ky);
+  /* v3.56 \u2014 jis field me user ABHI type kar raha hai use rewrite mat karo
+     (warna typing ke beech "206" -> "206." decimal-fmt aa jata tha) */
+  function _setIdle(id, v){
+    var el = document.getElementById(id);
+    if (el && document.activeElement !== el) el.value = v;
+  }
   if (gangActive) {
     if (useLocked) {
       /* v3.50 \u2014 CNC MARGIN FINAL size me hi (left-right-top-bottom) — locked == manual same */
@@ -661,8 +787,8 @@ function computeLive(){
       unitL = pL * gx + _sumArr(pgXs) + 2 * kx;
       unitW = pW * gy + _sumArr(pgYs) + 2 * ky;
     }
-    document.getElementById('panel_len').value = fmtNum(unitL);
-    document.getElementById('panel_w').value = fmtNum(unitW);
+    _setIdle('panel_len', fmtNum(unitL));
+    _setIdle('panel_w', fmtNum(unitW));
     document.getElementById('panel_base_len').value = fmtNum(pL);
     document.getElementById('panel_base_w').value = fmtNum(pW);
   } else {
@@ -670,8 +796,8 @@ function computeLive(){
     if (!useLocked && baseL > 0 && baseW > 0) {
       pL = baseL; pW = baseW;   /* multiplier off: single panel wapas restore */
     }
-    document.getElementById('panel_len').value = fmtNum(pL);
-    document.getElementById('panel_w').value = fmtNum(pW);
+    _setIdle('panel_len', fmtNum(pL));
+    _setIdle('panel_w', fmtNum(pW));
     document.getElementById('panel_base_len').value = '';
     document.getElementById('panel_base_w').value = '';
     unitL = pL + 2 * kx; unitW = pW + 2 * ky;   /* v2.87 — sheet fit CUTTING size (+2×CNC MARGIN) par */

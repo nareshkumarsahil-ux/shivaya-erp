@@ -1185,6 +1185,230 @@ def _svg_gang(s, cx, cy, cl, cw, gx, gy, kx, ky, fill, stroke, sw_,
                 s.append(f'<rect x="{cx + a * (p + kx):.1f}" y="{cy + b * (q + ky):.1f}" width="{p:.1f}" height="{q:.1f}" fill="{in_fill}" stroke="{in_stroke}" stroke-width="0.7"/>')
 
 
+def _pack_axis(rem, sl, sw, vertical):
+    """v3.53 \u2014 ek axis me bands packing + har band ke BACHE HUE width me doosre
+    panel ka filler column (rotation auto) \u2014 reference optimizer jaisa mixed layout."""
+    A, B = (sw, sl) if vertical else (sl, sw)
+    place = []
+    band = 0.0
+    guard = 0
+    while band < B - 1e-9 and guard < 60:
+        guard += 1
+        best = None
+        for i, p in enumerate(rem):
+            if p["qty"] <= 0:
+                continue
+            for orient, (L, W) in (("n", (p["l"], p["w"])), ("r", (p["w"], p["l"]))):
+                if L <= A + 1e-9 and W <= B - band + 1e-9:
+                    n = min(int(A // L), p["qty"])
+                    if n > 0:
+                        area = n * L * W
+                        if best is None or area > best["area"] + 1e-9:
+                            best = {"pi": i, "l": L, "w": W, "n": n, "orient": orient, "area": area}
+        if best is None:
+            break
+
+        def _emit(seg, b0, i0):
+            bl = seg["n"] * seg["l"]
+            if vertical:
+                place.append({"pi": seg["pi"], "n": seg["n"], "pl": seg["l"], "pw": seg["w"],
+                              "orient": seg["orient"], "x": b0, "y": i0, "bw": seg["w"], "bh": bl, "v": True})
+            else:
+                place.append({"pi": seg["pi"], "n": seg["n"], "pl": seg["l"], "pw": seg["w"],
+                              "orient": seg["orient"], "x": i0, "y": b0, "bw": bl, "bh": seg["w"], "v": False})
+
+        _emit(best, band, 0.0)
+        rem[best["pi"]]["qty"] -= best["n"]
+        inner = best["n"] * best["l"]
+        left = A - inner
+        fg = 0
+        while left > 1e-9 and fg < 30:
+            fg += 1
+            fb = None
+            for i, p in enumerate(rem):
+                if p["qty"] <= 0:
+                    continue
+                for orient, (L, W) in (("n", (p["l"], p["w"])), ("r", (p["w"], p["l"]))):
+                    if L <= left + 1e-9 and W <= best["w"] + 1e-9:
+                        n = min(int(left // L), p["qty"])
+                        if n > 0:
+                            ar = n * L * W
+                            if fb is None or ar > fb["area"] + 1e-9:
+                                fb = {"pi": i, "l": L, "w": W, "n": n, "orient": orient, "area": ar}
+            if fb is None:
+                break
+            _emit(fb, band, inner)
+            rem[fb["pi"]]["qty"] -= fb["n"]
+            inner += fb["n"] * fb["l"]
+            left = A - inner
+        band += best["w"]
+    used = sum(s["n"] * s["pl"] * s["pw"] for s in place)
+    return place, used
+
+
+def _pack_sheet_best(rem, sl, sw):
+    """v3.53 \u2014 horizontal AUR vertical dono packing try, jo zyada area bhare wahi."""
+    cands = []
+    for vertical in (False, True):
+        cp = [dict(p) for p in rem]
+        place, used = _pack_axis(cp, sl, sw, vertical)
+        cands.append((used, place))
+    cands.sort(key=lambda c: -c[0])
+    return cands[0][1], cands[0][0]
+
+
+def _mix_pack_plan(f):
+    """v3.51/v3.53 \u2014 MULTI PANEL \u2192 SHEET PLANNER: alag-alag size ke panels (manual) x
+    alag-alag size ki sheets (manual). Har sheet: best of horizontal/vertical packing,
+    bands + filler columns (mixed sizes ek hi sheet me) \u2014 maximum USE."""
+    def _fl(x):
+        try:
+            return float(str(x).strip())
+        except (TypeError, ValueError):
+            return 0.0
+    panels = []
+    for _L, _W, _Q in zip(f.getlist("mp_len"), f.getlist("mp_wid"), f.getlist("mp_qty")):
+        L, W, Q = _fl(_L), _fl(_W), int(_fl(_Q) or 0)
+        if L > 0 and W > 0 and Q > 0:
+            panels.append({"l": L, "w": W, "qty": min(Q, 100000)})
+    sheets_in = []
+    for _L, _W in zip(f.getlist("mp_sl"), f.getlist("mp_sw")):
+        L, W = _fl(_L), _fl(_W)
+        if L > 0 and W > 0:
+            sheets_in.append((L, W))
+    if not panels or not sheets_in:
+        return None
+    sheets_in = sheets_in[:8]
+    panels = panels[:12]
+    out = []
+    for (sl, sw) in sheets_in:
+        rem = [dict(p) for p in panels]
+        layouts = []
+        for _s in range(400):
+            if all(p["qty"] <= 0 for p in rem):
+                break
+            rows, used = _pack_sheet_best(rem, sl, sw)
+            if not rows:
+                break
+            for _r in rows:
+                rem[_r["pi"]]["qty"] -= _r["n"]
+            layouts.append({"rows": rows, "use": round(100 * used / (sl * sw), 1)})
+        complete = all(p["qty"] <= 0 for p in rem)
+        totals = [0] * len(panels)
+        for ly in layouts:
+            for r in ly["rows"]:
+                totals[r["pi"]] += r["n"]
+        # v3.54 \u2014 lagatar IDENTICAL layouts ek group (reference jaisa x12/x23 multiplier)
+        groups = []
+        for ly in layouts:
+            _sig = tuple((r["pi"], round(r["x"], 1), round(r["y"], 1), round(r["bw"], 1), round(r["bh"], 1)) for r in ly["rows"])
+            if groups and groups[-1]["sig"] == _sig:
+                groups[-1]["times"] += 1
+            else:
+                groups.append({"sig": _sig, "rows": ly["rows"], "use": ly["use"], "times": 1})
+        # v3.54b \u2014 MIXED layout pehle dikhe, phir high-use
+        groups.sort(key=lambda g: (-len({r["pi"] for r in g["rows"]}), -g["use"]))
+        first = [0] * len(panels)
+        if groups:
+            for r in groups[0]["rows"]:
+                first[r["pi"]] += r["n"]
+        _shown = groups[:6]
+        out.append({
+            "sl": sl, "sw": sw,
+            "layouts": [{"rows": g["rows"], "use": g["use"], "times": g["times"],
+                         "svg": _svg_mix_sheet(sl, sw, g["rows"], g["use"])} for g in _shown],
+            "more": max(0, len(groups) - 6),
+            "per_sheet": first, "totals": totals,
+            "need": [p["qty"] for p in panels],
+            "sheets_needed": len(layouts) if complete else None,
+            "complete": complete,
+        })
+    return {"panels": panels, "sheets": out}
+
+
+def _svg_mix_sheet(sl, sw, placements, use):
+    """v3.55 \u2014 FULL-CUTLIST-style planner drawing: HAR PIECE box + #N centered numbering +
+    dims (top width / rotated left height) + RED band cuts / BLUE piece cuts +
+    sheet dims BAHAR (bottom + right rotated) + WASTE strips + USE+WASTE caption (reference jaisa)."""
+    W, H, pad = 500, 448, 30
+    scale = min((W - pad - 84) / sl, (H - pad - 64) / sw)
+    S, T = sl * scale, sw * scale
+    x0 = pad + (W - pad - 84 - S) / 2
+    y0 = pad + (H - pad - 64 - T) / 2
+    fills = [("#eef2ff", "#6366f1"), ("#fdf4ff", "#c026d3"), ("#dcfce7", "#16a34a"),
+             ("#fef9c3", "#ca8a04"), ("#dbeafe", "#2563eb"), ("#fce7f3", "#db2777")]
+    s = [f'<svg viewBox="0 0 {W} {H}" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;display:block">']
+    s.append(f'<rect x="{x0:.1f}" y="{y0:.1f}" width="{S:.1f}" height="{T:.1f}" fill="#fffdf5" stroke="#0f172a" stroke-width="1.6"/>')
+    maxW = max((p["x"] + p["bw"]) for p in placements)
+    maxH = max((p["y"] + p["bh"]) for p in placements)
+    # WASTE strips (right + bottom) — halka lal
+    waste_x, waste_y = max(sl - maxW, 0.0), max(sw - maxH, 0.0)
+    if waste_x > 0.05:
+        s.append(f'<rect x="{x0 + maxW * scale:.1f}" y="{y0:.1f}" width="{waste_x * scale:.1f}" height="{T:.1f}" fill="#fee2e2" fill-opacity="0.8" stroke="#fca5a5" stroke-width="1" stroke-dasharray="3 2"/>')
+    if waste_y > 0.05:
+        s.append(f'<rect x="{x0:.1f}" y="{y0 + maxH * scale:.1f}" width="{S:.1f}" height="{waste_y * scale:.1f}" fill="#fee2e2" fill-opacity="0.8" stroke="#fca5a5" stroke-width="1" stroke-dasharray="3 2"/>')
+        if waste_y * scale > 14 and S > 60:
+            s.append(f'<text x="{x0 + S / 2:.1f}" y="{y0 + maxH * scale + waste_y * scale / 2 + 3:.1f}" text-anchor="middle" font-size="8.5" font-weight="700" fill="#dc2626" font-family="Segoe UI,Arial">WASTE {waste_y:.2f}</text>')
+    # pieces (axis-sahi repeat)
+    pieces = []
+    for p in placements:
+        fill, _st = fills[p["pi"] % len(fills)]
+        if p.get("v"):
+            pw_, ph_ = p["bw"], p["bh"] / p["n"]
+        else:
+            pw_, ph_ = p["bw"] / p["n"], p["bh"]
+        for k in range(p["n"]):
+            if p.get("v"):
+                pieces.append((p["x"], p["y"] + k * ph_, pw_, ph_, fill, _st))
+            else:
+                pieces.append((p["x"] + k * pw_, p["y"], pw_, ph_, fill, _st))
+    for (px, py, pw_, ph_, fill, _st) in pieces:
+        s.append(f'<rect x="{x0 + px * scale:.1f}" y="{y0 + py * scale:.1f}" width="{pw_ * scale:.1f}" height="{ph_ * scale:.1f}" fill="{fill}" stroke="#94a3b8" stroke-width="0.8"/>')
+    # cuts: RED = band separator (pura lamba), BLUE = piece divider
+    for p in placements:
+        pw_, ph_ = (p["bw"], p["bh"] / p["n"]) if p.get("v") else (p["bw"] / p["n"], p["bh"])
+        for k in range(1, p["n"]):
+            off = (p["y"] + k * ph_) if p.get("v") else (p["x"] + k * pw_)
+            if p.get("v"):
+                yy = y0 + off * scale
+                s.append(f'<line x1="{x0 + p["x"] * scale:.1f}" y1="{yy:.1f}" x2="{x0 + (p["x"] + p["bw"]) * scale:.1f}" y2="{yy:.1f}" stroke="#2563eb" stroke-width="1.4"/>')
+            else:
+                xx = x0 + off * scale
+                s.append(f'<line x1="{xx:.1f}" y1="{y0 + p["y"] * scale:.1f}" x2="{xx:.1f}" y2="{y0 + (p["y"] + p["bh"]) * scale:.1f}" stroke="#2563eb" stroke-width="1.4"/>')
+        if p.get("v") and p["x"] > 0.01:
+            xx = x0 + p["x"] * scale
+            s.append(f'<line x1="{xx:.1f}" y1="{y0:.1f}" x2="{xx:.1f}" y2="{y0 + maxH * scale:.1f}" stroke="#dc2626" stroke-width="2"/>')
+        elif not p.get("v") and p["y"] > 0.01:
+            yy = y0 + p["y"] * scale
+            s.append(f'<line x1="{x0:.1f}" y1="{yy:.1f}" x2="{x0 + maxW * scale:.1f}" y2="{yy:.1f}" stroke="#dc2626" stroke-width="2"/>')
+    # labels: top width + rotated left height + #N centered (reference jaisa)
+    num = 1
+    for (px, py, pw_, ph_, fill, _st) in pieces:
+        P, Q = pw_ * scale, ph_ * scale
+        cx, cy = x0 + (px + pw_ / 2) * scale, y0 + (py + ph_ / 2) * scale
+        if P > 26 and Q > 13:
+            s.append(f'<text x="{cx:.1f}" y="{y0 + py * scale + 9.5:.1f}" text-anchor="middle" font-size="8.5" fill="#1e293b" font-family="Segoe UI,Arial">{pw_:g}</text>')
+        if Q > 30 and P > 13:
+            s.append(f'<text x="{x0 + px * scale + 6.5:.1f}" y="{cy:.1f}" transform="rotate(-90 {x0 + px * scale + 6.5:.1f} {cy:.1f})" text-anchor="middle" font-size="8.5" fill="#1e293b" font-family="Segoe UI,Arial">{ph_:g}</text>')
+        if P > 20 and Q > 20:
+            s.append(f'<text x="{cx:.1f}" y="{cy + 3.5:.1f}" text-anchor="middle" font-size="10.5" font-weight="800" fill="{_st}" font-family="Segoe UI,Arial">#{num}</text>')
+        elif P > 12 and Q > 12:
+            s.append(f'<text x="{x0 + px * scale + 3.5:.1f}" y="{y0 + (py + ph_) * scale - 3.5:.1f}" font-size="7.5" font-weight="700" fill="#475569" font-family="Segoe UI,Arial">{num}</text>')
+        num += 1
+    # WASTE text right strip me (rotated, red)
+    if waste_x > 0.05 and waste_x * scale > 14 and T > 60:
+        _rx, _ry = x0 + maxW * scale + waste_x * scale / 2, y0 + T / 2
+        s.append(f'<text x="{_rx:.1f}" y="{_ry:.1f}" transform="rotate(-90 {_rx:.1f} {_ry:.1f})" text-anchor="middle" font-size="9" font-weight="700" fill="#dc2626" font-family="Segoe UI,Arial">WASTE {waste_x:.2f}</text>')
+    # sheet dims BAHAR (bottom + right rotated) — reference jaisa
+    s.append(f'<text x="{x0 + S / 2:.1f}" y="{y0 + T + 16:.1f}" text-anchor="middle" font-size="10.5" font-weight="700" fill="#475569" font-family="Segoe UI,Arial">{sl:.2f} mm</text>')
+    s.append(f'<text x="{x0 + S + 14:.1f}" y="{y0 + T / 2:.1f}" transform="rotate(90 {x0 + S + 14:.1f} {y0 + T / 2:.1f})" text-anchor="middle" font-size="10.5" font-weight="700" fill="#475569" font-family="Segoe UI,Arial">{sw:.2f} mm</text>')
+    # captions: sheet info + USE + WASTE breakdown (image-2 jaisa)
+    s.append(f'<text x="{W / 2:.0f}" y="{H - 30:.0f}" text-anchor="middle" font-size="11" fill="#8a8f98" font-family="Segoe UI,Arial">SHEET {sl:g}\u00d7{sw:g} mm \u00b7 {len(pieces)} pieces \u00b7 USE {use}%</text>')
+    s.append(f'<text x="{W / 2:.0f}" y="{H - 12:.0f}" text-anchor="middle" font-size="10.5" font-weight="700" fill="#475569" font-family="Segoe UI,Arial">USE {maxW:.2f} + <tspan fill="#dc2626">WASTE {waste_x:.2f}</tspan> = {sl:.2f} mm</text>')
+    s.append('</svg>')
+    return "".join(s)
+
+
 def svg_sheet_preview(r):
     """Best layout preview on the sheet (uniform grid or mixed rows)."""
     W, H, pad = 430, 380, 26
@@ -1598,9 +1822,12 @@ def cutlist():
     load_model_name = ""
     load_model_id = request.args.get("model") or (request.values.get("model_id") if request.method == "POST" else None)
 
+    mix_result = None
     if request.method == "POST":
         f = request.form
         action = f.get("action", "calculate")
+        if action == "mixplan":
+            mix_result = _mix_pack_plan(f)
         if action == "load" and f.get("model_id"):
             return redirect_with_token(url_for("cutlist", model=f.get("model_id")))
         fields = {k: f.get(k, "") for k in FIELD_KEYS}
@@ -1873,8 +2100,10 @@ def cutlist():
         # v2.74 \u2014 apply ke baad CUT LIST se SEEDHA JOB ORDER (preview) par
         if action == "apply_order" and result and (f.get("apply_order") or "").strip().isdigit():
             return redirect_with_token(url_for("jobcard", order_id=int(f.get("apply_order"))))
-        params = urlencode({k: fields.get(k, "") for k in FIELD_KEYS})
-        return redirect_with_token(url_for("cutlist") + "?" + params)
+        # v3.51 \u2014 mixplan redirect SKIP (tail render me mix_result dikhta hai)
+        if action != "mixplan":
+            params = urlencode({k: fields.get(k, "") for k in FIELD_KEYS})
+            return redirect_with_token(url_for("cutlist") + "?" + params)
 
     # GET
     q = request.args
@@ -2010,7 +2239,7 @@ def cutlist():
                            svg_panel=svg_panel, svg_sheet=svg_sheet, gang_info=gang_info,
                            svg_gang_panel=svg_gang_panel, svg_sheet_layout=svg_sheet_layout,
                            disp_pl=disp_pl, disp_pw=disp_pw, load_model_name=load_model_name,
-                           cl_pdfs=_cl_pdfs)
+                           cl_pdfs=_cl_pdfs, mix_result=mix_result)
 
 
 # ---------------------------------------------------------------- finished products

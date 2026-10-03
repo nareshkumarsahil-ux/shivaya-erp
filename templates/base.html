@@ -66,7 +66,7 @@
   <div class="side-footer">
     <div class="saved-note"><span class="dot"></span> All changes saved</div>
     <div class="user-chip">👤 {{ current_user_name }}<span class="role">{{ current_user_role|upper }}</span></div>
-    <div class="ver-chip" title="App version — agar ye purana dikhe to naya ZIP deploy nahi hua">🛰 App v3.50 · CNC MARGIN gang panel ke FINAL size me (left-right-top-bottom) — wahi final size sheet me fit · TOOL size badge + Thickness PRICE ke baad + PARTY code + ⚙ COLUMNS</div>
+    <div class="ver-chip" title="App version — agar ye purana dikhe to naya ZIP deploy nahi hua">🛰 App v3.56 · Panel size typing FIX (live recalc ab type karte waqt field overwrite nahi karta) · Planner drawing FULL-CUTLIST style (#N + WASTE + ×N) · SMART packing · CNC MARGIN final size me · TOOL badge + Thickness PRICE ke baad + PARTY code + ⚙ COLUMNS</div>
     <a class="logout" href="/logout">Logout ↩</a>
   </div>
 </aside>
@@ -174,6 +174,25 @@ document.addEventListener('click', function(e){
 document.addEventListener('submit', function(e){
   var f = e.target;
   if (!(f instanceof HTMLFormElement)) return;
+  /* v3.52 \u2014 data-stay forms: response HTML ko HI page bana do (reload result na kha jaye) */
+  if (f.hasAttribute('data-stay')) {
+    e.preventDefault();
+    var sbS = e.submitter;
+    var ocS = sbS ? (sbS.getAttribute('onclick') || '') : '';
+    var mS = ocS.match(/confirm\(\s*(['"])(.*?)\1\s*\)/);
+    if (mS && !window.confirm(mS[2])) return;
+    var fdS = new FormData(f);
+    if (sbS && sbS.name && !fdS.has(sbS.name)) fdS.append(sbS.name, sbS.value);
+    var tS = new URLSearchParams(window.location.search).get('token');
+    if (tS && !fdS.get('token')) fdS.append('token', tS);
+    f.querySelectorAll('button, input[type="submit"]').forEach(function(bS){ bS.disabled = true; });
+    fetch(f.getAttribute('action') || window.location.pathname + window.location.search, {method: 'POST', body: fdS})
+      .then(function(rS){ return rS.text(); })
+      .then(function(txtS){
+        document.open(); document.write(txtS); document.close();
+      });
+    return;
+  }
   var method = (f.getAttribute('method') || 'get').toLowerCase();
   if (method !== 'post') return;
   e.preventDefault();
