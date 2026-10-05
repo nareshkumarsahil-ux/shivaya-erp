@@ -318,7 +318,7 @@
           <div class="field" style="flex:1"><label>X Multiplier</label><input type="number" name="gang_x" id="gang_x" value="{{ fields.get('gang_x') if fields.get('gang_x') not in (None, '') else 1 }}" min="1"></div>
           <div class="field" style="flex:1"><label>Y Multiplier</label><input type="number" name="gang_y" id="gang_y" value="{{ fields.get('gang_y') if fields.get('gang_y') not in (None, '') else 1 }}" min="1"></div>
         </div>
-        <p class="muted small" style="margin-top:8px">💡 CNC MARGIN gang panel ke FINAL size me ADD hota hai (left-right-top-bottom, har side + margin) — aur YAHI final size sheet me fit hota hai. Multiplier = kitne panels ek saath gang-cut honge.</p>
+        <p class="muted small" style="margin-top:8px">💡 GANG PANEL = panels + joints (CNC margin YAHAN nahi). PANEL IN SHEET me CUTTING SIZE = GANG + CNC MARGIN (left-right-top-bottom) — wahi sheet me fit hota hai. Multiplier = kitne panels ek saath gang-cut honge.</p>
         <div style="margin-top:10px;background:#f8fafc;border:1px solid var(--border);border-radius:9px;padding:9px 12px">
           <div class="small" style="font-weight:800;color:#334155">🔹 PANEL-TO-PANEL GAP — KAHIN BHI: koi bhi joint me gap rakho ya hatao</div>
           <div id="pgapx_cells" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px"></div>
@@ -800,19 +800,20 @@ function computeLive(){
     if (el && document.activeElement !== el) el.value = v;
   }
   if (gangActive) {
+    /* v3.58 — GANG PANEL = panels + joints (CNC margin YAHAN nahi); CUTTING = GANG + margin */
+    var gangL, gangW;
     if (useLocked) {
-      /* v3.50 \u2014 CNC MARGIN FINAL size me hi (left-right-top-bottom) — locked == manual same */
-      unitL = pL * gx + _sumArr(pgXs) + 2 * kx;
-      unitW = pW * gy + _sumArr(pgYs) + 2 * ky;
+      gangL = pL * gx + _sumArr(pgXs);
+      gangW = pW * gy + _sumArr(pgYs);
     } else {
-      /* v2.87 — visible PANEL field = PANEL size; CUTTING = panels + joints + 2×CNC MARGIN
-         (panel_base ho to wahi base — recalc par double-add na ho) */
       var baseL87 = num('panel_base_len'), baseW87 = num('panel_base_w');
       if (baseL87 > 0 && baseW87 > 0) { pL = baseL87; pW = baseW87; }
       else { pL = manualL; pW = manualW; }
-      unitL = pL * gx + _sumArr(pgXs) + 2 * kx;
-      unitW = pW * gy + _sumArr(pgYs) + 2 * ky;
+      gangL = pL * gx + _sumArr(pgXs);
+      gangW = pW * gy + _sumArr(pgYs);
     }
+    unitL = gangL + 2 * kx;   /* CUTTING SIZE — sirf PANEL IN SHEET me */
+    unitW = gangW + 2 * ky;
     _setIdle('panel_len', fmtNum(unitL));
     _setIdle('panel_w', fmtNum(unitW));
     document.getElementById('panel_base_len').value = fmtNum(pL);
@@ -889,7 +890,7 @@ function computeLive(){
   var pl = document.getElementById('livePanelLine');
   pl.style.display = 'block';
   var gangTxt = gangActive
-      ? ' · <span style="color:#16a34a">' + gx + '×' + gy + ' multiplier → CUTTING SIZE ' + fmtNum(gl) + '×' + fmtNum(gw) + 'mm · ' + pcsUnit + ' PCS/unit</span>'
+      ? ' · <span style="color:#16a34a">' + gx + '×' + gy + ' multiplier → GANG PANEL ' + fmtNum(gangL) + '×' + fmtNum(gangW) + 'mm (sheet cutting me +CNC margin) · ' + pcsUnit + ' PCS/unit</span>'
       : '';
   pl.innerHTML = '➕ <b>Panel Size: ' + fmtNum(pL) + '×' + fmtNum(pW) + 'mm · PCS/Panel: ' + pcsPanel + gangTxt + '</b>';
   document.getElementById('liveFormula').textContent = formula;
@@ -901,10 +902,10 @@ function computeLive(){
   var cutLine = document.getElementById('liveCutLine');
   if (gangActive) {
     cutLine.style.display = 'block';
-    cutLine.innerHTML = '✂ <b>Cutting Size: ' + fmtNum(gl) + ' × ' + fmtNum(gw) + 'mm - PCS/Unit: ' + pcsUnit + '</b>' +
+    cutLine.innerHTML = '✂ <b>GANG PANEL SIZE: ' + fmtNum(gangL) + ' × ' + fmtNum(gangW) + 'mm - PCS/Unit: ' + pcsUnit + '</b>' +
       '<div class="muted small" style="margin-top:3px">(' + fmtNum(pL) + ' x ' + gx + ' + gaps ' + pgStr(pgXs) +
-      ' + CNC ' + fmtNum(2 * kx) + ' = ' + fmtNum(gl) + 'mm, ' + fmtNum(pW) + ' x ' + gy + ' + gaps ' + pgStr(pgYs) +
-      ' + CNC ' + fmtNum(2 * ky) + ' = ' + fmtNum(gw) + 'mm)</div>';
+      ' = ' + fmtNum(gangL) + 'mm, ' + fmtNum(pW) + ' x ' + gy + ' + gaps ' + pgStr(pgYs) +
+      ' = ' + fmtNum(gangW) + 'mm — CNC margin isme NAHI, PANEL IN SHEET cutting me add hota hai)</div>';
   } else {
     cutLine.style.display = 'none';
   }
@@ -948,14 +949,14 @@ function computeLive(){
     }
     document.getElementById('gangSize').innerHTML = fmtNum(gl) + ' × ' + fmtNum(gw) + ' <span class="u">mm</span>';
     document.getElementById('gangPcs').innerHTML = pcsUnit + ' <span class="u">PCS</span>';
-    document.getElementById('gangSheet').innerHTML = '<b>' + layTxt + '</b><div class="gsize">' + fmtNum(gl) + ' × ' + fmtNum(gw) + ' mm</div>';
+    document.getElementById('gangSheet').innerHTML = '<b>' + layTxt + '</b><div class="gsize">' + fmtNum(gangL) + ' × ' + fmtNum(gangW) + ' mm</div>';
     document.getElementById('gangPcsSheet').innerHTML = pcsSheet + ' <span class="u">PCS</span>';
     document.getElementById('gangNote').innerHTML =
       '💡 Panel ' + fmtNum(pL) + '×' + fmtNum(pW) + ' mm (' + pcsPanel + ' PCS) × ' + gx + '×' + gy +
-      ' multiplier + joints + ' + fmtNum(2 * kx) + '/' + fmtNum(2 * ky) + ' mm CNC MARGIN (left-right-top-bottom) = FINAL CUTTING SIZE ' + fmtNum(gl) + '×' + fmtNum(gw) +
-      ' mm (' + pcsUnit + ' PCS/unit). Sheet ' + fmtNum(sl) + '×' + fmtNum(sw) + ' mm me <b>' + layTxt.toLowerCase() +
-      '</b> fit hoti hai — calculation isi ke hisaab se: ' + gangCount + ' × ' + pcsUnit + ' PCS = ' +
-      '<b>' + pcsSheet + ' PCS per sheet</b>.';
+      ' multiplier + joints = GANG PANEL ' + fmtNum(gangL) + '×' + fmtNum(gangW) + ' mm (' + pcsUnit +
+      ' PCS/unit) — CNC margin isme NAHI. PANEL IN SHEET me CUTTING SIZE (GANG + ' + fmtNum(2 * kx) + '/' + fmtNum(2 * ky) +
+      ' mm margin) fit hoti hai — Sheet ' + fmtNum(sl) + '×' + fmtNum(sw) + ' mm me <b>' + layTxt.toLowerCase() +
+      '</b>: ' + gangCount + ' × ' + pcsUnit + ' PCS = <b>' + pcsSheet + ' PCS per sheet</b>.';
     /* GANG PANEL PREVIEW SVG — EK gang unit zoom (multiplier panels + PCBs + joints) */
     var gh = document.getElementById('gangHead');
     if (gh) gh.textContent = '🔗 GANG PANEL PREVIEW — ' + gx + '×' + gy + ' MULTIPLIER = ' + pcsUnit + ' PCS';
@@ -1250,8 +1251,8 @@ function svgGangPanel(pcbL, pcbW, px, py, gapXs, gapYs, bl, br, bt, bb, pL, pW, 
      per-joint gap labels + total cutting size (gl x gw) dimensions ke saath */
   var W = 470, H = 412, pad = 30;
   pgXs = pgXs || []; pgYs = pgYs || [];
-  var gl = pL * gx + (pgXs.length ? _sumArr(pgXs) : kx * (gx - 1)) + 2 * kx;   /* v2.87 + CNC MARGIN */
-  var gw = pW * gy + (pgYs.length ? _sumArr(pgYs) : ky * (gy - 1)) + 2 * ky;   /* v2.87 + CNC MARGIN */
+  var gl = pL * gx + (pgXs.length ? _sumArr(pgXs) : kx * (gx - 1));   /* v3.58 GANG = panels + joints (margin NAHI) */
+  var gw = pW * gy + (pgYs.length ? _sumArr(pgYs) : ky * (gy - 1));   /* v3.58 */
   var scale = Math.min((W - pad - 46) / gl, (H - pad - 44) / gw);
   var S = gl * scale, T = gw * scale;
   var x0 = pad + (W - pad - 46 - S) / 2, y0 = pad + (H - pad - 44 - T) / 2;

@@ -1035,13 +1035,14 @@ def compute_layout(p):
     # v2.87 \u2014 kerf (CNC MARGIN) CUTTING SIZE me ADD hota hai: cutting = panel(+gaps) + 2*margin
     def _cut_add(_l, _w):
         return _l + 2 * kerf_x, _w + 2 * kerf_y
+    # v3.58 — GANG PANEL = panels + joints ONLY (CNC margin YAHAN nahi jodta)
     if gang_active:
-        # v2.87 — CUTTING SIZE = panels + joints + 2*CNC MARGIN (margin add hota hai)
         gang_len = panel_len * gang_x + (sum(pgaps_x) if pgaps_x else 0)
         gang_w = panel_w * gang_y + (sum(pgaps_y) if pgaps_y else 0)
-        gang_len, gang_w = _cut_add(gang_len, gang_w)
     else:
-        gang_len, gang_w = _cut_add(panel_len, panel_w)
+        gang_len, gang_w = panel_len, panel_w
+    # CUTTING SIZE = GANG + 2×CNC MARGIN — sirf PANEL IN SHEET me yahi fit/show hota hai
+    cutting_len, cutting_w = _cut_add(gang_len, gang_w)
 
     def fits(unit_l, unit_w):
         if unit_l <= 0 or unit_w <= 0:
@@ -1052,16 +1053,16 @@ def compute_layout(p):
         return nx, ny
 
     # sheet fitting unit = cutting size (gang); counts = gang units
-    nx, ny = fits(gang_len, gang_w)
+    nx, ny = fits(cutting_len, cutting_w)
     normal_panels = nx * ny
-    rx, ry = fits(gang_w, gang_len)
+    rx, ry = fits(cutting_w, cutting_len)
     rotated_panels = rx * ry
 
     # --- mixed rows: normal rows + rotated rows on one sheet ---
     # v3.50 \u2014 margin cutting size ke andar: pitch = cutting size khud (kerf spacing double nahi)
-    per_normal = int(sheet_len // gang_len) if gang_len > 0 else 0
-    per_rot = int(sheet_len // gang_w) if gang_w > 0 else 0
-    h_n, h_r = gang_w, gang_len
+    per_normal = int(sheet_len // cutting_len) if cutting_len > 0 else 0
+    per_rot = int(sheet_len // cutting_w) if cutting_w > 0 else 0
+    h_n, h_r = cutting_w, cutting_len
     max_n = int(sheet_w // h_n) if h_n > 0 else 0
     max_m = int(sheet_w // h_r) if h_r > 0 else 0
     mixed_n = mixed_m = 0
@@ -1084,9 +1085,9 @@ def compute_layout(p):
     else:
         best, panels_per_sheet = "normal", normal_panels
 
-    grid_x, grid_y, cell_len, cell_w = nx, ny, gang_len, gang_w
+    grid_x, grid_y, cell_len, cell_w = nx, ny, cutting_len, cutting_w
     if best == "rotated":
-        grid_x, grid_y, cell_len, cell_w = rx, ry, gang_w, gang_len
+        grid_x, grid_y, cell_len, cell_w = rx, ry, cutting_w, cutting_len
     pcs_unit = pcs_panel * gang_x * gang_y
     pcs_per_sheet = panels_per_sheet * pcs_unit
     total_panels = panels_per_sheet * sheets
@@ -1106,7 +1107,7 @@ def compute_layout(p):
     order_info = {"order_qty": order_qty, "panels_needed": panels_needed,
                   "sheets_needed": sheets_needed, "waste_panels": waste_panels, "waste_pcs": waste_pcs}
 
-    used = total_panels * gang_len * gang_w
+    used = total_panels * cutting_len * cutting_w
     sheet_area = sheets * sheet_len * sheet_w
     wastage = round(100 * (sheet_area - used) / sheet_area, 1) if sheet_area else 0
     inches = f"{sheet_len / 25.4:.1f}\u2033 \u00d7 {sheet_w / 25.4:.1f}\u2033"
@@ -1121,7 +1122,7 @@ def compute_layout(p):
         "pgaps_x": pgaps_x, "pgaps_y": pgaps_y,
         "sheet_len": sheet_len, "sheet_w": sheet_w, "kerf_x": kerf_x, "kerf_y": kerf_y, "sheets": sheets,
         "panel_len": panel_len, "panel_w": panel_w, "locked": locked,
-        "gang_active": gang_active, "cutting_len": gang_len, "cutting_w": gang_w,
+        "gang_active": gang_active, "cutting_len": cutting_len, "cutting_w": cutting_w,
         "pcs_panel": pcs_panel, "pcs_unit": pcs_unit, "formula": formula,
         "nx": nx, "ny": ny, "normal_panels": normal_panels,
         "rx": rx, "ry": ry, "rotated_panels": rotated_panels,
@@ -1424,12 +1425,12 @@ def svg_sheet_preview(r):
         # normal rows (amber) then rotated rows (blue)
         y = y0
         for _row in range(r["mixed_n"]):
-            cl, cw = r["gang_len"] * scale, r["gang_w"] * scale
+            cl, cw = r["cutting_len"] * scale, r["cutting_w"] * scale
             for i in range(r["per_normal"]):
                 _svg_gang(s, x0 + i * cl, y, cl, cw, gx, gy, kx, ky, "#dcfce7", "#16a34a", 1.4)
             y += cw
         for _row in range(r["mixed_m"]):
-            cl2p, cw2p = r["gang_w"] * scale, r["gang_len"] * scale
+            cl2p, cw2p = r["cutting_w"] * scale, r["cutting_len"] * scale
             for i in range(r["per_rot"]):
                 _svg_gang(s, x0 + i * cl2p, y, cl2p, cw2p, gx, gy, kx, ky, "#bfdbfe", "#2563eb", 1.4)
             y += cw2p
@@ -1521,8 +1522,8 @@ def svg_gang_panel_preview(r):
     kx, ky = r["kerf_x"], r["kerf_y"]
     pgx = r.get("pgaps_x") or []
     pgy = r.get("pgaps_y") or []
-    gl = pl * gx + (sum(pgx) if pgx else kx * (gx - 1)) + 2 * kx   # v2.87 + CNC MARGIN
-    gw = pw * gy + (sum(pgy) if pgy else ky * (gy - 1)) + 2 * ky   # v2.87 + CNC MARGIN
+    gl = pl * gx + (sum(pgx) if pgx else kx * (gx - 1))   # v3.58 GANG PANEL = panels + joints (margin NAHI)
+    gw = pw * gy + (sum(pgy) if pgy else ky * (gy - 1))   # v3.58
     scale = min((W - pad - 46) / gl, (H - pad - 44) / gw)
     S, T = gl * scale, gw * scale
     x0, y0 = pad + (W - pad - 46 - S) / 2, pad + (H - pad - 44 - T) / 2
@@ -1595,11 +1596,11 @@ def svg_sheet_layout_preview(r):
     # v2.62 \u2014 axis-wise USE + WASTE breakdown (red strips + USE/WASTE labels)
     kx_m, ky_m = r["kerf_x"], r["kerf_y"]
     if r["best"] == "mixed":
-        _un = r["per_normal"] * r["gang_len"] if r["per_normal"] and r["mixed_n"] else 0
-        _ur = r["per_rot"] * r["gang_w"] if r["per_rot"] and r["mixed_m"] else 0
+        _un = r["per_normal"] * r["cutting_len"] if r["per_normal"] and r["mixed_n"] else 0
+        _ur = r["per_rot"] * r["cutting_w"] if r["per_rot"] and r["mixed_m"] else 0
         used_x = max(_un, _ur)
         _rows = r["mixed_n"] + r["mixed_m"]
-        used_y = (r["mixed_n"] * r["gang_w"] + r["mixed_m"] * r["gang_len"]) if _rows else 0
+        used_y = (r["mixed_n"] * r["cutting_w"] + r["mixed_m"] * r["cutting_len"]) if _rows else 0
     else:
         used_x = r["grid_x"] * r["cell_len"] if r["grid_x"] else 0
         used_y = r["grid_y"] * r["cell_w"] if r["grid_y"] else 0
@@ -1665,16 +1666,16 @@ def svg_sheet_layout_preview(r):
     if r["best"] == "mixed":
         num = 1
         y = y0
-        cl, cw = r["gang_len"] * scale, r["gang_w"] * scale
+        cl, cw = r["cutting_len"] * scale, r["cutting_w"] * scale
         for _row in range(r["mixed_n"]):
             for i in range(r["per_normal"]):
-                _panel_cell(x0 + i * cl, y, cl, cw, num, "#eef2ff", "#6366f1", r["gang_len"], r["gang_w"])
+                _panel_cell(x0 + i * cl, y, cl, cw, num, "#eef2ff", "#6366f1", r["cutting_len"], r["cutting_w"])
                 num += 1
             y += cw
-        cl2, cw2 = r["gang_w"] * scale, r["gang_len"] * scale
+        cl2, cw2 = r["cutting_w"] * scale, r["cutting_len"] * scale
         for _row in range(r["mixed_m"]):
             for i in range(r["per_rot"]):
-                _panel_cell(x0 + i * cl2, y, cl2, cw2, num, "#fdf4ff", "#c026d3", r["gang_w"], r["gang_len"], rot=True)
+                _panel_cell(x0 + i * cl2, y, cl2, cw2, num, "#fdf4ff", "#c026d3", r["cutting_w"], r["cutting_len"], rot=True)
                 num += 1
             y += cw2
         if r["gang_active"]:
@@ -1735,7 +1736,7 @@ def gang_info_for(r):
         return None
     gx, gy = r["gang_x"], r["gang_y"]
     pcs_gang = r["pcs_unit"]
-    gl, gw = r["cutting_len"], r["cutting_w"]
+    gl, gw = r["gang_len"], r["gang_w"]   # v3.58 — GANG PANEL size (margin nahi)
     if r["best"] == "mixed":
         gang_count = r["mixed_n"] * r["per_normal"] + r["mixed_m"] * r["per_rot"]
         lay = f'{r["mixed_n"]} row × {r["per_normal"]} + {r["mixed_m"]} row × {r["per_rot"]}'
@@ -1752,16 +1753,16 @@ def gang_info_for(r):
         if all(abs(v - arr[0]) < 1e-9 for v in arr):
             return f"{arr[0]:.2f} x {len(arr)}"
         return "[" + "+".join(f"{v:g}" for v in arr) + "]"
-    cut_html = (f'✂ <b>Cutting Size: {gl:.2f} × {gw:.2f}mm - PCS/Unit: {pcs_gang}</b>'
+    cut_html = (f'✂ <b>GANG PANEL SIZE: {gl:.2f} × {gw:.2f}mm - PCS/Unit: {pcs_gang}</b>'
                 f'<div class="muted small" style="margin-top:3px">'
                 f'({r["panel_len"]:.2f} x {gx} + gaps {_gstr(r.get("pgaps_x"), r["kerf_x"])} = {gl:.2f}mm, '
-                f'{r["panel_w"]:.2f} x {gy} + gaps {_gstr(r.get("pgaps_y"), r["kerf_y"])} = {gw:.2f}mm)</div>')
+                f'{r["panel_w"]:.2f} x {gy} + gaps {_gstr(r.get("pgaps_y"), r["kerf_y"])} = {gw:.2f}mm — CNC margin isme NAHI)</div>')
     layout_html = (f'<b>{lay}</b>'
                    f'<div class="gsize">{gl:.2f} × {gw:.2f} mm</div>')
     note = (f'💡 Panel {r["panel_len"]:.2f}×{r["panel_w"]:.2f} mm ({r["pcs_panel"]} PCS) × {gx}×{gy} '
-            f'multiplier + {r["kerf_x"]:.2f}/{r["kerf_y"]:.2f} mm CNC MARGIN = CUTTING SIZE {gl:.2f}×{gw:.2f} '
-            f'mm ({pcs_gang} PCS/unit). Sheet {r["sheet_len"]:.2f}×{r["sheet_w"]:.2f} mm me <b>{lay.lower()}</b> fit '
-            f'hoti hai — calculation isi ke hisaab se: {gang_count} × {pcs_gang} PCS = '
+            f'multiplier + joints = GANG PANEL {gl:.2f}×{gw:.2f} mm ({pcs_gang} PCS/unit) — CNC margin isme NAHI. '
+            f'PANEL IN SHEET me CUTTING SIZE (GANG + {r["kerf_x"]:.2f}/{r["kerf_y"]:.2f} mm margin) fit hoti hai — '
+            f'Sheet {r["sheet_len"]:.2f}×{r["sheet_w"]:.2f} mm me <b>{lay.lower()}</b>: {gang_count} × {pcs_gang} PCS = '
             f'<b>{pcs_sheet} PCS per sheet</b>.')
     return {"gl": gl, "gw": gw, "pcs_gang": pcs_gang, "gx": gx, "gy": gy,
             "pcs_panel": r["pcs_panel"],
