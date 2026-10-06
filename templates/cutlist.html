@@ -992,7 +992,7 @@ function computeLive(){
     var slh = document.getElementById('sheetLayoutHead');
     if (slh) slh.textContent = gangActive ? '📐 GANG PANEL IN SHEET — 1 SHEET ME KITNE GANG PANELS' : '📐 PANEL IN SHEET — 1 SHEET ME KITNE PANELS';
     document.getElementById('svgSheetLayout').innerHTML =
-      svgSheetLayout(sl, sw, cl, cw, gx2, gy2, gx, gy, kx, ky, pps, best, mN, mM, perN, perR, gl, gw, pcsUnit, shape, pcbL, pcbW, px, py);
+      svgSheetLayout(sl, sw, cl, cw, gx2, gy2, gx, gy, kx, ky, pps, best, mN, mM, perN, perR, gl, gw, pcsUnit, shape, pcbL, pcbW, px, py, gangL, gangW);
     _zApply('svgSheetLayout');
   }
 
@@ -1135,7 +1135,9 @@ function svgSheet(sl, sw, cl, cw, gx2, gy2, gx, gy, kx, ky, pps, waste, best, mN
 /* ---- 📐 PANEL IN SHEET (live mirror) — gang ho to CUTTING PANEL fit, warna PANEL ----
    Poori sheet ke andar numbered panels + har panel ka andar single-PCB grid + caption
    batata hai kaunsa panel fit hua (size ke saath) aur 1 sheet me kitne aate hai. ---- */
-function svgSheetLayout(sl, sw, cl, cw, gx2, gy2, gx, gy, kx, ky, pps, best, mN, mM, perN, perR, gl, gw, pcsUnit, shape, pcbL, pcbW, px, py){
+function svgSheetLayout(sl, sw, cl, cw, gx2, gy2, gx, gy, kx, ky, pps, best, mN, mM, perN, perR, gl, gw, pcsUnit, shape, pcbL, pcbW, px, py, ggl, ggw){
+    /* v3.59 fix \u2014 ggl/ggw = GANG PANEL mm (margin NAHI); purane caller ke liye cutting par fallback */
+    var _GGL = (typeof ggl === 'number' && ggl > 0) ? ggl : gl, _GGW = (typeof ggw === 'number' && ggw > 0) ? ggw : gw;
   shape = shape || 'rect';   /* v3.21 — sheet layout me bhi PCB shape same */
   /* v2.63 — canvas 500x448: neeche 3 rows (sheet-dim / USE-WASTE / caption), right pe 2 rotated columns */
   var W = 500, H = 448, pad = 30;
@@ -1204,8 +1206,8 @@ function svgSheetLayout(sl, sw, cl, cw, gx2, gy2, gx, gy, kx, ky, pps, best, mN,
     /* v3.59 — dims label GANG PANEL size (margin nahi) + PCS/gang */
     if (gang && Cl > 60 && Cw > 30) {
       s += '<text x="' + (cx + Cl/2).toFixed(1) + '" y="' + (cy + Cw/2 + 15).toFixed(1) + '" text-anchor="middle" font-size="8.5" font-weight="700" fill="' + stroke + '" font-family="Segoe UI,Arial">' + pcsUnit + ' PCS/GANG</text>';
-      if (Cl > 26 && Cw > 15) lblW(cx + Cl/2, cy + 8.5, rot ? (cw / scale) : (cl / scale));
-      if (Cw > 26 && Cl > 15) lblH(cx + 7.5, cy + Cw/2, rot ? (cl / scale) : (cw / scale));
+      if (Cl > 26 && Cw > 15) lblW(cx + Cl/2, cy + 8.5, rot ? _GGW : _GGL);
+      if (Cw > 26 && Cl > 15) lblH(cx + 7.5, cy + Cw/2, rot ? _GGL : _GGW);
     } else {
       if (Cl > 26 && Cw > 15) lblW(cx + Cl/2, cy + 8.5, Cl / scale);
       if (Cw > 26 && Cl > 15) lblH(cx + 7.5, cy + Cw/2, Cw / scale);
@@ -1223,14 +1225,14 @@ function svgSheetLayout(sl, sw, cl, cw, gx2, gy2, gx, gy, kx, ky, pps, best, mN,
     for (var rN = 0; rN < mN; rN++) { for (i = 0; i < perN; i++) { cell(x0 + i*cl, y, cl, cw, num, '#eef2ff', '#6366f1'); num++; } y += cw; }
     var cl2 = cw, cw2 = cl;
     for (var rM = 0; rM < mM; rM++) { for (i = 0; i < perR; i++) { cell(x0 + i*cl2, y, cl2, cw2, num, '#fdf4ff', '#c026d3', true); num++; } y += cw2; }
-    cap = '1 SHEET ' + fmtNum(sl) + 'x' + fmtNum(sw) + ' mm \u2190 ' + ptype + ' ' + fmtNum(gang ? gangL : cl) + 'x' + fmtNum(gang ? gangW : cw) +
+    cap = '1 SHEET ' + fmtNum(sl) + 'x' + fmtNum(sw) + ' mm \u2190 ' + ptype + ' ' + fmtNum(gang ? _GGL : cl) + 'x' + fmtNum(gang ? _GGW : cw) +
           ' mm' + (gang ? ' (' + pcsUnit + ' PCS/gang, sheet cutting me +CNC margin)' : '') +
           ' = ' + pps + ' ' + ptype + 'S (' + mN + 'x row ' + perN + ' + ' + mM + 'x row ' + perR + ') = ' + fmtNum(pps * pcsUnit) + ' PCS';
   } else {
     num = 1;
     var _rotAll = (best === 'rotated');
     for (var ix = 0; ix < gx2; ix++) for (var iy = 0; iy < gy2; iy++) { cell(x0 + ix*cl, y0 + iy*cw, cl, cw, num, '#eef2ff', '#6366f1', _rotAll); num++; }
-    cap = '1 SHEET ' + fmtNum(sl) + 'x' + fmtNum(sw) + ' mm \u2190 ' + ptype + ' ' + fmtNum(gang ? gangL : cl) + 'x' + fmtNum(gang ? gangW : cw) +
+    cap = '1 SHEET ' + fmtNum(sl) + 'x' + fmtNum(sw) + ' mm \u2190 ' + ptype + ' ' + fmtNum(gang ? _GGL : cl) + 'x' + fmtNum(gang ? _GGW : cw) +
           ' mm' + (gang ? ' (' + pcsUnit + ' PCS/gang, sheet cutting me +CNC margin)' : '') +
           ' = ' + gx2 + 'x' + gy2 + ' = ' + pps + ' ' + ptype + 'S x ' + fmtNum(pcsUnit) + ' PCS = ' + fmtNum(pps * pcsUnit) + ' PCS';
   }
@@ -1563,16 +1565,35 @@ function _collectSection(sel){
   clone.style.maxWidth = '100%';
   return '<div class="pp-sec">' + clone.outerHTML + '</div>';
 }
+/* v3.60 \u2014 PRINT PREVIEW AB ALAG PAGE (new tab) par khulta hai; print output same A4 landscape */
 function _showOverlay(body){
-  var sh = document.getElementById('prevPrintSheet');
-  if (!sh) { alert('Print sheet nahi mila \u2014 page reload karke try karo.'); return; }
-  sh.innerHTML = '<div class="pp-tools">' +
-    '<button type="button" onclick="_doPrint()" style="background:#fff;color:#192338;border:0;padding:8px 18px;border-radius:8px;font-weight:800;cursor:pointer;font-size:13px">\ud83d\udda8\ufe0f PRINT / SAVE PDF</button>' +
-    '<button type="button" onclick="_closePrev()" style="background:#475569;color:#fff;border:0;padding:8px 16px;border-radius:8px;font-weight:800;cursor:pointer;font-size:13px">\u2715 BAND KARO</button>' +
-    '<span style="color:#cbd5e1;font-size:11.5px;font-weight:600">Print dialog na dikhe to Ctrl+P dabao \u2014 jo preview me dikh raha hai WAHI A4 landscape par print hoga</span></div>' +
-    '<div class="pp-screen">PRINT PREVIEW \u2014 YEHI PAGE PAR JAYEGA' +
-    '<div style="font:600 9.5px Segoe UI,Arial;color:#64748b;margin-top:2px">PROFESSIONAL DOCUMENT \u00b7 LETTERHEAD + DETAILS + DRAWING + SIGNATURES \u00b7 A4 LANDSCAPE</div></div>' + body;
-  document.body.classList.add('prevshow');
+  if (body.indexOf('KOI PREVIEW NAHI MILA') !== -1) {
+    alert('KOI PREVIEW NAHI MILA \u2014 Pehle values bharke CALCULATE dabao, phir PRINT/PDF chalega.');
+    return;
+  }
+  var w = null;
+  try { w = window.open('', '_blank'); } catch(e) { w = null; }
+  if (!w || w.closed || typeof w.document === 'undefined') {
+    alert('Popup block ho gaya \u2014 address bar me popup ALLOW karo, ya cutlist page par Ctrl+P dabao.');
+    return;
+  }
+  var styles = '';
+  var stEls = document.querySelectorAll('style');
+  for (var k = 0; k < stEls.length; k++) styles += '<style>' + stEls[k].textContent + '</style>';
+  var lnEls = document.querySelectorAll('link[rel="stylesheet"]');
+  for (var k2 = 0; k2 < lnEls.length; k2++) styles += lnEls[k2].outerHTML;
+  var doc = '<!DOCTYPE html><html lang="hi"><head><meta charset="utf-8"><title>PRINT PREVIEW \u2014 Shivaya ERP</title>' + styles + '</head>' +
+    '<body class="prevshow" style="margin:0"><div id="prevPrintSheet">' +
+    '<div class="pp-tools">' +
+    '<button type="button" onclick="window.print()" style="background:#fff;color:#192338;border:0;padding:8px 18px;border-radius:8px;font-weight:800;cursor:pointer;font-size:13px">\ud83d\udda8\ufe0f PRINT / SAVE PDF</button>' +
+    '<button type="button" onclick="window.close()" style="background:#475569;color:#fff;border:0;padding:8px 16px;border-radius:8px;font-weight:800;cursor:pointer;font-size:13px">\u2715 BAND KARO</button>' +
+    '<span style="color:#cbd5e1;font-size:11.5px;font-weight:600">ALAG PAGE \u00b7 Print dialog na dikhe to Ctrl+P dabao \u2014 jo preview me dikh raha hai WAHI A4 landscape par print hoga</span></div>' +
+    '<div class="pp-screen">PRINT PREVIEW \u2014 ALAG PAGE PE KHULA' +
+    '<div style="font:600 9.5px Segoe UI,Arial;color:#64748b;margin-top:2px">PROFESSIONAL DOCUMENT \u00b7 LETTERHEAD + DETAILS + DRAWING + SIGNATURES \u00b7 A4 LANDSCAPE</div></div>' + body + '</div>' +
+    '</body></html>';
+  w.document.open();
+  w.document.write(doc);
+  w.document.close();
 }
 function _doPrint(){
   document.body.classList.add('prevprint');
