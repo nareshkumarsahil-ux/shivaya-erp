@@ -525,6 +525,7 @@
           <div class="gstat"><div class="glbl">TOTAL PCB (1 SHEET)</div><div class="gnum" style="color:#166534" id="slPcs">—</div></div>
         {% set R96 = result %}
         <div class="gstat"><div class="glbl">ORDER QTY (PANELS)</div><div class="gnum" style="color:#334155" id="slOrderQty">{{ fields.get('order_qty') if fields.get('order_qty') else '—' }}</div></div>
+        <div class="gstat"><div class="glbl">TOTAL SHEET</div><div class="gnum" style="color:#0f172a" id="slTotSheets">{{ R96.sheets if R96 else '—' }}</div></div>
         <div class="gstat"><div class="glbl">TOTAL PANELS ({{ R96.sheets if R96 else 1 }} SH)</div><div class="gnum" style="color:#1d4ed8" id="slTotPanels">{{ '%0.0f'|format(R96.total_panels) if R96 and R96.total_panels else '—' }}</div></div>
         <div class="gstat"><div class="glbl">TOTAL PCB ({{ R96.sheets if R96 else 1 }} SH)</div><div class="gnum" style="color:#166534" id="slTotPcs">{{ '%0.0f'|format(R96.total_pcs) if R96 and R96.total_pcs else '—' }}</div></div>
         <div class="gstat"><div class="glbl">WASTE PANELS{% if R96 and R96.order_qty %} ({{ '%0.2f'|format(R96.cutting_len) }}×{{ '%0.2f'|format(R96.cutting_w) }} mm){% endif %}</div><div class="gnum" style="color:#dc2626" id="slWastePanels">{% if R96 and R96.order_qty %}{{ '%0.0f'|format(R96.waste_panels) }}{% else %}—{% endif %}</div></div>
@@ -912,7 +913,7 @@ function computeLive(){
 
   var sl2 = document.getElementById('liveSheetLine');
   sl2.style.display = 'block';
-  var gangPre = gangActive ? '<b>' + fmtNum(gl) + ' × ' + fmtNum(gw) + ' mm</b> · ' : '';
+  var gangPre = gangActive ? '<b>GANG ' + fmtNum(gangL) + ' × ' + fmtNum(gangW) + ' mm · ' + pcsUnit + ' PCS/gang</b> · ' : '';
   if (best === 'mixed') {
     sl2.innerHTML = '→ ' + gangPre + '<b>Mixed: ' + mN + ' × row of ' + perN + ' (normal) + ' + mM +
                     ' × row of ' + perR + ' (rotated) = ' + pps + ' panels/sheet · ' + pcsSheet + ' PCS</b>';
@@ -980,6 +981,8 @@ function computeLive(){
     var _totPan = pps * sheets, _totPcs = _totPan * pcsUnit;
     document.getElementById('slTotPanels').textContent = fmtNum(_totPan);
     document.getElementById('slTotPcs').textContent = fmtNum(_totPcs);
+    var _tsEl = document.getElementById('slTotSheets');   /* v3.59 — TOTAL SHEET */
+    if (_tsEl) _tsEl.textContent = (_oq > 0) ? String(Math.ceil(_oq / (pps || 1))) : String(sheets);
     var _wEl = document.getElementById('slWastePanels');
     if (_oq > 0) {
       _wEl.textContent = String(Math.max(0, _totPan - _oq));
@@ -1198,8 +1201,15 @@ function svgSheetLayout(sl, sw, cl, cw, gx2, gy2, gx, gy, kx, ky, pps, best, mN,
         pcbGrid(cx + a*(p + Kx), cy + b*(q + Ky), p, q, rot);
       }
     } else pcbGrid(cx, cy, Cl, Cw, rot);
-    if (Cl > 26 && Cw > 15) lblW(cx + Cl/2, cy + 8.5, Cl / scale);
-    if (Cw > 26 && Cl > 15) lblH(cx + 7.5, cy + Cw/2, Cw / scale);
+    /* v3.59 — dims label GANG PANEL size (margin nahi) + PCS/gang */
+    if (gang && Cl > 60 && Cw > 30) {
+      s += '<text x="' + (cx + Cl/2).toFixed(1) + '" y="' + (cy + Cw/2 + 15).toFixed(1) + '" text-anchor="middle" font-size="8.5" font-weight="700" fill="' + stroke + '" font-family="Segoe UI,Arial">' + pcsUnit + ' PCS/GANG</text>';
+      if (Cl > 26 && Cw > 15) lblW(cx + Cl/2, cy + 8.5, rot ? (cw / scale) : (cl / scale));
+      if (Cw > 26 && Cl > 15) lblH(cx + 7.5, cy + Cw/2, rot ? (cl / scale) : (cw / scale));
+    } else {
+      if (Cl > 26 && Cw > 15) lblW(cx + Cl/2, cy + 8.5, Cl / scale);
+      if (Cw > 26 && Cl > 15) lblH(cx + 7.5, cy + Cw/2, Cw / scale);
+    }
     if (Cl > 34 && Cw > 22)
       s += '<text x="' + (cx + Cl/2).toFixed(1) + '" y="' + (cy + Cw/2 + 4).toFixed(1) + '" text-anchor="middle" font-size="10" font-weight="800" fill="' + stroke + '" font-family="Segoe UI,Arial">#' + num + '</text>';
     else if (Cl > 22 && Cw > 34) {
@@ -1213,14 +1223,16 @@ function svgSheetLayout(sl, sw, cl, cw, gx2, gy2, gx, gy, kx, ky, pps, best, mN,
     for (var rN = 0; rN < mN; rN++) { for (i = 0; i < perN; i++) { cell(x0 + i*cl, y, cl, cw, num, '#eef2ff', '#6366f1'); num++; } y += cw; }
     var cl2 = cw, cw2 = cl;
     for (var rM = 0; rM < mM; rM++) { for (i = 0; i < perR; i++) { cell(x0 + i*cl2, y, cl2, cw2, num, '#fdf4ff', '#c026d3', true); num++; } y += cw2; }
-    cap = '1 SHEET ' + fmtNum(sl) + 'x' + fmtNum(sw) + ' mm \u2190 ' + ptype + ' ' + fmtNum(gang ? gl : cl) + 'x' + fmtNum(gang ? gw : cw) +
-          ' mm = ' + pps + ' ' + ptype + 'S (' + mN + 'x row ' + perN + ' + ' + mM + 'x row ' + perR + ') = ' + fmtNum(pps * pcsUnit) + ' PCS';
+    cap = '1 SHEET ' + fmtNum(sl) + 'x' + fmtNum(sw) + ' mm \u2190 ' + ptype + ' ' + fmtNum(gang ? gangL : cl) + 'x' + fmtNum(gang ? gangW : cw) +
+          ' mm' + (gang ? ' (' + pcsUnit + ' PCS/gang, sheet cutting me +CNC margin)' : '') +
+          ' = ' + pps + ' ' + ptype + 'S (' + mN + 'x row ' + perN + ' + ' + mM + 'x row ' + perR + ') = ' + fmtNum(pps * pcsUnit) + ' PCS';
   } else {
     num = 1;
     var _rotAll = (best === 'rotated');
     for (var ix = 0; ix < gx2; ix++) for (var iy = 0; iy < gy2; iy++) { cell(x0 + ix*cl, y0 + iy*cw, cl, cw, num, '#eef2ff', '#6366f1', _rotAll); num++; }
-    cap = '1 SHEET ' + fmtNum(sl) + 'x' + fmtNum(sw) + ' mm \u2190 ' + ptype + ' ' + fmtNum(cl) + 'x' + fmtNum(cw) +
-          ' mm = ' + gx2 + 'x' + gy2 + ' = ' + pps + ' ' + ptype + 'S x ' + fmtNum(pcsUnit) + ' PCS = ' + fmtNum(pps * pcsUnit) + ' PCS';
+    cap = '1 SHEET ' + fmtNum(sl) + 'x' + fmtNum(sw) + ' mm \u2190 ' + ptype + ' ' + fmtNum(gang ? gangL : cl) + 'x' + fmtNum(gang ? gangW : cw) +
+          ' mm' + (gang ? ' (' + pcsUnit + ' PCS/gang, sheet cutting me +CNC margin)' : '') +
+          ' = ' + gx2 + 'x' + gy2 + ' = ' + pps + ' ' + ptype + 'S x ' + fmtNum(pcsUnit) + ' PCS = ' + fmtNum(pps * pcsUnit) + ' PCS';
   }
   /* sheet dimensions — neeche length (ticks), right rotated width, qty */
   var _c = '#94a3b8', _yd = y0 + T + 11;

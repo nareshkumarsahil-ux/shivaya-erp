@@ -1653,10 +1653,13 @@ def svg_sheet_layout_preview(r):
                     _pcb_grid(cx + a * (p + kx), cy + b * (q + ky), p, q)
         else:
             _pcb_grid(cx, cy, cl, cw)
+        # v3.59 — dims label = GANG PANEL size (margin nahi) + PCS per gang panel
         if cl > 26 and cw > 15:
             _svg_dim_w(s, cx + cl / 2, cy + 8.5, mm_l)
         if cw > 26 and cl > 15:
             _svg_dim_h(s, cx + 7.5, cy + cw / 2, mm_w)
+        if r.get("gang_active") and cl > 60 and cw > 30:
+            s.append(f'<text x="{cx + cl / 2:.1f}" y="{cy + cw / 2 + 15:.1f}" text-anchor="middle" font-size="8.5" font-weight="700" fill="{stroke}" font-family="Segoe UI,Arial">{r["pcs_unit"]} PCS/GANG</text>')
         if cl > 34 and cw > 22:
             s.append(f'<text x="{cx + cl / 2:.1f}" y="{cy + cw / 2 + 4:.1f}" text-anchor="middle" font-size="10" font-weight="800" fill="{stroke}" font-family="Segoe UI,Arial">#{num}</text>')
         elif cl > 22 and cw > 34:
@@ -1669,17 +1672,17 @@ def svg_sheet_layout_preview(r):
         cl, cw = r["cutting_len"] * scale, r["cutting_w"] * scale
         for _row in range(r["mixed_n"]):
             for i in range(r["per_normal"]):
-                _panel_cell(x0 + i * cl, y, cl, cw, num, "#eef2ff", "#6366f1", r["cutting_len"], r["cutting_w"])
+                _panel_cell(x0 + i * cl, y, cl, cw, num, "#eef2ff", "#6366f1", r["gang_len"], r["gang_w"])
                 num += 1
             y += cw
         cl2, cw2 = r["cutting_w"] * scale, r["cutting_len"] * scale
         for _row in range(r["mixed_m"]):
             for i in range(r["per_rot"]):
-                _panel_cell(x0 + i * cl2, y, cl2, cw2, num, "#fdf4ff", "#c026d3", r["cutting_w"], r["cutting_len"], rot=True)
+                _panel_cell(x0 + i * cl2, y, cl2, cw2, num, "#fdf4ff", "#c026d3", r["gang_w"], r["gang_len"], rot=True)
                 num += 1
             y += cw2
         if r["gang_active"]:
-            cap = (f"1 SHEET {sl:.0f}x{sw:.0f} mm \u2190 GANG PANEL {r['cutting_len']:g}x{r['cutting_w']:g} mm = "
+            cap = (f"1 SHEET {sl:.0f}x{sw:.0f} mm \u2190 GANG PANEL {r['gang_len']:g}x{r['gang_w']:g} mm ({r['pcs_unit']} PCS/gang, sheet cutting me +CNC margin) = "
                    f"{r['panels_per_sheet']} GANG PANELS "
                    f"({r['mixed_n']}x row {r['per_normal']} + {r['mixed_m']}x row {r['per_rot']}) = {r['pcs_per_sheet']} PCS")
         else:
@@ -1692,10 +1695,10 @@ def svg_sheet_layout_preview(r):
         for i in range(r["grid_x"]):
             for j in range(r["grid_y"]):
                 _panel_cell(x0 + i * cl, y0 + j * cw, cl, cw, num, "#eef2ff", "#6366f1",
-                            r["cell_len"], r["cell_w"], rot=(r["best"] == "rotated"))
+                            r["gang_len"], r["gang_w"], rot=(r["best"] == "rotated"))
                 num += 1
         if r["gang_active"]:
-            cap = (f"1 SHEET {sl:.0f}x{sw:.0f} mm \u2190 GANG PANEL {r['cell_len']:g}x{r['cell_w']:g} mm = "
+            cap = (f"1 SHEET {sl:.0f}x{sw:.0f} mm \u2190 GANG PANEL {r['gang_len']:g}x{r['gang_w']:g} mm ({r['pcs_unit']} PCS/gang, sheet cutting me +CNC margin) = "
                    f"{r['grid_x']}x{r['grid_y']} = {r['panels_per_sheet']} GANG PANELS x {r['pcs_unit']} PCS = {r['pcs_per_sheet']} PCS")
         else:
             cap = (f"1 SHEET {sl:.0f}x{sw:.0f} mm \u2190 PANEL {r['cell_len']:g}x{r['cell_w']:g} mm = "
