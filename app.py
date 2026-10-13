@@ -91,15 +91,34 @@ OPERATOR_WRITE = {"operator_action", "operator_issue", "machine_status", "qualit
 
 @app.before_request
 def role_gate():
-    """Operator sirf apne allowed pages par kaam kar sakta hai — baaki sab sirf admin."""
-    if request.endpoint in ("login", "logout", "static", None):
+    """v3.70 — per-user permissions: admin SAB, baaki users sirf admin dikhaye gaye modules.
+    (Purana operator gate unlisted endpoints ke liye barkarar.)"""
+    if request.endpoint in ("login", "logout", "static", "pick_user", "switch_user", None):
         return
-    if session.get("user_role") == "operator":
-        allowed = (request.endpoint in OPERATOR_WRITE
-                   or (request.endpoint in OPERATOR_READ and request.method == "GET"))
-        if not allowed:
-            flash("Operator access limited hai — sirf Dashboard, Job Orders, Machines, Quality aur apna Operator View.", "error")
-            return redirect_with_token(url_for("operator_view"))
+    if not session.get("user_id") or session.get("pending_pick"):
+        return
+    if session.get("user_role") == "admin":
+        return
+    p = request.path or "/"
+    need = None
+    for pref, key in _MODULE_ROUTES:
+        if p == pref or p.startswith(pref + "/"):
+            need = key
+            break
+    if need == "admin":
+        flash("Is page ki permission nahi hai — admin se permission mangwao.", "error")
+        return redirect_with_token(url_for("dashboard"))
+    if need is not None:
+        if need in _user_perm_set():
+            return
+        flash("Is page ki permission nahi hai — admin se permission mangwao.", "error")
+        return redirect_with_token(url_for("dashboard"))
+    # v3.70: unlisted endpoint ka purana operator rule
+    allowed = (request.endpoint in OPERATOR_WRITE
+               or (request.endpoint in OPERATOR_READ and request.method == "GET"))
+    if not allowed:
+        flash("Is page ki permission nahi hai — admin se permission mangwao.", "error")
+        return redirect_with_token(url_for("operator_view"))
 
 
 @app.after_request
@@ -110,11 +129,55 @@ def add_cors(resp):
     return resp
 
 
+# ============ v3.70 — COMMON LOGIN + PER-USER PERMISSIONS ============
+_COMMON_USER = "shivaya"
+_COMMON_PASS = "shivaya@123"
+_MODULES = [
+    ("tracking", "Live Process Tracking"), ("orders", "Job Orders"), ("parties", "Parties"),
+    ("products", "Finished Products"), ("pdfs", "PDF Library"), ("purchase", "Purchase Orders"),
+    ("purchases", "Purchases (Stock In)"), ("cutlist", "Cut List Optimizer"), ("pcbcalc", "PCB Cost Calculator"),
+    ("inventory", "Inventory"), ("billing", "Billing"), ("proforma", "Proforma (PI)"),
+    ("payments", "Payments & Receipts"), ("employees", "Employees"), ("machines", "Machines"),
+    ("quality", "Quality"), ("operator", "Operator View"), ("mywork", "Mera Work"),
+    ("planning", "Production Planning"), ("material", "Material Planning"), ("reports", "Reports"),
+]
+_DEFAULT_PERMS = "orders,machines,quality,operator,mywork"
+_MODULE_ROUTES = [
+    ("/tracking", "tracking"), ("/orders", "orders"), ("/jobcard", "orders"), ("/parties", "parties"),
+    ("/products", "products"), ("/pdfs", "pdfs"), ("/model-pdf", "pdfs"), ("/purchase-orders", "purchase"),
+    ("/purchases", "purchases"), ("/cutlist", "cutlist"), ("/pcbcalc", "pcbcalc"), ("/inventory", "inventory"),
+    ("/billing", "billing"), ("/proforma", "proforma"), ("/payments", "payments"), ("/employees", "employees"),
+    ("/machines", "machines"), ("/quality", "quality"), ("/operator", "operator"), ("/my-work", "mywork"),
+    ("/production-planning", "planning"), ("/material-planning", "material"), ("/reports", "reports"),
+    ("/users", "admin"), ("/settings", "admin"),
+]
+
+
+def _users_perms_ensure():
+    """users table me perms column ki guarantee (self-heal)."""
+    try:
+        _uc = [r["name"] for r in db.query("PRAGMA table_info(users)")]
+        if "perms" not in _uc:
+            db.execute("ALTER TABLE users ADD COLUMN perms TEXT DEFAULT ''")
+    except Exception:
+        pass
+
+
+def _user_perm_set():
+    """Logged-in user ke allowed module keys (admin = sab)."""
+    if session.get("user_role") == "admin":
+        return {k for k, _ in _MODULES} | {"admin"}
+    raw = session.get("user_perms", "") or ""
+    return {k for k in raw.split(",") if k}
+
+
 def login_required(f):
     @wraps(f)
     def wrapper(*args, **kwargs):
         if not session.get("user_id"):
             return redirect(url_for("login"))
+        if session.get("pending_pick"):
+            return redirect(url_for("pick_user"))
         return f(*args, **kwargs)
     return wrapper
 
@@ -141,6 +204,7 @@ def inject_globals():
             "ui_brand": _ui_brand(),
             "current_user_name": session.get("user_name", ""),
             "current_user_role": session.get("user_role", ""),
+            "current_user_perms": _user_perm_set(),
             "all_parties": parties,
             "party_names": [p["name"] for p in parties]}
 
@@ -226,11 +290,22 @@ def login():
     if request.method == "POST":
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "")
+        # v3.70 \u2014 COMMON LOGIN: sab (owner samet) ek hi login se; baad me apna naam chunte hai
+        if username.strip().lower() == _COMMON_USER and password == _COMMON_PASS:
+            session.clear()
+            session["pending_pick"] = 1
+            target = url_for("pick_user")
+            if request.form.get("ajax") == "1":
+                return jsonify(ok=True, redirect=target, name="Common login")
+            return redirect(target)
+        # per-user accounts bhi chale (internal/tests) \u2014 UI par sirf common login dikh raha hai
         user = db.query("SELECT * FROM users WHERE username=? AND password=?", (username, password), one=True)
         if user:
             session["user_id"] = user["id"]
             session["user_name"] = user["name"]
             session["user_role"] = user["role"]
+            _users_perms_ensure()
+            session["user_perms"] = ((user["perms"] or "").strip() if "perms" in user.keys() else "") or _DEFAULT_PERMS
             token = make_token(user["id"])
             home = "operator_view" if user["role"] == "operator" else "dashboard"
             target = url_for(home) + f"?token={token}"
@@ -248,6 +323,41 @@ def login():
 def logout():
     session.clear()
     return redirect(url_for("login"))
+
+
+@app.route("/pick-user", methods=["GET", "POST"])
+def pick_user():
+    """v3.70 \u2014 common login ke baad APNA NAAM chuno (yahi identity + permissions set karta hai)."""
+    _users_perms_ensure()
+    if request.method == "POST":
+        try:
+            uid = int(request.form.get("uid") or 0)
+        except (TypeError, ValueError):
+            uid = 0
+        u = db.query("SELECT * FROM users WHERE id=?", (uid,), one=True)
+        if not u:
+            flash("Pehle apna naam select karo.", "error")
+            return redirect(url_for("pick_user"))
+        session.pop("pending_pick", None)
+        session["user_id"] = u["id"]
+        session["user_name"] = u["name"]
+        session["user_role"] = u["role"]
+        session["user_perms"] = ((u["perms"] or "").strip() if "perms" in u.keys() else "") or _DEFAULT_PERMS
+        token = make_token(u["id"])
+        home = "operator_view" if u["role"] != "admin" else "dashboard"
+        return redirect(url_for(home) + f"?token={token}")
+    if not session.get("pending_pick") and not session.get("user_id"):
+        return redirect(url_for("login"))
+    rows = db.query("SELECT * FROM users ORDER BY CASE WHEN role='admin' THEN 0 ELSE 1 END, name")
+    return render_template("pick_user.html", users=rows)
+
+
+@app.route("/switch-user")
+def switch_user():
+    """Kaun chal raha hai badalna ho \u2014 wapas naam-chuno par (login dobara nahi)."""
+    session.clear()
+    session["pending_pick"] = 1
+    return redirect(url_for("pick_user"))
 
 
 def _working_ops(order_ids):
@@ -6756,8 +6866,24 @@ def reports_csv():
 @login_required
 @admin_required
 def users():
+    _users_perms_ensure()
     if request.method == "POST":
         f = request.form
+        if f.get("action") == "perms":
+            try:
+                uid = int(f.get("uid") or 0)
+            except (TypeError, ValueError):
+                uid = 0
+            u = db.query("SELECT * FROM users WHERE id=?", (uid,), one=True)
+            if not u:
+                flash("User not found.", "error")
+            elif u["role"] == "admin":
+                flash("Admin ko hamesha SAB ka access rehta hai \u2014 permissions sirf operator users par lagti hai.", "error")
+            else:
+                allowed = ",".join(f.getlist("perm"))
+                db.execute("UPDATE users SET perms=? WHERE id=?", (allowed, uid))
+                flash(f"{u['name']} ke permissions save ho gaye ({len(f.getlist('perm'))} modules).", "success")
+            return redirect_with_token(url_for("users"))
         if f.get("action") == "update":
             try:
                 uid = int(f.get("pid") or 0)
@@ -6788,8 +6914,19 @@ def users():
     edit_row = None
     if edit_id:
         edit_row = db.query("SELECT * FROM users WHERE id=?", (int(edit_id),), one=True)
+    perms_row, perms_set = None, set()
+    perms_id = request.args.get("perms")
+    if perms_id:
+        perms_row = db.query("SELECT * FROM users WHERE id=?", (int(perms_id),), one=True)
+        if perms_row:
+            _raw = (perms_row["perms"] if "perms" in perms_row.keys() else "") or ""
+            perms_set = {k for k in _raw.split(",") if k}
+            if not _raw and perms_row["role"] != "admin":
+                perms_set = {k for k in _DEFAULT_PERMS.split(",") if k}
     return render_template("users.html", active="users", users=rows,
-                           show_add=request.args.get("add"), edit_row=edit_row)
+                           show_add=request.args.get("add"), edit_row=edit_row,
+                           modules=_MODULES, perms_row=perms_row, perms_set=perms_set,
+                           default_perms=_DEFAULT_PERMS)
 
 
 @app.route("/users/<int:user_id>/delete", methods=["POST"])

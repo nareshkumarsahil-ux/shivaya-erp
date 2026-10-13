@@ -5,39 +5,31 @@
   <form class="login-card" method="post" action="/login" id="loginForm">
     <div class="login-logo">SC</div>
     <h1>Shivaya Circuit</h1>
-    <div class="tag">Smart ERP — PCB Manufacturing · Admin Login</div>
+    <div class="tag">Smart ERP \u2014 PCB Manufacturing \u00b7 Common Login (sab yahin se \u2014 owner samet)</div>
     <div id="loginMsg"></div>
     {% with msgs = get_flashed_messages(with_categories=true) %}
       {% for cat, m in msgs %}<div class="flash {{cat}}" style="margin-bottom:14px">{{ m }}</div>{% endfor %}
     {% endwith %}
     <div class="field">
       <label>Username</label>
-      <input type="text" name="username" placeholder="sahil" required autofocus>
+      <input type="text" name="username" placeholder="shivaya" required autofocus>
     </div>
     <div class="field">
       <label>Password</label>
-      <input type="password" name="password" placeholder="••••••••" required>
+      <input type="password" name="password" placeholder="\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022" required>
     </div>
-    <button class="btn" type="submit" id="loginBtn">Login →</button>
-    <button class="btn btn-amber" type="button" style="width:100%;margin-top:8px" onclick="quickLogin('sahil','admin123')">👑 1-CLICK OWNER LOGIN (Sahil)</button>
-    <div class="demo-hint">Admin: <b>sahil</b> / <b>admin123</b><br>Employees: apna naam ka pehla word + password (admin se lein — default <b>shivaya@123</b>)<br>Jaise CNC Operator: <b>ravi</b> · Dispatch: <b>shivam</b></div>
+    <button class="btn" type="submit" id="loginBtn">Login \u2192</button>
+    <div class="demo-hint">COMMON LOGIN \u2014 sab staff ke liye ek hi login:<br><b>shivaya</b> / <b>shivaya@123</b><br>Login ke baad <b>apna naam chuno</b> \u2014 menu/permissions usi hisab se khulenge (owner bhi isi se).</div>
   </form>
 </div>
 <script>
-/* JS-based login: works even where native form submission / cookies are blocked */
-function quickLogin(u, p){
-  var f = document.getElementById('loginForm');
-  f.username.value = u;
-  f.password.value = p;
-  if (f.requestSubmit) { f.requestSubmit(); } else { f.submit(); }
-}
 (function(){
   var form = document.getElementById('loginForm');
   var btn  = document.getElementById('loginBtn');
   var msg  = document.getElementById('loginMsg');
   form.addEventListener('submit', function(e){
     e.preventDefault();
-    btn.disabled = true; btn.textContent = 'Logging in…';
+    btn.disabled = true; btn.textContent = 'Logging in\u2026';
     var fd = new FormData(form);
     fd.append('ajax', '1');
     fetch('/login', {method: 'POST', body: fd})
@@ -48,7 +40,7 @@ function quickLogin(u, p){
         } else {
           msg.innerHTML = '<div class="flash error" style="margin-bottom:14px">' +
             ((d && d.error) || 'Login failed.') + '</div>';
-          btn.disabled = false; btn.textContent = 'Login →';
+          btn.disabled = false; btn.textContent = 'Login \u2192';
         }
       })
       .catch(function(){

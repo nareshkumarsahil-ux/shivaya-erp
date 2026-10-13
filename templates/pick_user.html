@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Kaun ho aap?{% endblock %}
+{% block fullpage %}
+<div class="login-wrap">
+  <div class="login-card" style="max-width:430px">
+    <div class="login-logo" style="background:#16a34a">✓</div>
+    <h1>Apna Naam Chuno</h1>
+    <div class="tag">Common login ho gaya \u2014 ab apni identity select karo (permissions usi hisab se lagengi)</div>
+    {% with msgs = get_flashed_messages(with_categories=true) %}
+      {% for cat, m in msgs %}<div class="flash {{cat}}" style="margin-bottom:12px">{{ m }}</div>{% endfor %}
+    {% endwith %}
+    <div style="display:flex;flex-direction:column;gap:8px;margin-top:6px">
+      {% for u in users %}
+      <form method="post" action="/pick-user">
+        <input type="hidden" name="uid" value="{{ u.id }}">
+        <button type="submit" style="width:100%;display:flex;align-items:center;gap:10px;padding:10px 14px;border:1.5px solid var(--border);border-radius:10px;background:#fff;cursor:pointer;font:600 13.5px Segoe UI,Arial;color:#192338;text-align:left"
+                onmouseover="this.style.borderColor='#6366f1'" onmouseout="this.style.borderColor='var(--border)'">
+          <span class="avatar {{ 'b' if u.role!='admin' }}">{{ u.name[0] }}</span>
+          <span style="flex:1">{{ u.name }}<br><span style="font:600 11px Segoe UI,Arial;color:#94a3b8">@{{ u.username }}</span></span>
+          <span class="badge {{'b-amber' if u.role=='admin' else 'b-blue'}}">{{ u.role|upper }}</span>
+        </button>
+      </form>
+      {% endfor %}
+    </div>
+    <div class="demo-hint" style="margin-top:14px">Galti se login kar liya? Neeche Logout dabao.</div>
+    <a class="btn btn-outline" href="/logout" style="width:100%;margin-top:8px;text-align:center;text-decoration:none">Logout ↩</a>
+  </div>
+</div>
+{% endblock %}

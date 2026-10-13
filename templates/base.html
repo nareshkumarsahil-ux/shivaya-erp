@@ -36,49 +36,55 @@
     <div><div class="brand-name">Shivaya Circuit</div><div class="brand-sub">SMART ERP</div></div>
   </div>
   <nav>
-    {% if current_user_role == 'admin' %}
+    {% set P = current_user_perms %}
+    {% set A = current_user_role == 'admin' %}
     <a href="/" class="{{'active' if active=='dashboard'}}">🏠 Dashboard</a>
+    {% if A or 'tracking' in P %}
     <div class="sec-label">Live Process Tracking</div>
     <a href="/tracking" class="{{'active' if active=='tracking'}}"><span class="live-dot"></span>&nbsp;Live Process Tracking</a>
+    {% endif %}
+    {% if A or 'orders' in P %}
     <div class="sec-label">Operations</div>
     <a href="/orders" class="{{'active' if active=='orders'}}">📋 Job Orders</a>
-    <a href="/parties" class="{{'active' if active=='parties'}}">🤝 Parties</a>
-    <a href="/products" class="{{'active' if active=='products'}}">🗂️ Finished Products</a>
-    <a href="/pdfs" class="{{'active' if active=='pdfs'}}">📄 PDF Library</a>
-    <a href="/purchase-orders" class="{{'active' if active=='purchase'}}">📦 Purchase Orders</a>
-    <a href="/purchases" class="{{'active' if active=='purchases'}}">🛒 Purchases (Stock In)</a>
-    <a href="/cutlist" class="{{'active' if active=='cutlist'}}">✂️ Cut List Optimizer</a>
-    <a href="/pcbcalc" class="{{'active' if active=='pcbcalc'}}">💰 PCB Cost Calculator</a>
-    <a href="/inventory" class="{{'active' if active=='inventory'}}">🗄️ Inventory</a>
-    <a href="/billing" class="{{'active' if active=='billing'}}">🧾 Billing</a>
-    <a href="/proforma" class="{{'active' if active=='proforma'}}">📄 Proforma (PI)</a>
-    <a href="/payments" class="{{'active' if active=='payments'}}">💸 Payments & Receipts</a>
+    {% endif %}
+    {% if A or 'parties' in P %}<a href="/parties" class="{{'active' if active=='parties'}}">🤝 Parties</a>{% endif %}
+    {% if A or 'products' in P %}<a href="/products" class="{{'active' if active=='products'}}">🗂️ Finished Products</a>{% endif %}
+    {% if A or 'pdfs' in P %}<a href="/pdfs" class="{{'active' if active=='pdfs'}}">📄 PDF Library</a>{% endif %}
+    {% if A or 'purchase' in P %}<a href="/purchase-orders" class="{{'active' if active=='purchase'}}">📦 Purchase Orders</a>{% endif %}
+    {% if A or 'purchases' in P %}<a href="/purchases" class="{{'active' if active=='purchases'}}">🛒 Purchases (Stock In)</a>{% endif %}
+    {% if A or 'cutlist' in P %}<a href="/cutlist" class="{{'active' if active=='cutlist'}}">✂️ Cut List Optimizer</a>{% endif %}
+    {% if A or 'pcbcalc' in P %}<a href="/pcbcalc" class="{{'active' if active=='pcbcalc'}}">💰 PCB Cost Calculator</a>{% endif %}
+    {% if A or 'inventory' in P %}<a href="/inventory" class="{{'active' if active=='inventory'}}">🗄️ Inventory</a>{% endif %}
+    {% if A or 'billing' in P %}<a href="/billing" class="{{'active' if active=='billing'}}">🧾 Billing</a>{% endif %}
+    {% if A or 'proforma' in P %}<a href="/proforma" class="{{'active' if active=='proforma'}}">📄 Proforma (PI)</a>{% endif %}
+    {% if A or 'payments' in P %}<a href="/payments" class="{{'active' if active=='payments'}}">💸 Payments & Receipts</a>{% endif %}
+    {% if A or 'employees' in P or 'machines' in P %}
     <div class="sec-label">Workforce</div>
-    <a href="/employees" class="{{'active' if active=='employees'}}">👥 Employees</a>
-    <a href="/machines" class="{{'active' if active=='machines'}}">🏭 Machines</a>
-    <a href="/quality" class="{{'active' if active=='quality'}}">✅ Quality</a>
-    <a href="/operator" class="{{'active' if active=='operator'}}">🛠️ Operator View</a>
-    <a href="/my-work" class="{{'active' if active=='mywork'}}">🎯 Mera Work</a>
+    {% endif %}
+    {% if A or 'employees' in P %}<a href="/employees" class="{{'active' if active=='employees'}}">👥 Employees</a>{% endif %}
+    {% if A or 'machines' in P %}<a href="/machines" class="{{'active' if active=='machines'}}">🏭 Machines</a>{% endif %}
+    {% if A or 'quality' in P %}<a href="/quality" class="{{'active' if active=='quality'}}">✅ Quality</a>{% endif %}
+    {% if A or 'operator' in P %}<a href="/operator" class="{{'active' if active=='operator'}}">🛠️ Operator View</a>{% endif %}
+    {% if A or 'mywork' in P %}<a href="/my-work" class="{{'active' if active=='mywork'}}">🎯 Mera Work</a>{% endif %}
+    {% if A or 'planning' in P or 'material' in P or 'reports' in P %}
     <div class="sec-label">Planning</div>
-    <a href="/production-planning" class="{{'active' if active=='planning'}}">📋 Production Planning</a>
-    <a href="/material-planning" class="{{'active' if active=='material'}}">🧮 Material Planning</a>
-    <a href="/reports" class="{{'active' if active=='reports'}}">📊 Reports</a>
+    {% endif %}
+    {% if A or 'planning' in P %}<a href="/production-planning" class="{{'active' if active=='planning'}}">📋 Production Planning</a>{% endif %}
+    {% if A or 'material' in P %}<a href="/material-planning" class="{{'active' if active=='material'}}">🧮 Material Planning</a>{% endif %}
+    {% if A or 'reports' in P %}<a href="/reports" class="{{'active' if active=='reports'}}">📊 Reports</a>{% endif %}
+    {% if A %}
     <a href="/users" class="{{'active' if active=='users'}}">🔐 Users & Access</a>
     <a href="/settings" class="{{'active' if active=='settings'}}">⚙️ Settings</a>
-    {% else %}
-    <a href="/" class="{{'active' if active=='dashboard'}}">🏠 Dashboard</a>
-    <a href="/orders" class="{{'active' if active=='orders'}}">📋 Job Orders</a>
-    <a href="/machines" class="{{'active' if active=='machines'}}">🏭 Machines</a>
-    <a href="/quality" class="{{'active' if active=='quality'}}">✅ Quality</a>
-    <a href="/operator" class="{{'active' if active=='operator'}}">🛠️ Operator View</a>
-    <a href="/my-work" class="{{'active' if active=='mywork'}}">🎯 Mera Work</a>
     {% endif %}
   </nav>
   <div class="side-footer">
     <div class="saved-note"><span class="dot"></span> All changes saved</div>
     <div class="user-chip">👤 {{ current_user_name }}<span class="role">{{ current_user_role|upper }}</span></div>
-    <div class="ver-chip" title="App version — agar ye purana dikhe to naya ZIP deploy nahi hua">🛰 App v3.69 · Calculator HISTORY me MODEL NO column (model select karke save karo to naam bhi save) · MODEL dropdowns searchable · FP attachment GREEN · PRINT alag page</div>
-    <a class="logout" href="/logout">Logout ↩</a>
+    <div class="ver-chip" title="App version — agar ye purana dikhe to naya ZIP deploy nahi hua">🛰 App v3.70 · COMMON LOGIN (sab ek login se — owner samet) + apna naam chuno · Admin har user ko PER-MODULE permissions de sakta hai (Users & Access me Perms) · sidebar permission ke hisab se</div>
+    <div style="display:flex;gap:8px;justify-content:space-between;align-items:center">
+      <a class="logout" href="/switch-user" title="Doosre user ke naam par switch karo (login dobara nahi)" style="font-size:11.5px">🔄 Switch</a>
+      <a class="logout" href="/logout">Logout ↩</a>
+    </div>
   </div>
 </aside>
 <div class="sidebar-backdrop"></div>

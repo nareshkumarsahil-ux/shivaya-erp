@@ -49,6 +49,37 @@
 <div class="toolbar" style="justify-content:flex-end"><a class="btn" href="/users?add=1">＋ Create User</a></div>
 {% endif %}
 
+{% if perms_row %}
+<div class="panel">
+  <div class="panel-head"><h3>🔐 Permissions — {{ perms_row.name }} ({{ perms_row.role|upper }})</h3><a class="btn btn-outline btn-sm" href="/users">✕ Close</a></div>
+  <div class="panel-body">
+    {% if perms_row.role == 'admin' %}
+    <p class="muted small">👑 Admin ko hamesha SAB modules ka access rehta hai — permissions sirf operator users par lagti hai.</p>
+    {% endif %}
+    <form method="post">
+      <input type="hidden" name="action" value="perms">
+      <input type="hidden" name="uid" value="{{ perms_row.id }}">
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(215px,1fr));gap:8px">
+        {% for key, label in modules %}
+        <label style="display:flex;gap:8px;align-items:center;border:1px solid var(--border);border-radius:8px;padding:8px 10px;background:#fff;font-size:12.5px;cursor:pointer">
+          <input type="checkbox" name="perm" value="{{ key }}" class="pmChk" {{'checked' if key in perms_set}} {{'disabled' if perms_row.role=='admin'}}>
+          <span>{{ label }}</span></label>
+        {% endfor %}
+      </div>
+      {% if perms_row.role != 'admin' %}
+      <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;align-items:center">
+        <button type="button" class="btn btn-outline btn-xs" onclick="pmAll(1)">✅ SAB de do</button>
+        <button type="button" class="btn btn-outline btn-xs" onclick="pmDefault()">🛠 Operator default</button>
+        <button type="button" class="btn btn-outline btn-xs" onclick="pmAll(0)">🚫 Sab hatao</button>
+        <span style="flex:1"></span>
+        <button class="btn" type="submit">💾 Permissions Save</button>
+      </div>
+      {% endif %}
+    </form>
+  </div>
+</div>
+{% endif %}
+
 <div class="panel">
   <div class="panel-head"><h3>🔐 System Users ({{ users|length }})</h3></div>
   <div class="panel-body" style="padding:0">
@@ -62,6 +93,7 @@
           <td><span class="badge {{'b-amber' if u.role=='admin' else 'b-blue'}}">{{ u.role|upper }}</span></td>
           <td class="t-right" style="white-space:nowrap">
             <a class="btn btn-outline btn-xs" href="/users?edit={{ u.id }}">✏️ Edit</a>
+            <a class="btn btn-outline btn-xs" href="/users?perms={{ u.id }}" title="Kaun sa module chalega">🔐 Perms</a>
             {% if u.id != session.get('user_id') %}
             <form method="post" action="/users/{{ u.id }}/delete" style="display:inline" onsubmit="return confirm('Remove user {{ u.username }}?')">
               <button class="btn btn-danger btn-xs" type="submit">🗑</button>
@@ -74,5 +106,11 @@
     </table>
   </div>
 </div>
-<p class="muted small">👑 Admin: sab modules ka access · 🛠️ Operator: dashboard, tracking, operator view ka access (Users & Access sirf admin ke liye)</p>
+<p class="muted small">👑 Admin: sab modules ka access · 🔐 Perms button se har user ke liye chuno kaun sa module chalega · Login SAB ka common hai (shivaya) — apna naam chuno se pehchan</p>
+{% if perms_row and perms_row.role != 'admin' %}
+<script>
+function pmAll(on){document.querySelectorAll('.pmChk').forEach(function(c){c.checked=!!on;});}
+function pmDefault(){var d='{{ default_perms }}'.split(',');document.querySelectorAll('.pmChk').forEach(function(c){c.checked=d.indexOf(c.value)!==-1;});}
+</script>
+{% endif %}
 {% endblock %}
