@@ -65,7 +65,7 @@
         </tr></thead>
         <tbody>
           {% for p in rows %}
-          {% set p_linked = p.model_id and (models | selectattr('id', 'equalto', p.model_id) | list | length > 0) %}
+          {% set p_linked = p.is_att or (p.model_id and (models | selectattr('id', 'equalto', p.model_id) | list | length > 0)) %}
           <tr>
             <td style="word-break:break-word;line-height:1.45">
               {% if p_linked %}<b style="color:#16a34a" title="Finished Product se link ho gayi — Cutlist + Products me dikhegi">● {{ p.model_name }}</b>
