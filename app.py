@@ -84,9 +84,9 @@ def token_login():
 # Operator ka limited access (screenshot jaisa): Dashboard, Job Orders, Machines,
 # Quality, Operator View — in pages mein wo dekh + kaam kar sakta hai. Baaki sab admin-only.
 OPERATOR_READ = {"dashboard", "orders", "machines", "quality", "operator_view",
-                 "product_attachment_view", "dispatch_photo", "jobcard", "my_work"}
+                 "product_attachment_view", "dispatch_photo", "jobcard", "my_work", "my_password"}
 OPERATOR_WRITE = {"operator_action", "operator_issue", "machine_status", "quality", "quality_result",
-                  "dispatch_attach_photo", "my_work_claim", "request_material", "request_action"}
+                  "dispatch_attach_photo", "my_work_claim", "request_material", "request_action", "my_password"}
 
 
 @app.before_request
@@ -344,6 +344,9 @@ def pick_user():
         session["user_role"] = u["role"]
         session["user_perms"] = ((u["perms"] or "").strip() if "perms" in u.keys() else "") or _DEFAULT_PERMS
         token = make_token(u["id"])
+        # v3.73 \u2014 naam chunte waqt hi password set karna ho to seedha Mera Password par
+        if request.form.get("next") == "pw":
+            return redirect(url_for("my_password") + f"?token={token}")
         home = "operator_view" if u["role"] != "admin" else "dashboard"
         return redirect(url_for(home) + f"?token={token}")
     if not session.get("pending_pick") and not session.get("user_id"):

@@ -19,6 +19,8 @@
           <span style="flex:1">{{ u.name }}<br><span style="font:600 11px Segoe UI,Arial;color:#94a3b8">@{{ u.username }}</span></span>
           <span class="badge {{'b-amber' if u.role=='admin' else 'b-blue'}}">{{ u.role|upper }}</span>
         </button>
+        <button type="submit" name="next" value="pw" title="Is naam se enter karke seedha apna password set karo"
+                style="white-space:nowrap;padding:8px 10px;border:1.5px solid var(--border);border-radius:10px;background:#fff;cursor:pointer;font:700 11px Segoe UI,Arial;color:#1d4ed8;text-align:center">\U0001F511 Password bhi</button>
       </form>
       {% endfor %}
     </div>
