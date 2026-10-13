@@ -6,6 +6,17 @@
 <title>{% block title %}Shivaya Circuit{% endblock %} · Smart ERP</title>
 <link rel="stylesheet" href="/static/style.css">
 <style>
+/* v3.68 — searchable model dropdown (type karo: 176 / scpl-17 → matches niche) */
+.ss-wrap{position:relative}
+.ss-row{display:flex;gap:6px;align-items:center}
+.ss-in{flex:1;padding:9px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;background:#fff;outline:none;min-width:120px}
+.ss-in:focus{border-color:#6366f1}
+.ss-clr{border:1px solid var(--border);background:#fff;border-radius:8px;padding:8px 10px;cursor:pointer;font-weight:800;color:#64748b}
+.ss-clr:hover{background:#f1f5f9}
+.ss-list{display:none;position:absolute;top:100%;left:0;right:0;z-index:9990;background:#fff;border:1.5px solid #6366f1;border-radius:8px;margin-top:4px;max-height:260px;overflow:auto;box-shadow:0 10px 26px rgba(15,23,42,.14)}
+.ss-item{padding:8px 12px;font:600 13px Segoe UI,Arial;color:#192338;cursor:pointer;border-bottom:1px solid #f1f5f9}
+.ss-item:hover,.ss-item.ss-active{background:#eef2ff;color:#3730a3}
+.ss-empty{padding:12px;font:600 12.5px Segoe UI,Arial;color:#94a3b8;text-align:center}
   /* v3.29 app-wide theme color — Settings me badla ja sakta hai */
   :root { --ui-brand: {{ ui_brand }}; }
   .sidebar nav a.active { background: var(--ui-brand); color: #fff; box-shadow: 0 4px 12px rgba(0,0,0,.28); }
@@ -66,7 +77,7 @@
   <div class="side-footer">
     <div class="saved-note"><span class="dot"></span> All changes saved</div>
     <div class="user-chip">👤 {{ current_user_name }}<span class="role">{{ current_user_role|upper }}</span></div>
-    <div class="ver-chip" title="App version — agar ye purana dikhe to naya ZIP deploy nahi hua">🛰 App v3.67 · PDF Library: FP attachment rows GREEN (linked) — cutlist/finished-product wale docs library+calculator dono me green + view · Calculator attachment panel hamesha · PRINT alag page</div>
+    <div class="ver-chip" title="App version — agar ye purana dikhe to naya ZIP deploy nahi hua">🛰 App v3.68 · MODEL dropdowns SEARCHABLE (type 176 / scpl-17 → matches niche, click/Enter select) — Calculator + PDF Library + Cutlist · FP attachment GREEN · PRINT alag page</div>
     <a class="logout" href="/logout">Logout ↩</a>
   </div>
 </aside>
@@ -113,6 +124,97 @@
   <div class="content">{% block content %}{% endblock %}</div>
 </main>
 <script>
+/* v3.68 — MODEL dropdowns searchable: type karo (176 / scpl-17 / dob) → matching niche, click/Enter se select.
+   Original select chhupa rehta hai (form submit + onchange waise hi chalte hai — hum 'change' dispatch karte hai) */
+(function(){
+  function enhance(sel){
+    if (!sel || sel.dataset.ss) return;
+    sel.dataset.ss = '1';
+    var wrap = document.createElement('div');
+    wrap.className = 'ss-wrap';
+    sel.parentNode.insertBefore(wrap, sel);
+    var row = document.createElement('div'); row.className = 'ss-row';
+    var inp = document.createElement('input');
+    inp.type = 'text'; inp.className = 'ss-in'; inp.autocomplete = 'off';
+    inp.placeholder = 'Type karo \u2014 176 / scpl-17 / dob\u2026 (search + select)';
+    var clr = document.createElement('button'); clr.type = 'button'; clr.className = 'ss-clr';
+    clr.textContent = '\u2715'; clr.title = 'Clear \u2014 select hatao';
+    row.appendChild(inp); row.appendChild(clr);
+    var lst = document.createElement('div'); lst.className = 'ss-list';
+    wrap.appendChild(row); wrap.appendChild(lst); wrap.appendChild(sel);
+    sel.style.display = 'none';
+    var active = -1;
+    function opts(){
+      return Array.prototype.slice.call(sel.options).map(function(o){ return { v: o.value, t: o.textContent.trim() }; });
+    }
+    function sync(){
+      var o = sel.options[sel.selectedIndex];
+      inp.value = (o && o.value) ? o.textContent.trim() : '';
+    }
+    function render(){
+      var q = inp.value.trim().toLowerCase();
+      var toks = q.split(/\s+/);
+      var items = opts().filter(function(o){
+        if (!o.v) return q === '';
+        var t = o.t.toLowerCase();
+        return toks.every(function(tk){ return t.indexOf(tk) !== -1; });
+      });
+      var html = '';
+      for (var i = 0; i < items.length; i++){
+        html += '<div class="ss-item" data-v="' + items[i].v.replace(/"/g, '&quot;') + '">' + items[i].t.replace(/</g, '&lt;') + '</div>';
+      }
+      if (!items.length) html = '<div class="ss-empty">Koi model nahi mila \u2014 doosre akshar try karo</div>';
+      lst.innerHTML = html;
+      active = -1;
+      lst.style.display = 'block';
+    }
+    function pick(v, t){
+      sel.value = v;
+      inp.value = t;
+      lst.style.display = 'none';
+      try { sel.dispatchEvent(new Event('change', { bubbles: true })); } catch (e) {}
+    }
+    inp.addEventListener('focus', render);
+    inp.addEventListener('input', render);
+    inp.addEventListener('keydown', function(e){
+      var items = lst.querySelectorAll('.ss-item');
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp'){
+        e.preventDefault();
+        if (!items.length) return;
+        active = e.key === 'ArrowDown' ? Math.min(items.length - 1, active + 1) : Math.max(0, active - 1);
+        for (var i = 0; i < items.length; i++) items[i].classList.toggle('ss-active', i === active);
+        if (items[active]) items[active].scrollIntoView({ block: 'nearest' });
+      } else if (e.key === 'Enter'){
+        e.preventDefault();
+        if (active >= 0 && items[active]) pick(items[active].getAttribute('data-v'), items[active].textContent);
+        else if (items.length) pick(items[0].getAttribute('data-v'), items[0].textContent);
+      } else if (e.key === 'Escape'){ lst.style.display = 'none'; }
+    });
+    lst.addEventListener('mousedown', function(e){
+      var it = e.target.closest ? e.target.closest('.ss-item') : null;
+      if (!it) return;
+      e.preventDefault();
+      pick(it.getAttribute('data-v'), it.textContent);
+    });
+    inp.addEventListener('blur', function(){ setTimeout(function(){ lst.style.display = 'none'; }, 200); });
+    clr.addEventListener('click', function(){
+      sel.value = ''; inp.value = ''; lst.style.display = 'none';
+      try { sel.dispatchEvent(new Event('change', { bubbles: true })); } catch (e) {}
+      inp.focus();
+    });
+    sel.addEventListener('change', sync);
+    sync();
+  }
+  function init(){
+    var sels = ['#pccModel', '#pdfModelSel', '#pdfEditSel'].map(function(s){ return document.querySelector(s); })
+      .filter(Boolean);
+    Array.prototype.push.apply(sels, Array.prototype.slice.call(document.querySelectorAll('select[name="model_id"], select[name="save_select"]')));
+    for (var i = 0; i < sels.length; i++) enhance(sels[i]);
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+  else init();
+})();
+</script>
 /* Mobile sidebar drawer */
 (function(){
   var hb = document.getElementById('hamburger');

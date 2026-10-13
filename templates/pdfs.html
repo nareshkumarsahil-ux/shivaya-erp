@@ -143,6 +143,7 @@ function openPdfEdit(id, curModelId, name){
   document.getElementById('pdfEditTitle').textContent = '✎ ' + (name || 'PDF') + ' — model link edit';
   var sel = document.getElementById('pdfEditSel');
   sel.value = curModelId ? String(curModelId) : '';
+  try { sel.dispatchEvent(new Event('change')); } catch (e) {}   /* v3.68 searchable input sync */
   document.getElementById('pdfEditOv').style.display = 'block';
 }
 /* v3.66 — FP attachment overlay (Products wala 📎) */
