@@ -195,7 +195,7 @@
           {% if e.login %}
           <td class="mono"><b>{{ e.login.username }}</b></td>
           <td class="mono">{{ e.login.password }}</td>
-          <td><span class="badge {{'b-blue' if e.login.role=='admin' else 'b-amber'}}">{{ e.login.role|upper }}</span></td>
+          <td><span class="badge {{'b-blue' if e.login.role=='admin' else ('b-violet' if e.login.role=='other' else 'b-amber')}}">{{ e.login.role|upper }}</span></td>
           {% else %}
           <td class="muted small" colspan="3">Login nahi bana — "Sab ke logins banao" dabao</td>
           {% endif %}
@@ -225,6 +225,7 @@
                 <select name="role" style="padding:5px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px">
                   <option value="operator" {{'selected' if e.login.role=='operator'}}>Operator</option>
                   <option value="admin" {{'selected' if e.login.role=='admin'}}>Admin</option>
+                  <option value="other" {{'selected' if e.login.role=='other'}}>Other</option>
                 </select>
               </label>
               <button class="btn btn-xs" type="submit" style="background:#16a34a;color:#fff">💾 Save</button>

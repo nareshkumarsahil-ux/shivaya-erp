@@ -18,6 +18,7 @@
           <select name="role">
             <option value="operator" {{'selected' if edit_row.role=='operator'}}>Operator</option>
             <option value="admin" {{'selected' if edit_row.role=='admin'}}>Admin</option>
+            <option value="other" {{'selected' if edit_row.role=='other'}}>Other (custom permission)</option>
           </select>
         </div>
         <div class="full" style="display:flex;gap:10px;justify-content:flex-end">
@@ -38,7 +39,7 @@
         <div class="field"><label>Password *</label><input type="text" name="password" required placeholder="e.g. amit123"></div>
         <div class="field"><label>Full Name</label><input name="name" placeholder="e.g. Amit Patel"></div>
         <div class="field"><label>Role</label>
-          <select name="role"><option value="operator">Operator</option><option value="admin">Admin</option></select>
+          <select name="role"><option value="operator">Operator</option><option value="admin">Admin</option><option value="other">Other (custom permission)</option></select>
         </div>
         <div class="full"><button class="btn" type="submit">Create User</button></div>
       </div>
@@ -54,7 +55,7 @@
   <div class="panel-head"><h3>🔐 Permissions — {{ perms_row.name }} ({{ perms_row.role|upper }})</h3><a class="btn btn-outline btn-sm" href="/users">✕ Close</a></div>
   <div class="panel-body">
     {% if perms_row.role == 'admin' %}
-    <p class="muted small">👑 Admin ko hamesha SAB modules ka access rehta hai — permissions sirf operator users par lagti hai.</p>
+    <p class="muted small">👑 Admin ko hamesha SAB modules ka access rehta hai — permissions operator + other (custom) users par lagti hai. Other role = jo bhi admin tick karega wahi dikhega.</p>
     {% endif %}
     <form method="post">
       <input type="hidden" name="action" value="perms">
@@ -88,9 +89,9 @@
       <tbody>
         {% for u in users %}
         <tr>
-          <td><span class="avatar {{ 'b' if u.role=='operator' }}">{{ u.name[0] }}</span><b>{{ u.name }}</b>{% if u.id == session.get('user_id') %} <span class="muted small">(you)</span>{% endif %}</td>
+          <td><span class="avatar {{ 'b' if u.role in ('operator','other') }}">{{ u.name[0] }}</span><b>{{ u.name }}</b>{% if u.id == session.get('user_id') %} <span class="muted small">(you)</span>{% endif %}</td>
           <td class="mono">{{ u.username }}</td>
-          <td><span class="badge {{'b-amber' if u.role=='admin' else 'b-blue'}}">{{ u.role|upper }}</span></td>
+          <td><span class="badge {{'b-amber' if u.role=='admin' else ('b-violet' if u.role=='other' else 'b-blue')}}">{{ u.role|upper }}</span></td>
           {% set _up = ((u.perms if 'perms' in u.keys() else '') or '').split(',') %}
           <td class="pmCell" data-uid="{{ u.id }}" style="padding:8px 10px">
             {% if u.role == 'admin' %}

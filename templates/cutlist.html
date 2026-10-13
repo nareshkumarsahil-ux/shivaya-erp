@@ -620,8 +620,9 @@
 @media(min-width:1100px){
   .cl-stats{position:sticky;top:60px;z-index:30;background:var(--bg);padding:4px 4px 12px;margin:-4px -4px 2px;border-radius:0 0 12px 12px}
 }
-/* v3.62 — PREVIEWS LEFT (chauda column) + BUILDER FORMS RIGHT (patla column) */
-.grid2.cl-main{grid-template-columns:minmax(0,1.55fr) minmax(360px,1fr)}
+/* v3.76 — SWAP: BUILDER FORMS LEFT (pehla column) + PREVIEWS RIGHT, dono columns BARABAR (50-50) */
+.grid2.cl-main{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+.clColForm{order:-1}
 @media(max-width:1100px){
   .grid2.cl-main{display:flex;flex-direction:column}
   .clColForm{order:1}

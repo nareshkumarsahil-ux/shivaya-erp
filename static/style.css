@@ -89,6 +89,7 @@ tr:hover td{background:#fdfcf9}
 .b-green{background:#e8f7ee;color:#15803d} .b-red{background:#fdeaea;color:#b91c1c}
 .b-blue{background:#e3edfd;color:#1d4ed8} .b-gray{background:#eef0f3;color:#4b5563}
 .b-amber{background:#fdf3df;color:#b45309}
+.b-violet{background:#f3e8ff;color:#7c3aed}
 
 /* ---------- buttons ---------- */
 .btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:8px;border:none;cursor:pointer;font-size:13px;font-weight:700;background:var(--navy);color:#fff;transition:all .15s;font-family:inherit}

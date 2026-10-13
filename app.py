@@ -366,7 +366,11 @@ def my_password():
         cur = request.form.get("current_password", "")
         new = request.form.get("new_password", "")
         new2 = request.form.get("new_password2", "")
-        if cur != (u["password"] or ""):
+        # v3.75 — SIRF ADMIN apna password bhool jaye to bhi reset kar sake: current OPTIONAL
+        # (admin waise bhi Users page se sabke password reset kar sakta hai; khaali = skip,
+        #  agar likha hai to sahi hona zaroori. Operator ke liye current AB BHI zaroori.)
+        _is_admin = (session.get("user_role") == "admin")
+        if (not _is_admin or cur) and cur != (u["password"] or ""):
             flash("Current password galat hai.", "error")
         elif len(new) < 4:
             flash("Naya password kam se kam 4 characters ka ho.", "error")
@@ -4007,7 +4011,7 @@ def employee_login_edit(emp_id):
     username = (request.form.get("username") or "").strip().lower()
     password = (request.form.get("password") or "").strip()
     role = (request.form.get("role") or "operator").strip().lower()
-    if role not in ("admin", "operator"):
+    if role not in ("admin", "operator", "other"):
         role = "operator"
     u = db.query("SELECT * FROM users WHERE employee_id=?", (emp_id,), one=True)
     if not u:
