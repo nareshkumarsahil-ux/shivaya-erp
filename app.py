@@ -1787,6 +1787,10 @@ def gang_info_for(r):
 def pcbcalc():
     """💰 PCB COST CALCULATOR — panel/PCB size + PCS + RATE ya PRICE (dono direction):
     RATE daalo → PRICE nikle, PRICE daalo → RATE nikle. Har calculation HISTORY me save."""
+    # v3.69 — history me MODEL bhi (self-heal column — POST se bhi PEHLE)
+    _phc = [r["name"] for r in db.query("PRAGMA table_info(pcb_calc_history)")]
+    if "model_name" not in _phc:
+        db.execute("ALTER TABLE pcb_calc_history ADD COLUMN model_name TEXT DEFAULT ''")
     if request.method == "POST":
         f = request.form
         if f.get("action") == "delete_history" and (f.get("id") or "").isdigit():
@@ -1817,9 +1821,13 @@ def pcbcalc():
                 direction, rate, price = "rate", round(rate_in, 3), round(area_pcb * rate_in, 2)
             else:                # PRICE daala → RATE nikla
                 direction, rate, price = "price", round(price_in / area_pcb, 3), round(price_in, 2)
+            _hm = ""
+            if (f.get("model_id") or "").strip().isdigit():
+                _mrow = db.query("SELECT name FROM product_models WHERE id=?", (int(f["model_id"]),), one=True)
+                _hm = (_mrow["name"] if _mrow else "")
             db.execute("INSERT INTO pcb_calc_history (mode, party, input_len, input_w, pcs, direction, "
-                       "rate, price, area, created_on) VALUES (?,?,?,?,?,?,?,?,?,?)",
-                       (mode, party, L, W, pcs, direction, rate, price, round(area_pcb, 4), _now_dt()))
+                       "rate, price, area, created_on, model_name) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                       (mode, party, L, W, pcs, direction, rate, price, round(area_pcb, 4), _now_dt(), _hm))
             flash("Calculation history me save ho gayi ✅", "success")
             return redirect_with_token(url_for("pcbcalc"))
     models = db.query("SELECT id, name, model_code, pcb_len, pcb_w, cutting_len, cutting_w, "

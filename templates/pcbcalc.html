@@ -29,7 +29,7 @@
       <!-- MODEL se prefill -->
       <div class="field" style="max-width:440px">
         <label>MODEL SE BHARO (optional — Finished Product ki details auto)</label>
-        <select id="pccModel" onchange="pccModelFill()">
+        <select id="pccModel" name="model_id" onchange="pccModelFill()">
           <option value="">— Select model —</option>
           {% for m in models %}
           <option value="{{ m.id }}"
@@ -130,7 +130,7 @@
       <div style="overflow-x:auto">
       <table style="min-width:860px">
         <thead><tr>
-          <th>DATE · TIME (IST)</th><th>MODE</th><th>NOTE / PARTY</th><th>SIZE (MM)</th><th>PCS/PANEL</th>
+          <th>DATE · TIME (IST)</th><th>MODE</th><th>MODEL</th><th>NOTE / PARTY</th><th>SIZE (MM)</th><th>PCS/PANEL</th>
           <th class="t-right">AREA/PCB (SQ.INCH)</th><th class="t-right">RATE (₹/SQ.INCH)</th>
           <th class="t-right">PCB PRICE (₹)</th><th class="t-right">PANEL PRICE (₹)</th><th></th>
         </tr></thead>
@@ -139,6 +139,7 @@
           <tr>
             <td style="white-space:nowrap">{{ h.created_on }}</td>
             <td>{% if h.mode == 'panel' %}<span class="badge b-blue">PANEL</span>{% else %}<span class="badge b-pending">PCB</span>{% endif %}</td>
+            <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#1d4ed8;font-weight:700" title="{{ h.model_name or '' }}">{{ h.model_name or '—' }}</td>
             <td>{{ h.party|dash }}</td>
             <td style="white-space:nowrap">{{ h.input_len|gfmt }} × {{ h.input_w|gfmt }}</td>
             <td>{{ h.pcs if h.pcs else '—' }}</td>
