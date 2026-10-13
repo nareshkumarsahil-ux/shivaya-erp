@@ -113,9 +113,108 @@
 </div>
 
 <form method="post" action="/cutlist" id="clForm">
-<div class="grid2">
-  <!-- ============ LEFT: builder forms ============ -->
-  <div>
+<div class="grid2 cl-main">
+  <!-- ============ LEFT: stats + previews (v3.62 swap — preview ko zyada space) ============ -->
+  <div class="clColPrev">
+    <div class="cards cl-stats" style="grid-template-columns:repeat(auto-fill,minmax(130px,1fr))">
+      <div class="stat"><div class="top"><span class="lbl">Panels/Sheet</span></div><div class="num" id="statPPS">0</div></div>
+      <div class="stat"><div class="top"><span class="lbl">Total Panels</span></div><div class="num" id="statTP">0</div></div>
+      <div class="stat"><div class="top"><span class="lbl">PCS/Sheet</span></div><div class="num" id="statPCS">0</div></div>
+      <div class="stat"><div class="top"><span class="lbl">Total PCS</span></div><div class="num" id="statTPCS">0</div></div>
+      <div class="stat"><div class="top"><span class="lbl">Wastage</span></div><div class="num" id="statWaste" style="color:#16a34a">0%</div></div>
+      <div class="stat"><div class="top"><span class="lbl">Layout Type</span></div><div class="num" id="statLayout" style="font-size:14px">—</div></div>
+    </div>
+
+    <div class="panel" id="panelPreviewBox">
+      <div class="panel-head"><h3>🔲 PANEL PREVIEW — 1 PANEL + INDIVIDUAL PCB</h3>
+        <button type="button" class="btn btn-outline btn-xs" style="margin-left:auto" onclick="printPanelPreview()">🖨️ PRINT / PDF</button><button type="button" class="btn btn-outline btn-xs" onclick="printPreviews()">🖨️ SAB (3 PAGE)</button>
+        <span class="muted small" style="display:inline-flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:2px">
+          <span style="display:inline-flex;gap:4px;align-items:center"><span style="width:11px;height:11px;background:#dbeafe;border:1.5px solid #2563eb;border-radius:2px;display:inline-block"></span>Panel</span>
+          <span style="display:inline-flex;gap:4px;align-items:center"><span style="width:11px;height:11px;background:#fbbf24;border:1.5px solid #f59e0b;border-radius:2px;display:inline-block"></span>PCB</span>
+            <span style="font-weight:800;color:#92400e">PCB DIMS: TOP = LENGTH (X) · LEFT = WIDTH (Y)</span>
+        </span>
+      </div>
+      <div class="panel-body" style="padding:10px">
+        <div id="svgPanel" style="max-width:640px;margin-left:auto;margin-right:auto">{{ svg_panel|safe }}{% if not svg_panel %}<div class="muted small" style="padding:18px;text-align:center">Value bharke ⚙️ CALCULATE dabao — preview yahan banega</div>{% endif %}</div>
+      </div>
+    </div>
+
+    <div class="panel" id="gangPanel" style="{{ 'display:block;' if gang_info else 'display:none;' }}border-left:4px solid #16a34a">
+      <div class="panel-head"><h3 id="gangHead">{{ ('🔗 GANG PANEL PREVIEW — ' ~ gang_info.gx ~ '×' ~ gang_info.gy ~ ' MULTIPLIER = ' ~ gang_info.pcs_gang ~ ' PCS') if gang_info else '🔗 GANG PANEL PREVIEW (MULTIPLIER)' }}</h3><button type="button" class="btn btn-outline btn-xs" style="margin-left:auto" onclick="printGangPreview()">🖨️ PRINT / PDF</button></div>
+      <div class="panel-body" style="padding:12px 16px">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px">
+          <div class="gstat"><div class="glbl">GANG SIZE (TOTAL)</div><div class="gnum" id="gangSize">{{ '%0.2f × %0.2f'|format(gang_info.gl, gang_info.gw) if gang_info else '—' }} <span class="u">mm</span></div></div>
+          <div class="gstat"><div class="glbl">PCS PER GANG</div><div class="gnum" id="gangPcs">{{ gang_info.pcs_gang if gang_info else '—' }} <span class="u">PCS</span></div></div>
+          <div class="gstat"><div class="glbl">SHEET LAYOUT (GANG)</div><div class="gnum" id="gangSheet" style="font-size:15px">{{ gang_info.layout|safe if gang_info else '—' }}</div></div>
+          <div class="gstat"><div class="glbl">PCS PER SHEET</div><div class="gnum" id="gangPcsSheet">{{ gang_info.pcs_sheet if gang_info else '—' }} <span class="u">PCS</span></div></div>
+        </div>
+        <div class="muted small" id="gangNote" style="margin-top:10px">{{ gang_info.note|safe if gang_info else '' }}</div>
+        <div style="margin-top:12px">
+          <span class="muted small" style="display:inline-flex;gap:10px;align-items:center;flex-wrap:wrap">
+            <span style="display:inline-flex;gap:4px;align-items:center"><span style="width:12px;height:12px;background:#ede9fe;border:3px solid #7c3aed;border-radius:2px;display:inline-block"></span><b style="color:#7c3aed">GANG PANEL</b> (thick violet)</span>
+            <span style="display:inline-flex;gap:4px;align-items:center"><span style="width:12px;height:12px;background:#dbeafe;border:1.5px solid #2563eb;border-radius:2px;display:inline-block"></span>Panel</span>
+            <span style="display:inline-flex;gap:4px;align-items:center"><span style="width:12px;height:12px;background:#fbbf24;border:1.5px solid #f59e0b;border-radius:2px;display:inline-block"></span>PCB</span>
+            <span style="font-weight:800;color:#92400e">PCB DIMS: TOP = LENGTH (X) · LEFT = WIDTH (Y)</span>
+          </span>
+          <div id="svgGangPanel" style="margin-top:8px;max-width:640px;margin-left:auto;margin-right:auto">{{ svg_gang_panel|safe }}{% if not svg_gang_panel %}<div class="muted small" style="padding:18px;text-align:center">Value bharke ⚙️ CALCULATE dabao — preview yahan banega</div>{% endif %}</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel" id="sheetLayoutPanel" style="border-left:4px solid #6366f1">
+      <div class="panel-head"><h3 id="sheetLayoutHead">📐 {{ 'GANG PANEL' if gang_info else 'PANEL' }} IN SHEET — 1 SHEET ME KITNE {{ 'GANG PANELS' if gang_info else 'PANELS' }}</h3><button type="button" class="btn btn-outline btn-xs" style="margin-left:auto" onclick="printSheetPreview()">🖨️ PRINT / PDF</button></div>
+      <div class="panel-body" style="padding:12px 16px">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px">
+          <div class="gstat"><div class="glbl">SHEET SIZE</div><div class="gnum" style="font-size:15px"><span id="slSheet">—</span> <span class="u">mm</span></div></div>
+          <div class="gstat"><div class="glbl">1 SHEET ME {{ 'CUTTING PANELS' if gang_info else 'PANELS' }}</div><div class="gnum" style="color:#4f46e5" id="slCount">—</div></div>
+          <div class="gstat"><div class="glbl">TOTAL PCB (1 SHEET)</div><div class="gnum" style="color:#166534" id="slPcs">—</div></div>
+          <div class="gstat"><div class="glbl" id="slGangSizeLbl">{{ 'GANG PANEL (ACTUAL)' if result and result.gang_active else 'PANEL (ACTUAL)' }}</div><div class="gnum" style="color:#7c3aed" id="slGangSize">{% if result %}{{ '%0.2f'|format(result.gang_len) }}×{{ '%0.2f'|format(result.gang_w) }} mm · {{ result.pcs_unit }} PCB{% else %}—{% endif %}</div></div>
+          <div class="gstat"><div class="glbl">CUTTING PANEL SIZE (CNC MARGIN KE BAAD)</div><div class="gnum" style="color:#b45309" id="slCutSize">{% if result %}{{ '%0.2f'|format(result.cutting_len) }}×{{ '%0.2f'|format(result.cutting_w) }} mm{% else %}—{% endif %}</div></div>
+        {% set R96 = result %}
+        <div class="gstat"><div class="glbl">ORDER QTY (PANELS)</div><div class="gnum" style="color:#334155" id="slOrderQty">{{ fields.get('order_qty') if fields.get('order_qty') else '—' }}</div></div>
+        <div class="gstat"><div class="glbl">TOTAL SHEET</div><div class="gnum" style="color:#0f172a" id="slTotSheets">{{ R96.sheets if R96 else '—' }}</div></div>
+        <div class="gstat"><div class="glbl">TOTAL PANELS ({{ R96.sheets if R96 else 1 }} SH)</div><div class="gnum" style="color:#1d4ed8" id="slTotPanels">{{ '%0.0f'|format(R96.total_panels) if R96 and R96.total_panels else '—' }}</div></div>
+        <div class="gstat"><div class="glbl">TOTAL PCB ({{ R96.sheets if R96 else 1 }} SH)</div><div class="gnum" style="color:#166534" id="slTotPcs">{{ '%0.0f'|format(R96.total_pcs) if R96 and R96.total_pcs else '—' }}</div></div>
+        <div class="gstat"><div class="glbl">WASTE PANELS{% if R96 and R96.order_qty %} ({{ '%0.2f'|format(R96.cutting_len) }}×{{ '%0.2f'|format(R96.cutting_w) }} mm){% endif %}</div><div class="gnum" style="color:#dc2626" id="slWastePanels">{% if R96 and R96.order_qty %}{{ '%0.0f'|format(R96.waste_panels) }}{% else %}—{% endif %}</div></div>
+        </div>
+        <div style="margin-top:12px">
+          <span class="muted small" style="display:inline-flex;gap:12px;flex-wrap:wrap">
+            <span style="display:inline-flex;gap:4px;align-items:center"><span style="width:12px;height:12px;background:#eef2ff;border:2px solid #6366f1;border-radius:2px;display:inline-block"></span><b style="color:#4f46e5">{{ 'CUTTING PANEL (GANG)' if gang_info else 'PANEL' }}</b> (numbered)</span>
+            <span style="display:inline-flex;gap:4px;align-items:center"><span style="width:12px;height:12px;background:#fdf4ff;border:2px solid #c026d3;border-radius:2px;display:inline-block"></span>Rotated</span>
+            <span style="display:inline-flex;gap:4px;align-items:center"><span style="width:12px;height:12px;background:#fffdf5;border:2px solid #b3ac99;border-radius:2px;display:inline-block"></span>Sheet</span>
+          </span>
+          <div id="svgSheetLayout" style="margin-top:8px;max-width:100%;margin-left:auto;margin-right:auto">{{ svg_sheet_layout|safe }}{% if not svg_sheet_layout %}<div class="muted small" style="padding:18px;text-align:center">Value bharke ⚙️ CALCULATE dabao — preview yahan banega</div>{% endif %}</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel" id="orientPanel" style="display:none">
+      <div class="panel-head"><h3>🔄 Orientation Options</h3></div>
+      <div class="panel-body" style="padding:12px 16px">
+        <div style="display:flex;gap:12px;flex-wrap:wrap">
+          <div id="orientNormal" style="flex:1;min-width:200px;border:2px solid var(--border);border-radius:10px;padding:12px 14px;background:#fff">
+            <b>NORMAL ORIENTATION ONLY</b>
+            <div style="font-size:18px;font-weight:800;margin-top:6px" id="liveNormal">0 × 0 = 0 panels</div>
+            <div id="badgeNormal"></div>
+          </div>
+          <div id="orientRotated" style="flex:1;min-width:200px;border:2px solid var(--border);border-radius:10px;padding:12px 14px;background:#fff">
+            <b>ROTATED 90° ONLY</b>
+            <div style="font-size:18px;font-weight:800;margin-top:6px" id="liveRotated">0 × 0 = 0 panels</div>
+            <div id="badgeRotated"></div>
+          </div>
+          <div id="orientMixed" style="flex:1;min-width:260px;border:2px solid var(--border);border-radius:10px;padding:12px 14px;background:#fff">
+            <b>MIXED ROWS (BEST)</b>
+            <div style="font-size:16px;font-weight:800;margin-top:6px" id="liveMixed">0 × row of 0 + 0 × row of 0 = 0 panels</div>
+            <div id="badgeMixed"></div>
+          </div>
+        </div>
+        <p class="muted small" style="margin-top:10px">💡 Tip: mixing row orientations often beats a single uniform grid — this optimizer checks both automatically.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ RIGHT: builder forms (v3.62 swap) ============ -->
+  <div class="clColForm">
     <div class="panel" style="display:flex;align-items:center;gap:10px;padding:10px 14px">
       <span class="muted small" style="white-space:nowrap">📂 Load from Finished Product…</span>
       <span style="position:relative;display:inline-flex;flex-direction:column">
@@ -468,102 +567,6 @@
       </div>
     </div>
   </div>
-
-  <!-- ============ RIGHT: stats + previews ============ -->
-  <div>
-    <div class="cards cl-stats" style="grid-template-columns:repeat(auto-fill,minmax(130px,1fr))">
-      <div class="stat"><div class="top"><span class="lbl">Panels/Sheet</span></div><div class="num" id="statPPS">0</div></div>
-      <div class="stat"><div class="top"><span class="lbl">Total Panels</span></div><div class="num" id="statTP">0</div></div>
-      <div class="stat"><div class="top"><span class="lbl">PCS/Sheet</span></div><div class="num" id="statPCS">0</div></div>
-      <div class="stat"><div class="top"><span class="lbl">Total PCS</span></div><div class="num" id="statTPCS">0</div></div>
-      <div class="stat"><div class="top"><span class="lbl">Wastage</span></div><div class="num" id="statWaste" style="color:#16a34a">0%</div></div>
-      <div class="stat"><div class="top"><span class="lbl">Layout Type</span></div><div class="num" id="statLayout" style="font-size:14px">—</div></div>
-    </div>
-
-    <div class="panel" id="panelPreviewBox">
-      <div class="panel-head"><h3>🔲 PANEL PREVIEW — 1 PANEL + INDIVIDUAL PCB</h3>
-        <button type="button" class="btn btn-outline btn-xs" style="margin-left:auto" onclick="printPanelPreview()">🖨️ PRINT / PDF</button><button type="button" class="btn btn-outline btn-xs" onclick="printPreviews()">🖨️ SAB (3 PAGE)</button>
-        <span class="muted small" style="display:inline-flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:2px">
-          <span style="display:inline-flex;gap:4px;align-items:center"><span style="width:11px;height:11px;background:#dbeafe;border:1.5px solid #2563eb;border-radius:2px;display:inline-block"></span>Panel</span>
-          <span style="display:inline-flex;gap:4px;align-items:center"><span style="width:11px;height:11px;background:#fbbf24;border:1.5px solid #f59e0b;border-radius:2px;display:inline-block"></span>PCB</span>
-            <span style="font-weight:800;color:#92400e">PCB DIMS: TOP = LENGTH (X) · LEFT = WIDTH (Y)</span>
-        </span>
-      </div>
-      <div class="panel-body" style="padding:10px">
-        <div id="svgPanel" style="max-width:470px;margin-left:auto;margin-right:auto">{{ svg_panel|safe }}{% if not svg_panel %}<div class="muted small" style="padding:18px;text-align:center">Value bharke ⚙️ CALCULATE dabao — preview yahan banega</div>{% endif %}</div>
-      </div>
-    </div>
-
-    <div class="panel" id="gangPanel" style="{{ 'display:block;' if gang_info else 'display:none;' }}border-left:4px solid #16a34a">
-      <div class="panel-head"><h3 id="gangHead">{{ ('🔗 GANG PANEL PREVIEW — ' ~ gang_info.gx ~ '×' ~ gang_info.gy ~ ' MULTIPLIER = ' ~ gang_info.pcs_gang ~ ' PCS') if gang_info else '🔗 GANG PANEL PREVIEW (MULTIPLIER)' }}</h3><button type="button" class="btn btn-outline btn-xs" style="margin-left:auto" onclick="printGangPreview()">🖨️ PRINT / PDF</button></div>
-      <div class="panel-body" style="padding:12px 16px">
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px">
-          <div class="gstat"><div class="glbl">GANG SIZE (TOTAL)</div><div class="gnum" id="gangSize">{{ '%0.2f × %0.2f'|format(gang_info.gl, gang_info.gw) if gang_info else '—' }} <span class="u">mm</span></div></div>
-          <div class="gstat"><div class="glbl">PCS PER GANG</div><div class="gnum" id="gangPcs">{{ gang_info.pcs_gang if gang_info else '—' }} <span class="u">PCS</span></div></div>
-          <div class="gstat"><div class="glbl">SHEET LAYOUT (GANG)</div><div class="gnum" id="gangSheet" style="font-size:15px">{{ gang_info.layout|safe if gang_info else '—' }}</div></div>
-          <div class="gstat"><div class="glbl">PCS PER SHEET</div><div class="gnum" id="gangPcsSheet">{{ gang_info.pcs_sheet if gang_info else '—' }} <span class="u">PCS</span></div></div>
-        </div>
-        <div class="muted small" id="gangNote" style="margin-top:10px">{{ gang_info.note|safe if gang_info else '' }}</div>
-        <div style="margin-top:12px">
-          <span class="muted small" style="display:inline-flex;gap:10px;align-items:center;flex-wrap:wrap">
-            <span style="display:inline-flex;gap:4px;align-items:center"><span style="width:12px;height:12px;background:#ede9fe;border:3px solid #7c3aed;border-radius:2px;display:inline-block"></span><b style="color:#7c3aed">GANG PANEL</b> (thick violet)</span>
-            <span style="display:inline-flex;gap:4px;align-items:center"><span style="width:12px;height:12px;background:#dbeafe;border:1.5px solid #2563eb;border-radius:2px;display:inline-block"></span>Panel</span>
-            <span style="display:inline-flex;gap:4px;align-items:center"><span style="width:12px;height:12px;background:#fbbf24;border:1.5px solid #f59e0b;border-radius:2px;display:inline-block"></span>PCB</span>
-            <span style="font-weight:800;color:#92400e">PCB DIMS: TOP = LENGTH (X) · LEFT = WIDTH (Y)</span>
-          </span>
-          <div id="svgGangPanel" style="margin-top:8px;max-width:470px;margin-left:auto;margin-right:auto">{{ svg_gang_panel|safe }}{% if not svg_gang_panel %}<div class="muted small" style="padding:18px;text-align:center">Value bharke ⚙️ CALCULATE dabao — preview yahan banega</div>{% endif %}</div>
-        </div>
-      </div>
-    </div>
-
-    <div class="panel" id="sheetLayoutPanel" style="border-left:4px solid #6366f1">
-      <div class="panel-head"><h3 id="sheetLayoutHead">📐 {{ 'GANG PANEL' if gang_info else 'PANEL' }} IN SHEET — 1 SHEET ME KITNE {{ 'GANG PANELS' if gang_info else 'PANELS' }}</h3><button type="button" class="btn btn-outline btn-xs" style="margin-left:auto" onclick="printSheetPreview()">🖨️ PRINT / PDF</button></div>
-      <div class="panel-body" style="padding:12px 16px">
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px">
-          <div class="gstat"><div class="glbl">SHEET SIZE</div><div class="gnum" style="font-size:15px"><span id="slSheet">—</span> <span class="u">mm</span></div></div>
-          <div class="gstat"><div class="glbl">1 SHEET ME {{ 'CUTTING PANELS' if gang_info else 'PANELS' }}</div><div class="gnum" style="color:#4f46e5" id="slCount">—</div></div>
-          <div class="gstat"><div class="glbl">TOTAL PCB (1 SHEET)</div><div class="gnum" style="color:#166534" id="slPcs">—</div></div>
-        {% set R96 = result %}
-        <div class="gstat"><div class="glbl">ORDER QTY (PANELS)</div><div class="gnum" style="color:#334155" id="slOrderQty">{{ fields.get('order_qty') if fields.get('order_qty') else '—' }}</div></div>
-        <div class="gstat"><div class="glbl">TOTAL SHEET</div><div class="gnum" style="color:#0f172a" id="slTotSheets">{{ R96.sheets if R96 else '—' }}</div></div>
-        <div class="gstat"><div class="glbl">TOTAL PANELS ({{ R96.sheets if R96 else 1 }} SH)</div><div class="gnum" style="color:#1d4ed8" id="slTotPanels">{{ '%0.0f'|format(R96.total_panels) if R96 and R96.total_panels else '—' }}</div></div>
-        <div class="gstat"><div class="glbl">TOTAL PCB ({{ R96.sheets if R96 else 1 }} SH)</div><div class="gnum" style="color:#166534" id="slTotPcs">{{ '%0.0f'|format(R96.total_pcs) if R96 and R96.total_pcs else '—' }}</div></div>
-        <div class="gstat"><div class="glbl">WASTE PANELS{% if R96 and R96.order_qty %} ({{ '%0.2f'|format(R96.cutting_len) }}×{{ '%0.2f'|format(R96.cutting_w) }} mm){% endif %}</div><div class="gnum" style="color:#dc2626" id="slWastePanels">{% if R96 and R96.order_qty %}{{ '%0.0f'|format(R96.waste_panels) }}{% else %}—{% endif %}</div></div>
-        </div>
-        <div style="margin-top:12px">
-          <span class="muted small" style="display:inline-flex;gap:12px;flex-wrap:wrap">
-            <span style="display:inline-flex;gap:4px;align-items:center"><span style="width:12px;height:12px;background:#eef2ff;border:2px solid #6366f1;border-radius:2px;display:inline-block"></span><b style="color:#4f46e5">{{ 'CUTTING PANEL (GANG)' if gang_info else 'PANEL' }}</b> (numbered)</span>
-            <span style="display:inline-flex;gap:4px;align-items:center"><span style="width:12px;height:12px;background:#fdf4ff;border:2px solid #c026d3;border-radius:2px;display:inline-block"></span>Rotated</span>
-            <span style="display:inline-flex;gap:4px;align-items:center"><span style="width:12px;height:12px;background:#fffdf5;border:2px solid #b3ac99;border-radius:2px;display:inline-block"></span>Sheet</span>
-          </span>
-          <div id="svgSheetLayout" style="margin-top:8px;max-width:500px;margin-left:auto;margin-right:auto">{{ svg_sheet_layout|safe }}{% if not svg_sheet_layout %}<div class="muted small" style="padding:18px;text-align:center">Value bharke ⚙️ CALCULATE dabao — preview yahan banega</div>{% endif %}</div>
-        </div>
-      </div>
-    </div>
-
-    <div class="panel" id="orientPanel" style="display:none">
-      <div class="panel-head"><h3>🔄 Orientation Options</h3></div>
-      <div class="panel-body" style="padding:12px 16px">
-        <div style="display:flex;gap:12px;flex-wrap:wrap">
-          <div id="orientNormal" style="flex:1;min-width:200px;border:2px solid var(--border);border-radius:10px;padding:12px 14px;background:#fff">
-            <b>NORMAL ORIENTATION ONLY</b>
-            <div style="font-size:18px;font-weight:800;margin-top:6px" id="liveNormal">0 × 0 = 0 panels</div>
-            <div id="badgeNormal"></div>
-          </div>
-          <div id="orientRotated" style="flex:1;min-width:200px;border:2px solid var(--border);border-radius:10px;padding:12px 14px;background:#fff">
-            <b>ROTATED 90° ONLY</b>
-            <div style="font-size:18px;font-weight:800;margin-top:6px" id="liveRotated">0 × 0 = 0 panels</div>
-            <div id="badgeRotated"></div>
-          </div>
-          <div id="orientMixed" style="flex:1;min-width:260px;border:2px solid var(--border);border-radius:10px;padding:12px 14px;background:#fff">
-            <b>MIXED ROWS (BEST)</b>
-            <div style="font-size:16px;font-weight:800;margin-top:6px" id="liveMixed">0 × row of 0 + 0 × row of 0 = 0 panels</div>
-            <div id="badgeMixed"></div>
-          </div>
-        </div>
-        <p class="muted small" style="margin-top:10px">💡 Tip: mixing row orientations often beats a single uniform grid — this optimizer checks both automatically.</p>
-      </div>
-    </div>
   </div>
 </div>
 </form>
@@ -616,6 +619,13 @@
 /* stats cards FREEZE — scrolling par upar nahi jayenge (desktop 2-column view) */
 @media(min-width:1100px){
   .cl-stats{position:sticky;top:60px;z-index:30;background:var(--bg);padding:4px 4px 12px;margin:-4px -4px 2px;border-radius:0 0 12px 12px}
+}
+/* v3.62 — PREVIEWS LEFT (chauda column) + BUILDER FORMS RIGHT (patla column) */
+.grid2.cl-main{grid-template-columns:minmax(0,1.55fr) minmax(360px,1fr)}
+@media(max-width:1100px){
+  .grid2.cl-main{display:flex;flex-direction:column}
+  .clColForm{order:1}
+  .clColPrev{order:2}
 }
 </style>
 <script>
@@ -913,7 +923,7 @@ function computeLive(){
 
   var sl2 = document.getElementById('liveSheetLine');
   sl2.style.display = 'block';
-  var gangPre = gangActive ? '<b>GANG ' + fmtNum(gangL) + ' × ' + fmtNum(gangW) + ' mm · ' + pcsUnit + ' PCS/gang</b> · ' : '';
+  var gangPre = gangActive ? '<b>GANG ' + fmtNum(gangL) + ' × ' + fmtNum(gangW) + ' mm · ' + pcsUnit + ' PCB \u2192 CUT ' + fmtNum(gl) + '×' + fmtNum(gw) + ' mm</b> · ' : '';
   if (best === 'mixed') {
     sl2.innerHTML = '→ ' + gangPre + '<b>Mixed: ' + mN + ' × row of ' + perN + ' (normal) + ' + mM +
                     ' × row of ' + perR + ' (rotated) = ' + pps + ' panels/sheet · ' + pcsSheet + ' PCS</b>';
@@ -955,7 +965,8 @@ function computeLive(){
     document.getElementById('gangNote').innerHTML =
       '💡 Panel ' + fmtNum(pL) + '×' + fmtNum(pW) + ' mm (' + pcsPanel + ' PCS) × ' + gx + '×' + gy +
       ' multiplier + joints = GANG PANEL ' + fmtNum(gangL) + '×' + fmtNum(gangW) + ' mm (' + pcsUnit +
-      ' PCS/unit) — CNC margin isme NAHI. PANEL IN SHEET me CUTTING SIZE (GANG + ' + fmtNum(2 * kx) + '/' + fmtNum(2 * ky) +
+      ' PCS/unit) — CNC margin isme NAHI. PANEL IN SHEET me CUTTING PANEL SIZE ' + fmtNum(gl) + '×' + fmtNum(gw) +
+      ' mm (GANG + ' + fmtNum(2 * kx) + '/' + fmtNum(2 * ky) +
       ' mm margin) fit hoti hai — Sheet ' + fmtNum(sl) + '×' + fmtNum(sw) + ' mm me <b>' + layTxt.toLowerCase() +
       '</b>: ' + gangCount + ' × ' + pcsUnit + ' PCS = <b>' + pcsSheet + ' PCS per sheet</b>.';
     /* GANG PANEL PREVIEW SVG — EK gang unit zoom (multiplier panels + PCBs + joints) */
@@ -983,6 +994,15 @@ function computeLive(){
     document.getElementById('slTotPcs').textContent = fmtNum(_totPcs);
     var _tsEl = document.getElementById('slTotSheets');   /* v3.59 — TOTAL SHEET */
     if (_tsEl) _tsEl.textContent = (_oq > 0) ? String(Math.ceil(_oq / (pps || 1))) : String(sheets);
+    /* v3.61 — GANG PANEL (actual + PCB) aur CUTTING PANEL SIZE (margin ke baad) alag cards */
+    var _gsEl = document.getElementById('slGangSize');
+    if (_gsEl) {
+      _gsEl.textContent = fmtNum(gangActive ? gangL : pL) + '\u00d7' + fmtNum(gangActive ? gangW : pW) + ' mm \u00b7 ' + pcsUnit + ' PCB';
+      var _gsLb = document.getElementById('slGangSizeLbl');
+      if (_gsLb) _gsLb.textContent = gangActive ? 'GANG PANEL (ACTUAL)' : 'PANEL (ACTUAL)';
+    }
+    var _csEl = document.getElementById('slCutSize');
+    if (_csEl) _csEl.textContent = fmtNum(unitL) + '\u00d7' + fmtNum(unitW) + ' mm';
     var _wEl = document.getElementById('slWastePanels');
     if (_oq > 0) {
       _wEl.textContent = String(Math.max(0, _totPan - _oq));
@@ -1205,7 +1225,9 @@ function svgSheetLayout(sl, sw, cl, cw, gx2, gy2, gx, gy, kx, ky, pps, best, mN,
     } else pcbGrid(cx, cy, Cl, Cw, rot);
     /* v3.59 — dims label GANG PANEL size (margin nahi) + PCS/gang */
     if (gang && Cl > 60 && Cw > 30) {
-      s += '<text x="' + (cx + Cl/2).toFixed(1) + '" y="' + (cy + Cw/2 + 15).toFixed(1) + '" text-anchor="middle" font-size="8.5" font-weight="700" fill="' + stroke + '" font-family="Segoe UI,Arial">' + pcsUnit + ' PCS/GANG</text>';
+      s += '<text x="' + (cx + Cl/2).toFixed(1) + '" y="' + (cy + Cw/2 + 15).toFixed(1) + '" text-anchor="middle" font-size="8.5" font-weight="700" fill="' + stroke + '" font-family="Segoe UI,Arial">' + pcsUnit + ' PCB</text>';
+      if (Cw > 62) s += '<text x="' + (cx + Cl/2).toFixed(1) + '" y="' + (cy + Cw/2 + 26).toFixed(1) + '" text-anchor="middle" font-size="7.5" font-weight="700" fill="#b45309" font-family="Segoe UI,Arial">CUT ' + fmtNum(Cl/scale) + '\u00d7' + fmtNum(Cw/scale) + ' mm</text>';
+      if (Cw > 78) s += '<text x="' + (cx + Cl/2).toFixed(1) + '" y="' + (cy + Cw/2 + 37).toFixed(1) + '" text-anchor="middle" font-size="7.5" font-weight="600" fill="#64748b" font-family="Segoe UI,Arial">GANG ' + fmtNum(rot ? _GGW : _GGL) + '\u00d7' + fmtNum(rot ? _GGL : _GGW) + ' mm</text>';
       if (Cl > 26 && Cw > 15) lblW(cx + Cl/2, cy + 8.5, rot ? _GGW : _GGL);
       if (Cw > 26 && Cl > 15) lblH(cx + 7.5, cy + Cw/2, rot ? _GGL : _GGW);
     } else {
@@ -1225,16 +1247,14 @@ function svgSheetLayout(sl, sw, cl, cw, gx2, gy2, gx, gy, kx, ky, pps, best, mN,
     for (var rN = 0; rN < mN; rN++) { for (i = 0; i < perN; i++) { cell(x0 + i*cl, y, cl, cw, num, '#eef2ff', '#6366f1'); num++; } y += cw; }
     var cl2 = cw, cw2 = cl;
     for (var rM = 0; rM < mM; rM++) { for (i = 0; i < perR; i++) { cell(x0 + i*cl2, y, cl2, cw2, num, '#fdf4ff', '#c026d3', true); num++; } y += cw2; }
-    cap = '1 SHEET ' + fmtNum(sl) + 'x' + fmtNum(sw) + ' mm \u2190 ' + ptype + ' ' + fmtNum(gang ? _GGL : cl) + 'x' + fmtNum(gang ? _GGW : cw) +
-          ' mm' + (gang ? ' (' + pcsUnit + ' PCS/gang, sheet cutting me +CNC margin)' : '') +
-          ' = ' + pps + ' ' + ptype + 'S (' + mN + 'x row ' + perN + ' + ' + mM + 'x row ' + perR + ') = ' + fmtNum(pps * pcsUnit) + ' PCS';
+    cap = '1 SHEET ' + fmtNum(sl) + 'x' + fmtNum(sw) + ' mm \u2190 ' + (gang ? 'GANG PANEL ' + fmtNum(_GGL) + 'x' + fmtNum(_GGW) + ' mm \u00b7 ' + pcsUnit + ' PCB \u2192 CUTTING PANEL ' + fmtNum(gl) + 'x' + fmtNum(gw) + ' mm (CNC margin ke baad)' : ptype + ' ' + fmtNum(cl) + 'x' + fmtNum(cw) + ' mm') +
+          ' = ' + pps + (gang ? ' CUTTING PANELS (' : ' ' + ptype + 'S (') + mN + 'x row ' + perN + ' + ' + mM + 'x row ' + perR + ') = ' + fmtNum(pps * pcsUnit) + (gang ? ' PCB' : ' PCS');
   } else {
     num = 1;
     var _rotAll = (best === 'rotated');
     for (var ix = 0; ix < gx2; ix++) for (var iy = 0; iy < gy2; iy++) { cell(x0 + ix*cl, y0 + iy*cw, cl, cw, num, '#eef2ff', '#6366f1', _rotAll); num++; }
-    cap = '1 SHEET ' + fmtNum(sl) + 'x' + fmtNum(sw) + ' mm \u2190 ' + ptype + ' ' + fmtNum(gang ? _GGL : cl) + 'x' + fmtNum(gang ? _GGW : cw) +
-          ' mm' + (gang ? ' (' + pcsUnit + ' PCS/gang, sheet cutting me +CNC margin)' : '') +
-          ' = ' + gx2 + 'x' + gy2 + ' = ' + pps + ' ' + ptype + 'S x ' + fmtNum(pcsUnit) + ' PCS = ' + fmtNum(pps * pcsUnit) + ' PCS';
+    cap = '1 SHEET ' + fmtNum(sl) + 'x' + fmtNum(sw) + ' mm \u2190 ' + (gang ? 'GANG PANEL ' + fmtNum(_GGL) + 'x' + fmtNum(_GGW) + ' mm \u00b7 ' + pcsUnit + ' PCB \u2192 CUTTING PANEL ' + fmtNum(gl) + 'x' + fmtNum(gw) + ' mm (CNC margin ke baad)' : ptype + ' ' + fmtNum(cl) + 'x' + fmtNum(cw) + ' mm') +
+          ' = ' + gx2 + 'x' + gy2 + ' = ' + pps + (gang ? ' CUTTING PANELS x ' : ' ' + ptype + 'S x ') + fmtNum(pcsUnit) + (gang ? ' PCB = ' : ' PCS = ') + fmtNum(pps * pcsUnit) + (gang ? ' PCB' : ' PCS');
   }
   /* sheet dimensions — neeche length (ticks), right rotated width, qty */
   var _c = '#94a3b8', _yd = y0 + T + 11;
@@ -1632,7 +1652,7 @@ function _docInfo(){
   return {
     model: _modelName97() || '\u2014',
     party: (v('party_name') || '\u2014').toUpperCase(),
-    panel: mm(num('panel_len'), num('panel_w')),
+    panel: (intNum('gang_x') > 1 || intNum('gang_y') > 1) ? ('GANG ' + fmtNum(num('panel_len') - 2 * num('kerf_x')) + ' \u00d7 ' + fmtNum(num('panel_w') - 2 * num('kerf_y')) + ' mm \u2192 CUTTING ' + mm(num('panel_len'), num('panel_w'))) : mm(num('panel_len'), num('panel_w')),
     pcb: mm(num('pcb_len'), num('pcb_w')),
     pcsPanel: (px > 0 && py > 0) ? (px + ' \u00d7 ' + py + ' = ' + (px * py) + ' PCS') : '\u2014',
     sheet: mm(num('sheet_len'), num('sheet_w')),

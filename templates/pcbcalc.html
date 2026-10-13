@@ -35,10 +35,20 @@
           <option value="{{ m.id }}"
                   data-pcbl="{{ m.pcb_len|gfmt }}" data-pcbw="{{ m.pcb_w|gfmt }}"
                   data-cutl="{{ m.cutting_len|gfmt }}" data-cutw="{{ m.cutting_w|gfmt }}"
-                  data-pcs="{{ m.pcs_panel }}" data-rate="{{ m.per_sq_inch|gfmt }}">{{ m.name }}</option>
+                  data-pcs="{{ (m.pcs_panel or 0) * (m.gang_x or 1) * (m.gang_y or 1) }}" data-rate="{{ m.per_sq_inch|gfmt }}">{{ m.name }}</option>
           {% endfor %}
         </select>
       </div>
+
+      <!-- v3.64 — MODEL ATTACHMENT (drawing/PDF): model select karte hi yahan aa jayega -->
+      <div id="pccPdfWrap" style="display:none;margin-top:10px;border:1.5px dashed #6366f1;border-radius:10px;padding:10px 12px;background:var(--bg2)">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <b style="font-size:12px;color:#0f172a">📎 MODEL ATTACHMENT — DRAWING / PDF</b>
+          <span class="muted small" id="pccPdfCount"></span>
+        </div>
+        <div id="pccPdfList" style="display:flex;gap:10px;flex-wrap:wrap;margin-top:8px"></div>
+      </div>
+      <script>window.PCC_PDFS = {{ model_pdfs_map|tojson }};</script>
 
       <div style="display:flex;gap:18px;flex-wrap:wrap;align-items:flex-start;margin-top:12px">
         <!-- SIZE: EK HI ROW — L × W + (panel ho to) NO. OF PCB -->
@@ -177,10 +187,35 @@ function pccDisp(){
   document.getElementById('pccDispLbl').textContent = pccLabels[el.id] || '';
   document.getElementById('pccDispVal').textContent = el.value === '' ? '0' : el.value;
 }
+/* v3.64 — model attachments: iframe preview + naye tab me kholne ka button */
+function _pccPdfs(mid){
+  var wrap = document.getElementById('pccPdfWrap');
+  if (!wrap) return;
+  var lst = document.getElementById('pccPdfList');
+  var cnt = document.getElementById('pccPdfCount');
+  var map = window.PCC_PDFS || {};
+  var arr = (mid && map[mid]) ? map[mid] : [];
+  lst.innerHTML = '';
+  if (!arr.length) { wrap.style.display = 'none'; return; }
+  if (cnt) cnt.textContent = arr.length + (arr.length === 1 ? ' file' : ' files');
+  for (var i = 0; i < arr.length; i++) {
+    (function(p){
+      var d = document.createElement('div');
+      d.style.cssText = 'flex:1;min-width:270px;max-width:420px;border:1px solid var(--border);border-radius:8px;background:#fff;padding:8px';
+      var fn = p.filename || ('drawing-' + p.id);
+      d.innerHTML = '<div style="font:700 11px Segoe UI,Arial;color:#334155;margin-bottom:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + fn.replace(/"/g, '&quot;') + '">📄 ' + fn + '</div>' +
+        '<iframe src="/model-pdf/' + p.id + '/view" style="width:100%;height:300px;border:1px solid var(--border);border-radius:6px;background:#fff"></iframe>' +
+        '<a href="/model-pdf/' + p.id + '/view" target="_blank" class="btn btn-outline btn-xs" style="display:inline-block;margin-top:6px;text-decoration:none">🔍 NAYE TAB ME KHOLE</a>';
+      lst.appendChild(d);
+    })(arr[i]);
+  }
+  wrap.style.display = 'block';
+}
 /* MODEL se prefill */
 function pccModelFill(){
   var o = document.getElementById('pccModel').options[document.getElementById('pccModel').selectedIndex];
-  if (!o || !o.value) return;
+  if (!o || !o.value) { var _we = document.getElementById('pccPdfWrap'); if (_we) _we.style.display = 'none'; return; }
+  _pccPdfs(o.value);
   var g = function(a){ return parseFloat(o.getAttribute(a)) || 0; };
   document.getElementById('pccLen').value = (g('data-cutl') || g('data-pcbl')) || '';
   document.getElementById('pccWid').value = (g('data-cutw') || g('data-pcbw')) || '';

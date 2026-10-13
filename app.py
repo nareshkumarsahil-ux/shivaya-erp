@@ -1659,7 +1659,13 @@ def svg_sheet_layout_preview(r):
         if cw > 26 and cl > 15:
             _svg_dim_h(s, cx + 7.5, cy + cw / 2, mm_w)
         if r.get("gang_active") and cl > 60 and cw > 30:
-            s.append(f'<text x="{cx + cl / 2:.1f}" y="{cy + cw / 2 + 15:.1f}" text-anchor="middle" font-size="8.5" font-weight="700" fill="{stroke}" font-family="Segoe UI,Arial">{r["pcs_unit"]} PCS/GANG</text>')
+            # v3.61 — GANG PCB count + CUTTING PANEL SIZE (margin ke baad) + GANG size, naam ke saath
+            s.append(f'<text x="{cx + cl / 2:.1f}" y="{cy + cw / 2 + 15:.1f}" text-anchor="middle" font-size="8.5" font-weight="700" fill="{stroke}" font-family="Segoe UI,Arial">{r["pcs_unit"]} PCB</text>')
+            if cw > 62:
+                s.append(f'<text x="{cx + cl / 2:.1f}" y="{cy + cw / 2 + 26:.1f}" text-anchor="middle" font-size="7.5" font-weight="700" fill="#b45309" font-family="Segoe UI,Arial">CUT {cl / scale:g}\u00d7{cw / scale:g} mm</text>')
+            if cw > 78:
+                _gl1, _gl2 = (r["gang_w"], r["gang_len"]) if rot else (r["gang_len"], r["gang_w"])
+                s.append(f'<text x="{cx + cl / 2:.1f}" y="{cy + cw / 2 + 37:.1f}" text-anchor="middle" font-size="7.5" font-weight="600" fill="#64748b" font-family="Segoe UI,Arial">GANG {_gl1:g}\u00d7{_gl2:g} mm</text>')
         if cl > 34 and cw > 22:
             s.append(f'<text x="{cx + cl / 2:.1f}" y="{cy + cw / 2 + 4:.1f}" text-anchor="middle" font-size="10" font-weight="800" fill="{stroke}" font-family="Segoe UI,Arial">#{num}</text>')
         elif cl > 22 and cw > 34:
@@ -1682,9 +1688,10 @@ def svg_sheet_layout_preview(r):
                 num += 1
             y += cw2
         if r["gang_active"]:
-            cap = (f"1 SHEET {sl:.0f}x{sw:.0f} mm \u2190 GANG PANEL {r['gang_len']:g}x{r['gang_w']:g} mm ({r['pcs_unit']} PCS/gang, sheet cutting me +CNC margin) = "
-                   f"{r['panels_per_sheet']} GANG PANELS "
-                   f"({r['mixed_n']}x row {r['per_normal']} + {r['mixed_m']}x row {r['per_rot']}) = {r['pcs_per_sheet']} PCS")
+            cap = (f"1 SHEET {sl:.0f}x{sw:.0f} mm \u2190 GANG PANEL {r['gang_len']:g}x{r['gang_w']:g} mm \u00b7 {r['pcs_unit']} PCB \u2192 "
+                   f"CUTTING PANEL {r['cutting_len']:g}x{r['cutting_w']:g} mm (CNC margin ke baad) = "
+                   f"{r['panels_per_sheet']} CUTTING PANELS "
+                   f"({r['mixed_n']}x row {r['per_normal']} + {r['mixed_m']}x row {r['per_rot']}) = {r['pcs_per_sheet']} PCB")
         else:
             cap = (f"1 SHEET {sl:.0f}x{sw:.0f} mm \u2190 PANEL {r['panel_len']:g}x{r['panel_w']:g} mm = "
                    f"{r['panels_per_sheet']} PANELS "
@@ -1698,8 +1705,9 @@ def svg_sheet_layout_preview(r):
                             r["gang_len"], r["gang_w"], rot=(r["best"] == "rotated"))
                 num += 1
         if r["gang_active"]:
-            cap = (f"1 SHEET {sl:.0f}x{sw:.0f} mm \u2190 GANG PANEL {r['gang_len']:g}x{r['gang_w']:g} mm ({r['pcs_unit']} PCS/gang, sheet cutting me +CNC margin) = "
-                   f"{r['grid_x']}x{r['grid_y']} = {r['panels_per_sheet']} GANG PANELS x {r['pcs_unit']} PCS = {r['pcs_per_sheet']} PCS")
+            cap = (f"1 SHEET {sl:.0f}x{sw:.0f} mm \u2190 GANG PANEL {r['gang_len']:g}x{r['gang_w']:g} mm \u00b7 {r['pcs_unit']} PCB \u2192 "
+                   f"CUTTING PANEL {r['cutting_len']:g}x{r['cutting_w']:g} mm (CNC margin ke baad) = "
+                   f"{r['grid_x']}x{r['grid_y']} = {r['panels_per_sheet']} CUTTING PANELS x {r['pcs_unit']} PCB = {r['pcs_per_sheet']} PCB")
         else:
             cap = (f"1 SHEET {sl:.0f}x{sw:.0f} mm \u2190 PANEL {r['cell_len']:g}x{r['cell_w']:g} mm = "
                    f"{r['grid_x']}x{r['grid_y']} = {r['panels_per_sheet']} PANELS x {r['pcs_unit']} PCS = {r['pcs_per_sheet']} PCS")
@@ -1759,12 +1767,13 @@ def gang_info_for(r):
     cut_html = (f'✂ <b>GANG PANEL SIZE: {gl:.2f} × {gw:.2f}mm - PCS/Unit: {pcs_gang}</b>'
                 f'<div class="muted small" style="margin-top:3px">'
                 f'({r["panel_len"]:.2f} x {gx} + gaps {_gstr(r.get("pgaps_x"), r["kerf_x"])} = {gl:.2f}mm, '
-                f'{r["panel_w"]:.2f} x {gy} + gaps {_gstr(r.get("pgaps_y"), r["kerf_y"])} = {gw:.2f}mm — CNC margin isme NAHI)</div>')
+                f'{r["panel_w"]:.2f} x {gy} + gaps {_gstr(r.get("pgaps_y"), r["kerf_y"])} = {gw:.2f}mm — CNC margin isme NAHI. '
+                f'CUTTING PANEL SIZE: {r["cutting_len"]:.2f} × {r["cutting_w"]:.2f} mm (CNC margin ke baad))</div>')
     layout_html = (f'<b>{lay}</b>'
                    f'<div class="gsize">{gl:.2f} × {gw:.2f} mm</div>')
     note = (f'💡 Panel {r["panel_len"]:.2f}×{r["panel_w"]:.2f} mm ({r["pcs_panel"]} PCS) × {gx}×{gy} '
             f'multiplier + joints = GANG PANEL {gl:.2f}×{gw:.2f} mm ({pcs_gang} PCS/unit) — CNC margin isme NAHI. '
-            f'PANEL IN SHEET me CUTTING SIZE (GANG + {r["kerf_x"]:.2f}/{r["kerf_y"]:.2f} mm margin) fit hoti hai — '
+            f'PANEL IN SHEET me CUTTING PANEL SIZE {r["cutting_len"]:.2f}×{r["cutting_w"]:.2f} mm (GANG + {r["kerf_x"]:.2f}/{r["kerf_y"]:.2f} mm margin) fit hoti hai — '
             f'Sheet {r["sheet_len"]:.2f}×{r["sheet_w"]:.2f} mm me <b>{lay.lower()}</b>: {gang_count} × {pcs_gang} PCS = '
             f'<b>{pcs_sheet} PCS per sheet</b>.')
     return {"gl": gl, "gw": gw, "pcs_gang": pcs_gang, "gx": gx, "gy": gy,
@@ -1814,9 +1823,17 @@ def pcbcalc():
             flash("Calculation history me save ho gayi ✅", "success")
             return redirect_with_token(url_for("pcbcalc"))
     models = db.query("SELECT id, name, model_code, pcb_len, pcb_w, cutting_len, cutting_w, "
-                      "panel_len, panel_w, pcs_panel, per_sq_inch FROM product_models ORDER BY name")
+                      "panel_len, panel_w, pcs_panel, per_sq_inch, gang_x, gang_y FROM product_models ORDER BY name")
     history = db.query("SELECT * FROM pcb_calc_history ORDER BY id DESC LIMIT 100")
-    return render_template("pcbcalc.html", active="pcbcalc", models=models, history=history)
+    # v3.64 — MODEL select karne par uska attachment (drawing/PDF) next tab me
+    _pdf_ensure()
+    _pcc_pdfs = {}
+    _mids = [m["id"] for m in models]
+    if _mids:
+        _q = ",".join("?" * len(_mids))
+        for _r in db.query(f"SELECT id, model_id, filename FROM model_pdfs WHERE model_id IN ({_q}) ORDER BY id DESC", _mids):
+            _pcc_pdfs.setdefault(str(_r["model_id"]), []).append({"id": _r["id"], "filename": _r["filename"]})
+    return render_template("pcbcalc.html", active="pcbcalc", models=models, history=history, model_pdfs_map=_pcc_pdfs)
 
 
 @app.route("/cutlist", methods=["GET", "POST"])
