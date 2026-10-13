@@ -47,7 +47,7 @@
   <div class="panel-body">
     <form method="post" action="/employees/{{ edit_emp.id }}/edit">
       <div class="form-grid">
-        <div class="field"><label>Employee Code *</label><input name="emp_code" required value="{{ edit_emp.emp_code }}"></div>
+        <div class="field"><label>Employee Code *</label><input name="emp_code" required value="{{ edit_emp.emp_code }}"><small style="color:#64748b">Koi bhi number de sakte ho (khaali chhoda to apne aap agla number).</small></div>
         <div class="field"><label>Full Name *</label><input name="name" required value="{{ edit_emp.name }}"></div>
         <div class="field"><label>Email</label><input type="email" name="email" value="{{ edit_emp.email }}"></div>
         <div class="field"><label>Phone</label><input name="phone" value="{{ edit_emp.phone }}"></div>
@@ -87,7 +87,7 @@
   <div class="panel-body">
     <form method="post">
       <div class="form-grid">
-        <div class="field"><label>Employee Code *</label><input name="emp_code" required placeholder="EMP006"></div>
+        <div class="field"><label>Employee Code</label><input name="emp_code" value="{{ next_code }}"><small style="color:#64748b">Apne aap ban gaya — alag number chahiye to yahan likh lo, ya baad me ✏️ Edit se badal dena.</small></div>
         <div class="field"><label>Full Name *</label><input name="name" required placeholder="e.g. Rohit Sharma"></div>
         <div class="field"><label>Email</label><input type="email" name="email" placeholder="name@shivaya.in"></div>
         <div class="field"><label>Phone</label><input name="phone" placeholder="98XXXXXXXX"></div>

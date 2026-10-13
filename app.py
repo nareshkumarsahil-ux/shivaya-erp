@@ -4031,22 +4031,39 @@ def employee_login_edit(emp_id):
     return redirect_with_token(url_for("employees"))
 
 
+def _next_emp_code():
+    """v3.74 — Employee Code BY DEFAULT: sabse bade EMP<number> se agla number (EMP001, EMP002, ...)."""
+    mx = 0
+    for r in db.query("SELECT emp_code FROM employees"):
+        m = re.match(r"(?i)^EMP\s*0*(\d+)$", (r["emp_code"] or "").strip())
+        if m:
+            mx = max(mx, int(m.group(1)))
+    return f"EMP{mx + 1:03d}"
+
+
 @app.route("/employees", methods=["GET", "POST"])
 @login_required
 def employees():
     if request.method == "POST":
         f = request.form
         try:
+            # v3.74 — code khaali chhoda ya kisi ka duplicate likha to APNE AAP agla number
+            emp_code = (f.get("emp_code") or "").strip()
+            auto_code = False
+            if not emp_code or db.query("SELECT id FROM employees WHERE emp_code=?", (emp_code,), one=True):
+                emp_code = _next_emp_code()
+                auto_code = True
             db.execute(
                 "INSERT INTO employees (emp_code, name, email, phone, department, designation, joining_date, status, salary, shift, leave_balance, address) "
                 "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
-                (f.get("emp_code", "").strip(), f.get("name", "").strip(), f.get("email", "").strip(),
+                (emp_code, f.get("name", "").strip(), f.get("email", "").strip(),
                  f.get("phone", "").strip(), f.get("department", "").strip(), f.get("designation", "").strip(),
                  f.get("joining_date", "") or _today_ist().isoformat(), "active",
                  float(f.get("salary", 0) or 0), f.get("shift", "Day").strip() or "Day",
                  int(f.get("leave_balance", 12) or 0), f.get("address", "").strip()))
             db.provision_employee_logins()
-            flash("Employee added ✅ Login bhi ban gaya (username = pehla naam, password shivaya@123).", "success")
+            flash("Employee added ✅ Code " + emp_code + (" (apne aap bana)" if auto_code else "")
+                  + " · Login bhi ban gaya (username = pehla naam, password shivaya@123).", "success")
         except Exception as e:
             flash(f"Could not add employee: {e}", "error")
         return redirect_with_token(url_for("employees"))
@@ -4089,8 +4106,11 @@ def employees():
     eid = request.args.get("edit")
     if eid and eid.isdigit():
         edit_emp = db.query("SELECT * FROM employees WHERE id=?", (int(eid),), one=True)
+    # v3.74 — add-form me BY DEFAULT agla EMP code bhar ke dikhao (admin chahe to likh de)
+    next_code = _next_emp_code()
     return render_template("employees.html", active="employees", employees=rows, att=att, stats=stats,
                            att_labels=ATT_LABELS, show_add=request.args.get("add"), edit_emp=edit_emp,
+                           next_code=next_code,
                            dispatch_incharge=get_dispatch_incharge())
 
 
@@ -4115,17 +4135,26 @@ def employee_edit(emp_id):
     if not name:
         flash("Name zaroori hai.", "error")
         return redirect_with_token(url_for("employees", edit=emp_id))
+    # v3.74 — admin EMP code me KOI BHI number de sakta hai; khaali chhoda to agla auto number
+    emp_code = (f.get("emp_code") or "").strip()
+    old = db.query("SELECT emp_code FROM employees WHERE id=?", (emp_id,), one=True)
+    if not emp_code:
+        emp_code = (old["emp_code"] if old and old["emp_code"] else "") or _next_emp_code()
+    dup = db.query("SELECT id FROM employees WHERE emp_code=? AND id!=?", (emp_code, emp_id), one=True)
+    if dup:
+        flash(f"Employee code '{emp_code}' pehle se kisi aur ka hai — koi dusra number do.", "error")
+        return redirect_with_token(url_for("employees", edit=emp_id))
     try:
         db.execute(
             "UPDATE employees SET emp_code=?, name=?, email=?, phone=?, department=?, designation=?, "
             "joining_date=?, status=?, salary=?, shift=?, leave_balance=?, address=? WHERE id=?",
-            ((f.get("emp_code") or "").strip(), name, (f.get("email") or "").strip(),
+            (emp_code, name, (f.get("email") or "").strip(),
              (f.get("phone") or "").strip(), (f.get("department") or "").strip(),
              (f.get("designation") or "").strip(), (f.get("joining_date") or "").strip(),
              f.get("status", "active"), float(f.get("salary", 0) or 0),
              f.get("shift", "Day").strip() or "Day", int(f.get("leave_balance", 12) or 0),
              f.get("address", "").strip(), emp_id))
-        flash(f"'{name}' update ho gaya ✅", "success")
+        flash(f"'{name}' update ho gaya ✅ (Code {emp_code})", "success")
     except Exception as e:
         flash(f"Update failed: {e}", "error")
     return redirect_with_token(url_for("employees"))
