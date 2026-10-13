@@ -1832,7 +1832,13 @@ def pcbcalc():
     if _mids:
         _q = ",".join("?" * len(_mids))
         for _r in db.query(f"SELECT id, model_id, filename FROM model_pdfs WHERE model_id IN ({_q}) ORDER BY id DESC", _mids):
-            _pcc_pdfs.setdefault(str(_r["model_id"]), []).append({"id": _r["id"], "filename": _r["filename"]})
+            _pcc_pdfs.setdefault(str(_r["model_id"]), []).append(
+                {"id": _r["id"], "filename": _r["filename"], "url": f"/model-pdf/{_r['id']}/view"})
+    # v3.66 — FP 📎 attachment sabse pehle (wahi model ka doc hai)
+    for _a in db.query("SELECT id AS pid, attachment_name FROM product_models "
+                       "WHERE IFNULL(attachment_data,'') != ''"):
+        _pcc_pdfs.setdefault(str(_a["pid"]), []).insert(
+            0, {"filename": _a["attachment_name"] or "attachment", "url": f"/products/{_a['pid']}/attachment"})
     return render_template("pcbcalc.html", active="pcbcalc", models=models, history=history, model_pdfs_map=_pcc_pdfs)
 
 
@@ -2256,8 +2262,15 @@ def cutlist():
         _cl_mid = 0
     if _cl_mid:
         _pdf_ensure()
-        _cl_pdfs = db.query("SELECT id, model_name, filename, uploaded_on FROM model_pdfs "
-                            "WHERE model_id=? ORDER BY id DESC", (_cl_mid,))
+        _cl_pdfs = [dict(r) for r in db.query("SELECT id, model_name, filename, uploaded_on FROM model_pdfs "
+                                              "WHERE model_id=? ORDER BY id DESC", (_cl_mid,))]
+        # v3.66 — FP 📎 attachment bhi cutlist ke doc-area me
+        _att_cl = db.query("SELECT id AS pid, name, attachment_name AS filename FROM product_models "
+                           "WHERE id=? AND IFNULL(attachment_data,'') != ''", (_cl_mid,))
+        if _att_cl:
+            _cl_pdfs.insert(0, {"id": None, "pid": _att_cl[0]["pid"], "is_att": True,
+                                "model_name": _att_cl[0]["name"],
+                                "filename": _att_cl[0]["filename"] or "attachment", "uploaded_on": "FP 📎"})
     return render_template("cutlist.html", active="cutlist", fields=fields, pool_rows=pool_rows, result=result,
                            models=models, orders=orders, SHEET_PRESETS=SHEET_PRESETS,
                            svg_panel=svg_panel, svg_sheet=svg_sheet, gang_info=gang_info,
@@ -3555,7 +3568,23 @@ def pdf_library():
     if _w:
         _sql += " WHERE " + " AND ".join(_w)
     _sql += " ORDER BY id DESC"
-    return render_template("pdfs.html", active="pdfs", rows=db.query(_sql, _p),
+    rows = [dict(r) for r in db.query(_sql, _p)]
+    # v3.66 — Finished Products ka 📎 attachment BHI yahan dikhe (ek hi doc-duniya)
+    _att_sql = ("SELECT id AS pid, name AS model_name, attachment_name AS filename, "
+                "LENGTH(attachment_data) AS sz FROM product_models WHERE IFNULL(attachment_data,'') != ''")
+    _att_p = []
+    if q:
+        _att_sql += " AND (name LIKE ? OR attachment_name LIKE ?)"
+        _att_p += ["%" + q + "%"] * 2
+    if mid:
+        try:
+            _att_sql += " AND id=?"
+            _att_p.append(int(mid))
+        except (TypeError, ValueError):
+            pass
+    _att_rows = [dict(r, is_att=True, uploaded_on="FP 📎") for r in db.query(_att_sql, _att_p)]
+    rows = _att_rows + rows
+    return render_template("pdfs.html", active="pdfs", rows=rows,
                            models=db.query("SELECT id, name FROM product_models ORDER BY name"),
                            q=q, sel_model=mid, add_focus=request.args.get("add"))
 

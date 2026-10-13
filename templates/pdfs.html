@@ -74,13 +74,23 @@
             <td style="word-break:break-word;line-height:1.45;color:#334155">{{ p.filename }}</td>
             <td style="white-space:nowrap">{{ (p.sz or 0) // 1024 }} KB</td>
             <td style="white-space:nowrap">{{ p.uploaded_on or '' }}</td>
-            <td style="white-space:nowrap"><button type="button" class="btn btn-outline btn-xs" onclick="openPdfOv('{{ p.id }}', this.dataset.fn)" data-fn="{{ p.filename }}">👁 View</button></td>
+            <td style="white-space:nowrap">{% if p.is_att %}
+              <button type="button" class="btn btn-outline btn-xs" onclick="openAttOv({{ p.pid }}, this.dataset.fn)" data-fn="{{ p.filename }}">👁 View</button>
+              {% else %}
+              <button type="button" class="btn btn-outline btn-xs" onclick="openPdfOv('{{ p.id }}', this.dataset.fn)" data-fn="{{ p.filename }}">👁 View</button>
+              {% endif %}</td>
             <td style="white-space:nowrap">{% if current_user_role == 'admin' %}
+              {% if p.is_att %}
+              <span class="muted small" title="Finished Product ke 📎 se juda hai — Products page se hatao">FP</span>
+              <form method="post" action="/products/{{ p.pid }}/attachment/delete" style="display:inline" onsubmit="return confirm('Ye attachment (Finished Product wala) hatana hai?')">
+                <button class="btn btn-outline btn-xs" type="submit">🗑</button>
+              </form>
+              {% else %}
               <button type="button" class="btn btn-outline btn-xs" title="Doosre model se link karo"
                       onclick="openPdfEdit({{ p.id }}, {{ p.model_id }}, this.dataset.fn)" data-fn="{{ p.filename }}">✎</button>
               <form method="post" action="/model-pdf/{{ p.id }}/delete" style="display:inline" onsubmit="return confirm('Ye PDF delete karni hai?')">
                 <button class="btn btn-outline btn-xs" type="submit">🗑</button>
-              </form>{% endif %}</td>
+              </form>{% endif %}{% endif %}</td>
           </tr>
           {% else %}
           <tr><td colspan="6" style="text-align:center;color:#8a8f98;padding:22px">Abhi koi PDF nahi — upar se upload karo. Phir ye Cutlist aur Finished Products me bhi dikhegi.</td></tr>
@@ -134,6 +144,16 @@ function openPdfEdit(id, curModelId, name){
   var sel = document.getElementById('pdfEditSel');
   sel.value = curModelId ? String(curModelId) : '';
   document.getElementById('pdfEditOv').style.display = 'block';
+}
+/* v3.66 — FP attachment overlay (Products wala 📎) */
+function openAttOv(pid, name){
+  var t = new URLSearchParams(window.location.search).get('token');
+  if (!t) { try { t = localStorage.getItem('jcToken'); } catch (e) {} }
+  var u = '/products/' + pid + '/attachment' + (t ? ('?token=' + encodeURIComponent(t)) : '');
+  document.getElementById('pdfOvName').textContent = '\U0001F4CE ' + (name || 'FP Attachment');
+  document.getElementById('pdfOvNew').href = u;
+  document.getElementById('pdfOvF').src = u;
+  document.getElementById('pdfOv').style.display = 'block';
 }
 function openPdfOv(id, name){
   var t = new URLSearchParams(window.location.search).get('token');
