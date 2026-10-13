@@ -352,6 +352,32 @@ def pick_user():
     return render_template("pick_user.html", users=rows)
 
 
+@app.route("/my-password", methods=["GET", "POST"])
+@login_required
+def my_password():
+    """v3.72 \u2014 har user APNA password khud change kar sake (sidebar My Account se)."""
+    u = db.query("SELECT * FROM users WHERE id=?", (session.get("user_id"),), one=True)
+    if not u:
+        return redirect(url_for("logout"))
+    if request.method == "POST":
+        cur = request.form.get("current_password", "")
+        new = request.form.get("new_password", "")
+        new2 = request.form.get("new_password2", "")
+        if cur != (u["password"] or ""):
+            flash("Current password galat hai.", "error")
+        elif len(new) < 4:
+            flash("Naya password kam se kam 4 characters ka ho.", "error")
+        elif new != new2:
+            flash("Naya password aur Confirm match nahi kar rahe.", "error")
+        elif new == cur:
+            flash("Naya password purane jaisa nahi ho sakta.", "error")
+        else:
+            db.execute("UPDATE users SET password=? WHERE id=?", (new, u["id"]))
+            flash("Password change ho gaya \u2705 \u2014 agli baar naya password lagana.", "success")
+            return redirect_with_token(url_for("my_password"))
+    return render_template("my_password.html", active="mypassword", me=u)
+
+
 @app.route("/switch-user")
 def switch_user():
     """Kaun chal raha hai badalna ho \u2014 wapas naam-chuno par (login dobara nahi)."""

@@ -84,13 +84,29 @@
   <div class="panel-head"><h3>🔐 System Users ({{ users|length }})</h3></div>
   <div class="panel-body" style="padding:0">
     <table>
-      <thead><tr><th>User</th><th>Username</th><th>Role</th><th class="t-right">Actions</th></tr></thead>
+      <thead><tr><th>User</th><th>Username</th><th>Role</th><th style="width:44%">PERMISSIONS — TICK KARO (tick karte hi save)</th><th class="t-right">Actions</th></tr></thead>
       <tbody>
         {% for u in users %}
         <tr>
           <td><span class="avatar {{ 'b' if u.role=='operator' }}">{{ u.name[0] }}</span><b>{{ u.name }}</b>{% if u.id == session.get('user_id') %} <span class="muted small">(you)</span>{% endif %}</td>
           <td class="mono">{{ u.username }}</td>
           <td><span class="badge {{'b-amber' if u.role=='admin' else 'b-blue'}}">{{ u.role|upper }}</span></td>
+          {% set _up = ((u.perms if 'perms' in u.keys() else '') or '').split(',') %}
+          <td class="pmCell" data-uid="{{ u.id }}" style="padding:8px 10px">
+            {% if u.role == 'admin' %}
+            <span class="badge b-amber" title="Admin ko hamesha SAB ka access">👑 SAB ACCESS</span>
+            {% else %}
+            <div style="display:flex;flex-wrap:wrap;gap:4px">
+              {% for key, label in modules %}
+              <label class="pmChip" title="{{ label }}" style="display:inline-flex;gap:3px;align-items:center;border:1px solid var(--border);border-radius:6px;padding:2px 5px;background:#fff;font:600 10px Segoe UI,Arial;color:#475569;cursor:pointer;user-select:none">
+                <input type="checkbox" class="pmChk2" data-uid="{{ u.id }}" value="{{ key }}" {{'checked' if key in _up}} style="margin:0;accent-color:#16a34a;width:12px;height:12px;cursor:pointer">
+                <span>{{ label.split(' (')[0] }}</span>
+              </label>
+              {% endfor %}
+            </div>
+            <div class="pmStat" data-uid="{{ u.id }}" style="font:700 10px Segoe UI,Arial;color:#16a34a;margin-top:3px;min-height:12px"></div>
+            {% endif %}
+          </td>
           <td class="t-right" style="white-space:nowrap">
             <a class="btn btn-outline btn-xs" href="/users?edit={{ u.id }}">✏️ Edit</a>
             <a class="btn btn-outline btn-xs" href="/users?perms={{ u.id }}" title="Kaun sa module chalega">🔐 Perms</a>
@@ -106,6 +122,33 @@
     </table>
   </div>
 </div>
+<script>
+/* v3.71 \u2014 table me hi tick karo, turant save (fetch) */
+document.addEventListener('change', function(e){
+  var cb = e.target;
+  if (!cb.classList || !cb.classList.contains('pmChk2')) return;
+  var uid = cb.getAttribute('data-uid');
+  var cell = document.querySelector('.pmCell[data-uid="' + uid + '"]');
+  var stat = document.querySelector('.pmStat[data-uid="' + uid + '"]');
+  var chips = cell.querySelectorAll('.pmChk2');
+  var sel = [];
+  chips.forEach(function(c){ if (c.checked) sel.push(c.value); });
+  var fd = new FormData();
+  fd.append('action', 'perms');
+  fd.append('uid', uid);
+  sel.forEach(function(v){ fd.append('perm', v); });
+  if (stat) { stat.textContent = 'Saving\u2026'; stat.style.color = '#64748b'; }
+  fetch('/users', { method: 'POST', body: fd })
+    .then(function(r){ if (!r.ok) throw 0; return r; })
+    .then(function(){
+      if (stat) { stat.textContent = '\u2713 Saved (' + sel.length + ' modules)'; stat.style.color = '#16a34a'; }
+      setTimeout(function(){ if (stat) stat.textContent = ''; }, 2500);
+    })
+    .catch(function(){
+      if (stat) { stat.textContent = '\u2717 Save fail \u2014 dobara try karo'; stat.style.color = '#dc2626'; }
+    });
+});
+</script>
 <p class="muted small">👑 Admin: sab modules ka access · 🔐 Perms button se har user ke liye chuno kaun sa module chalega · Login SAB ka common hai (shivaya) — apna naam chuno se pehchan</p>
 {% if perms_row and perms_row.role != 'admin' %}
 <script>
