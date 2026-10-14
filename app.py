@@ -83,6 +83,8 @@ def token_login():
 
 # Operator ka limited access (screenshot jaisa): Dashboard, Job Orders, Machines,
 # Quality, Operator View — in pages mein wo dekh + kaam kar sakta hai. Baaki sab admin-only.
+_ATTACHMENT_VIEW_ENDPOINTS = {"model_pdf_view", "product_attachment_view"}
+
 OPERATOR_READ = {"dashboard", "orders", "machines", "quality", "operator_view",
                  "product_attachment_view", "dispatch_photo", "jobcard", "my_work", "my_password"}
 OPERATOR_WRITE = {"operator_action", "operator_issue", "machine_status", "quality", "quality_result",
@@ -98,6 +100,12 @@ def role_gate():
     if not session.get("user_id") or session.get("pending_pick"):
         return
     if session.get("user_role") == "admin":
+        return
+    # v3.78 — attachment/drawing sirf DEKHNE wale GET routes sab logged-in ke liye khule:
+    # jis user ko pcbcalc/cutlist jaise page ki permission hai, uske liye us page par
+    # dikh raha drawing/PDF bhi dekhna zaroori hai (warna panel me 'permission nahi' aata tha).
+    # Upload/edit/delete is bypass me NAHI aate — wo POST par hai aur module gate se block rahenge.
+    if request.method == "GET" and request.endpoint in _ATTACHMENT_VIEW_ENDPOINTS:
         return
     p = request.path or "/"
     need = None
