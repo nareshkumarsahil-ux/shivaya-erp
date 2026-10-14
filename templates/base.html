@@ -13,7 +13,9 @@
 .ss-in:focus{border-color:#6366f1}
 .ss-clr{border:1px solid var(--border);background:#fff;border-radius:8px;padding:8px 10px;cursor:pointer;font-weight:800;color:#64748b}
 .ss-clr:hover{background:#f1f5f9}
-.ss-list{display:none;position:absolute;top:100%;left:0;right:0;z-index:9990;background:#fff;border:1.5px solid #6366f1;border-radius:8px;margin-top:4px;max-height:260px;overflow:auto;box-shadow:0 10px 26px rgba(15,23,42,.14)}
+.ss-dd{border:1px solid var(--border);background:#fff;border-radius:8px;padding:8px 12px;cursor:pointer;font-weight:800;color:#64748b}
+.ss-dd:hover{background:#f1f5f9}
+.ss-list{display:none;position:fixed;z-index:99997;background:#fff;border:1.5px solid #6366f1;border-radius:8px;margin-top:4px;max-height:260px;overflow:auto;box-shadow:0 10px 26px rgba(15,23,42,.14)}
 .ss-item{padding:8px 12px;font:600 13px Segoe UI,Arial;color:#192338;cursor:pointer;border-bottom:1px solid #f1f5f9}
 .ss-item:hover,.ss-item.ss-active{background:#eef2ff;color:#3730a3}
 .ss-empty{padding:12px;font:600 12.5px Segoe UI,Arial;color:#94a3b8;text-align:center}
@@ -81,7 +83,7 @@
     <div class="saved-note"><span class="dot"></span> All changes saved</div>
     <a href="/my-password" style="display:flex;align-items:center;gap:6px;font:700 12px Segoe UI,Arial;color:#cbd5e1;text-decoration:none;padding:6px 8px;border-radius:8px" onmouseover="this.style.background='rgba(255,255,255,.08)'" onmouseout="this.style.background='none'">🔑 Mera Password</a>
     <div class="user-chip">👤 {{ current_user_name }}<span class="role">{{ current_user_role|upper }}</span></div>
-    <div class="ver-chip" title="App version — agar ye purana dikhe to naya ZIP deploy nahi hua">🛰 App v3.76 · Cutlist: Builder LEFT + Preview RIGHT (50-50) · Role me OTHER (custom permission) · Admin password reset easy · Employee Code BY DEFAULT · COMMON LOGIN</div>
+    <div class="ver-chip" title="App version — agar ye purana dikhe to naya ZIP deploy nahi hua">🛰 App v3.77 · Model dropdown ki LIST ab DIKHEGI (▾ button, fixed panel) · Cutlist 50-50 swap · Role me OTHER · Employee Code BY DEFAULT · COMMON LOGIN</div>
     <div style="display:flex;gap:8px;justify-content:space-between;align-items:center">
       <a class="logout" href="/switch-user" title="Doosre user ke naam par switch karo (login dobara nahi)" style="font-size:11.5px">🔄 Switch</a>
       <a class="logout" href="/logout">Logout ↩</a>
@@ -146,11 +148,28 @@
     inp.placeholder = 'Type karo \u2014 176 / scpl-17 / dob\u2026 (search + select)';
     var clr = document.createElement('button'); clr.type = 'button'; clr.className = 'ss-clr';
     clr.textContent = '\u2715'; clr.title = 'Clear \u2014 select hatao';
-    row.appendChild(inp); row.appendChild(clr);
+    var dd = document.createElement('button'); dd.type = 'button'; dd.className = 'ss-dd';
+    dd.textContent = '\u25BE'; dd.title = 'Poori list dikhao';
+    row.appendChild(inp); row.appendChild(dd); row.appendChild(clr);
     var lst = document.createElement('div'); lst.className = 'ss-list';
     wrap.appendChild(row); wrap.appendChild(lst); wrap.appendChild(sel);
     sel.style.display = 'none';
     var active = -1;
+    /* v3.77 \u2014 list FIXED position par: panel ka overflow:hidden ab CLIP nahi karta.
+       Scroll/resize par list input ke saath chipki rahegi; niche jagah na ho to UPAR khulti hai. */
+    function place(flip){
+      var r = inp.getBoundingClientRect();
+      lst.style.left = r.left + 'px';
+      lst.style.width = Math.max(r.width, 280) + 'px';
+      var top = r.bottom + 4;
+      if (flip) {
+        var h = Math.min(lst.scrollHeight || 260, 260);
+        if (top + h > window.innerHeight - 8 && r.top - h - 8 > 8) top = r.top - h - 4;
+      }
+      lst.style.top = top + 'px';
+    }
+    window.addEventListener('scroll', function(){ if (lst.style.display === 'block') place(false); }, true);
+    window.addEventListener('resize', function(){ if (lst.style.display === 'block') place(false); });
     function opts(){
       return Array.prototype.slice.call(sel.options).map(function(o){ return { v: o.value, t: o.textContent.trim() }; });
     }
@@ -174,6 +193,7 @@
       lst.innerHTML = html;
       active = -1;
       lst.style.display = 'block';
+      place(true);
     }
     function pick(v, t){
       sel.value = v;
@@ -204,6 +224,8 @@
       pick(it.getAttribute('data-v'), it.textContent);
     });
     inp.addEventListener('blur', function(){ setTimeout(function(){ lst.style.display = 'none'; }, 200); });
+    dd.addEventListener('mousedown', function(e){ e.preventDefault(); });
+    dd.addEventListener('click', function(){ inp.focus(); render(); });
     clr.addEventListener('click', function(){
       sel.value = ''; inp.value = ''; lst.style.display = 'none';
       try { sel.dispatchEvent(new Event('change', { bubbles: true })); } catch (e) {}

@@ -217,14 +217,6 @@
   <div class="clColForm">
     <div class="panel" style="display:flex;align-items:center;gap:10px;padding:10px 14px">
       <span class="muted small" style="white-space:nowrap">📂 Load from Finished Product…</span>
-      <span style="position:relative;display:inline-flex;flex-direction:column">
-        <input type="text" id="clSearch" placeholder="🔍 Type karo — s / sc / scp / scpl-…" autocomplete="off"
-               style="width:170px;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px"
-               oninput="clFilterModels(this.value)" onkeydown="return clSearchKey(event)">
-        <span id="clSug" style="display:none;position:fixed;z-index:99997;background:#fff;
-              border:1px solid var(--border);border-radius:10px;box-shadow:0 12px 30px rgba(0,0,0,.18);
-              max-height:260px;overflow-y:auto;text-align:left"></span>
-      </span>
       <select name="model_id" style="flex:1;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px">
         <option value="">— Select saved model —</option>
         {% for m in models %}<option value="{{ m.id }}">{{ m.name }} · {% if m.cutting_len %}Cutting {{ m.cutting_len|gfmt }}×{{ m.cutting_w|gfmt }}mm{% else %}Panel {{ m.panel_len|gfmt }}×{{ m.panel_w|gfmt }}mm{% endif %} · {{ m.pcs_panel }} PCS/panel</option>{% endfor %}
@@ -245,74 +237,6 @@
         if (!t) { try { t = localStorage.getItem('jcToken'); } catch(e){} }
         return t || '';
       }
-      var clAllModels = null;
-      function clFilterModels(v){
-        v = (v || '').trim();
-        var vl = v.toLowerCase();
-        var sel = document.querySelector('select[name="model_id"]');
-        if (!sel) return;
-        if (!clAllModels) {              /* pehli baar poori list yaad rakh lo */
-          clAllModels = [];
-          for (var i = 0; i < sel.options.length; i++)
-            clAllModels.push({ v: sel.options[i].value, t: sel.options[i].textContent });
-        }
-        var keep = [{ v: '', t: '— Select saved model —' }];
-        var sug = [];
-        for (var j = 1; j < clAllModels.length; j++)
-          if (clAllModels[j].t.toLowerCase().indexOf(vl) !== -1) { keep.push(clAllModels[j]); sug.push(clAllModels[j]); }
-        sel.options.length = 0;          /* rebuild — native select me display:none kaam nahi karta */
-        for (var k = 0; k < keep.length; k++) sel.add(new Option(keep[k].t, keep[k].v));
-        /* v3.34 — match hua to dropdown ke box me USI KA NAAM dikhne lage */
-        sel.selectedIndex = sug.length ? 1 : 0;
-        /* live suggestions — type karte hi naam samne */
-        var box = document.getElementById('clSug');
-        if (box) {
-          if (!v) { box.style.display = 'none'; box.innerHTML = ''; }
-          else {
-            box.innerHTML = sug.length
-              ? sug.slice(0, 8).map(function (m, ix) {
-                  return '<button type="button" data-v="' + m.v + '" style="display:block;width:100%;text-align:left;' +
-                    'padding:8px 12px;border:0;background:' + (ix === 0 ? '#f1f5f9' : '#fff') + ';cursor:pointer;' +
-                    'font-size:12.5px;border-bottom:1px solid #f1f5f9"' +
-                    ' onmouseenter="this.style.background=\'#f8fafc\'" onmouseleave="this.style.background=\'\'"' +
-                    ' onclick="clGoModel(\'' + m.v + '\')">' + m.t + '</button>';
-                }).join('') + (sug.length > 8 ? '<div style="padding:6px 12px;font-size:11px;color:#94a3b8">+' + (sug.length - 8) + ' more — aur type karo…</div>' : '')
-              : '<div style="padding:10px 12px;font-size:12px;color:#94a3b8">koi model nahi mila</div>';
-            box.style.display = 'block';
-          }
-        }
-        var btn = document.getElementById('clSearch');
-        if (btn) {
-          btn.placeholder = v ? ('🔍 ' + sug.length + ' models mile — Enter = pehla load') : '🔍 Type karo — s / sc / scp / scpl-…';
-          var r = btn.getBoundingClientRect();      /* FIXED position — panel ka overflow:hidden ab clip nahi karta */
-          box.style.left = r.left + 'px';
-          box.style.top = (r.bottom + 6) + 'px';
-          box.style.width = Math.max(r.width, 340) + 'px';
-        }
-      }
-      function clGoModel(id){
-        var u = '/cutlist?model=' + encodeURIComponent(id);
-        var t = clToken();
-        if (t) u += '&token=' + encodeURIComponent(t);
-        window.location.href = u;
-      }
-      function clSearchKey(e){
-        if (e.keyCode === 13) {            /* Enter = pehla match seedha load */
-          e.preventDefault();
-          var sel = document.querySelector('select[name="model_id"]');
-          if (sel && sel.value) clGoModel(sel.value);
-          return false;
-        }
-        if (e.keyCode === 27) {            /* Esc = suggestions band */
-          var b = document.getElementById('clSug');
-          if (b) b.style.display = 'none';
-        }
-        return true;
-      }
-      document.addEventListener('click', function (e) {
-        var b = document.getElementById('clSug');
-        if (b && !e.target.closest('#clSug') && e.target.id !== 'clSearch') b.style.display = 'none';
-      });
       function openPdfOv(id, name){
         var t = clToken();
         var u = '/model-pdf/' + id + '/view' + (t ? ('?token=' + encodeURIComponent(t)) : '');
@@ -620,6 +544,7 @@
 @media(min-width:1100px){
   .cl-stats{position:sticky;top:60px;z-index:30;background:var(--bg);padding:4px 4px 12px;margin:-4px -4px 2px;border-radius:0 0 12px 12px}
 }
+.clColForm .ss-wrap{flex:1;min-width:240px}
 /* v3.76 — SWAP: BUILDER FORMS LEFT (pehla column) + PREVIEWS RIGHT, dono columns BARABAR (50-50) */
 .grid2.cl-main{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
 .clColForm{order:-1}
