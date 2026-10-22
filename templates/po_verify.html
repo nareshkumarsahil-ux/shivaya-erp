@@ -1,0 +1,174 @@
+{% extends "base.html" %}
+{% block title %}PO Verify — {{ order.order_no }}{% endblock %}
+{% block page_title %}✅ PO Verify — Job Card {{ order.order_no }}{% endblock %}
+{% block content %}
+<style>
+  .vbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
+  .vbadge{font-size:11px;font-weight:800;padding:4px 12px;border-radius:99px;letter-spacing:.4px}
+  .vbadge.review{background:#fef3c7;color:#92400e;border:1.5px solid #f59e0b}
+  .vbadge.proc{background:#dcfce7;color:#15803d;border:1.5px solid #16a34a}
+  .vsheet{background:#fff;border:1.5px solid var(--border);border-radius:12px;padding:14px;overflow:auto;box-shadow:0 4px 18px rgba(15,23,42,.06)}
+  .vwin{position:fixed;z-index:9990;background:#fff;border:1.5px solid #1e3a8a;border-radius:10px;box-shadow:0 16px 48px rgba(15,23,42,.35);display:none;flex-direction:column;min-width:280px;min-height:180px}
+  .vwin.open{display:flex}
+  .vwin-h{background:#1e3a8a;color:#fff;font-weight:800;font-size:12px;padding:7px 10px;cursor:grab;display:flex;align-items:center;gap:8px;border-radius:8px 8px 0 0;user-select:none}
+  .vwin-h:active{cursor:grabbing}
+  .vwin-h .vx{margin-left:auto;cursor:pointer;background:#ffffff22;border:0;color:#fff;font-weight:800;border-radius:5px;padding:1px 8px;font-size:12px}
+  .vwin-b{overflow:auto;flex:1;background:#f8fafc;border-radius:0 0 9px 9px;position:relative}
+  .vwin-b img{max-width:100%;display:block}
+  .vrsz{position:absolute;right:0;bottom:0;width:16px;height:16px;cursor:nwse-resize;background:linear-gradient(135deg,transparent 50%,#1e3a8a 50%);border-radius:0 0 8px 0}
+  .toast{position:fixed;bottom:18px;right:18px;background:#15803d;color:#fff;font-weight:800;padding:10px 16px;border-radius:10px;z-index:99999;display:none;box-shadow:0 10px 30px rgba(0,0,0,.3)}
+</style>
+
+<div class="vbar">
+  <span class="vbadge {{ 'proc' if in_process else 'review' }}" id="vBadge">{{ '✅ PROCESS ME AA GAYA' if in_process else '🔎 REVIEW — verify karo, phir approve' }}</span>
+  <button class="btn btn-outline" onclick="toggleWin('poWin')">📄 PO kholo</button>
+  <button class="btn btn-outline" onclick="toggleWin('dgWin')">📐 Design</button>
+  {% if not in_process %}
+  <button class="btn" id="apprBtn" style="background:#15803d" onclick="approve()">✅ APPROVE — process me bhejo</button>
+  {% endif %}
+  <a class="btn btn-outline" href="/jobcard/{{ order.id }}?token={{ request.args.get('token', '') }}">🗂️ Poora job card page</a>
+</div>
+
+<div class="vsheet" id="jcSheet">
+  {% include "_jobcard_print.html" %}
+</div>
+
+<!-- ===== PO window (movable) ===== -->
+<div class="vwin open" id="poWin" style="width:620px;height:560px;right:40px;top:90px">
+  <div class="vwin-h" onmousedown="dragWin(event,'poWin')">📄 PO — {{ pfile.filename if pfile else (order.po_no or 'PO') }}
+    <span class="muted" style="color:#bfdbfe;font-weight:700;font-size:10px">(drag karke kahin bhi set karo)</span>
+    <button class="vx" onclick="closeWin('poWin')">✕</button></div>
+  <div class="vwin-b" id="poBody">
+    {% if pfile %}
+      <div id="poRender" style="padding:8px"></div>
+    {% else %}
+      <div class="muted" style="padding:14px">PO file store me nahi mili ({{ order.po_no or '—' }}).</div>
+    {% endif %}
+  </div>
+  <div class="vrsz" onmousedown="rszWin(event,'poWin')"></div>
+</div>
+
+<!-- ===== Design window (movable) ===== -->
+<div class="vwin" id="dgWin" style="width:480px;height:440px;left:60px;top:120px">
+  <div class="vwin-h" onmousedown="dragWin(event,'dgWin')">📐 PCB DESIGN — {{ jc.model or 'model?' }}
+    <span class="muted" style="color:#bfdbfe;font-weight:700;font-size:10px">(drag karke kahin bhi set karo)</span>
+    <button class="vx" onclick="closeWin('dgWin')">✕</button></div>
+  <div class="vwin-b" id="dgBody">
+    {% if design.mid == 0 %}
+      <div class="muted" style="padding:14px">Is job card me MODEL select nahi hua tha — design link nahi ban saka.</div>
+    {% elif design.has %}
+      <div id="dgRender" style="padding:8px"></div>
+    {% else %}
+      <div style="padding:14px;text-align:center">
+        <div class="muted" style="margin-bottom:8px">Is Size Master ka design upload nahi hua.</div>
+        <input type="file" id="dgFile" accept=".pdf,.jpg,.jpeg,.png,.webp" style="margin-bottom:8px">
+        <button class="btn" style="background:#1e3a8a" onclick="upDesign()">📐 Design upload karo</button>
+      </div>
+    {% endif %}
+  </div>
+  <div class="vrsz" onmousedown="rszWin(event,'dgWin')"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+var token = new URLSearchParams(location.search).get('token') || '';
+function T(){ return token; }
+function toast(m, err){
+  var t = document.getElementById('toast');
+  t.textContent = m; t.style.background = err ? '#b91c1c' : '#15803d';
+  t.style.display = 'block'; setTimeout(function(){ t.style.display = 'none'; }, 3200);
+}
+/* ---- movable windows ---- */
+function toggleWin(id){
+  var w = document.getElementById(id);
+  w.classList.toggle('open');
+  if (w.classList.contains('open')) w.style.zIndex = ++zTop;
+}
+function closeWin(id){ document.getElementById(id).classList.remove('open'); }
+var zTop = 9991;
+document.querySelectorAll('.vwin').forEach(function(w){
+  w.addEventListener('mousedown', function(){ w.style.zIndex = ++zTop; });
+});
+function dragWin(e, id){
+  var w = document.getElementById(id);
+  var r = w.getBoundingClientRect(), ox = e.clientX - r.left, oy = e.clientY - r.top;
+  e.preventDefault();
+  function mv(ev){
+    w.style.left = Math.max(0, Math.min(window.innerWidth - 80, ev.clientX - ox)) + 'px';
+    w.style.top = Math.max(0, Math.min(window.innerHeight - 40, ev.clientY - oy)) + 'px';
+    w.style.right = 'auto';
+  }
+  function up(){ document.removeEventListener('mousemove', mv); document.removeEventListener('mouseup', up); }
+  document.addEventListener('mousemove', mv); document.addEventListener('mouseup', up);
+}
+function rszWin(e, id){
+  var w = document.getElementById(id), r = w.getBoundingClientRect();
+  e.preventDefault(); e.stopPropagation();
+  function mv(ev){
+    w.style.width = Math.max(280, ev.clientX - r.left) + 'px';
+    w.style.height = Math.max(180, ev.clientY - r.top) + 'px';
+  }
+  function up(){ document.removeEventListener('mousemove', mv); document.removeEventListener('mouseup', up); }
+  document.addEventListener('mousemove', mv); document.addEventListener('mouseup', up);
+}
+/* ---- PDF / image render (kabhi Chrome iframe nahi) ---- */
+function renderInto(bodyId, url, mime){
+  var box = document.getElementById(bodyId);
+  if (!box) return;
+  if (String(mime).indexOf('pdf') !== -1 && window.pdfjsLib) {
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    pdfjsLib.getDocument(url).promise.then(function(pdf){
+      return pdf.getPage(1).then(function(pg){
+        var sc = Math.min(1.6, 760 / pg.getViewport({scale:1}).width);
+        var vp = pg.getViewport({scale: sc});
+        var cv = document.createElement('canvas');
+        cv.width = vp.width; cv.height = vp.height;
+        box.appendChild(cv);
+        pg.render({canvasContext: cv.getContext('2d'), viewport: vp});
+      });
+    }).catch(function(){ box.innerHTML = '<div style="padding:12px">Preview nahi bana — <a href="' + url + '" target="_blank">naye tab me kholo</a></div>'; });
+  } else if (String(mime).indexOf('image') !== -1) {
+    var im = document.createElement('img');
+    im.src = url; box.appendChild(im);
+  } else {
+    box.innerHTML = '<div style="padding:12px"><a href="' + url + '" target="_blank">File kholo</a></div>';
+  }
+}
+{% if pfile %}
+renderInto('poRender', '/api/po/file/{{ pfile.id }}?token=' + encodeURIComponent(T()), '{{ pfile.mime }}');
+{% endif %}
+{% if design.mid != 0 and design.has %}
+renderInto('dgRender', '{{ design.url }}?token=' + encodeURIComponent(T()), '');
+{% endif %}
+
+/* ---- approve ---- */
+function approve(){
+  var b = document.getElementById('apprBtn');
+  b.disabled = true; b.textContent = '⏳ Approve ho raha…';
+  fetch('/api/po/approve/{{ order.id }}?token=' + encodeURIComponent(T()), { method: 'POST' })
+    .then(function(r){ return r.json(); })
+    .then(function(j){
+      if (!j.ok) { toast(j.error || 'Approve fail', true); b.disabled = false; b.textContent = '✅ APPROVE — process me bhejo'; return; }
+      var bd = document.getElementById('vBadge');
+      bd.className = 'vbadge proc'; bd.textContent = '✅ PROCESS ME AA GAYA — ' + j.process;
+      b.style.display = 'none';
+      toast('Approved ✅ — job card process me aa gaya (' + j.process + ')');
+    }).catch(function(){ b.disabled = false; toast('Network fail', true); });
+}
+/* ---- design upload ---- */
+function upDesign(){
+  var f = document.getElementById('dgFile');
+  if (!f || !f.files.length) { toast('Pehle file chuno', true); return; }
+  var fd = new FormData(); fd.append('file', f.files[0]);
+  fetch('/api/model/design/{{ design.mid }}?token=' + encodeURIComponent(T()), { method: 'POST', body: fd })
+    .then(function(r){ return r.json(); })
+    .then(function(j){
+      if (!j.ok) { toast(j.error || 'Upload fail', true); return; }
+      toast('Design save ho gaya — Size Master se ab hamesha milega');
+      document.getElementById('dgBody').innerHTML = '<div id="dgRender" style="padding:8px"></div>';
+      renderInto('dgRender', '{{ design.url }}?token=' + encodeURIComponent(T()) + '&t=' + Date.now(), '');
+    });
+}
+</script>
+{% endblock %}

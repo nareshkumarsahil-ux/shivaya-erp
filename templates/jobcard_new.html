@@ -2,7 +2,11 @@
 {% block title %}{{ 'Edit Job Card ' ~ edit_order.order_no if edit_id else 'New Job Card' }}{% endblock %}
 {% block page_title %}{% if edit_id %}✏️ EDIT JOB CARD {{ edit_order.order_no }} — Advanced{% else %}🆕 New Job Card — Advanced{% endif %}{% endblock %}
 {% block content %}
-
+<div class="jntabs" style="display:flex;gap:8px;margin-bottom:14px">
+  <button type="button" id="tabManual" class="btn btn-outline" style="font-weight:800">📝 Manual Job Card</button>
+  <button type="button" id="tabPO" class="btn btn-outline" style="font-weight:800">📄 PO Job Card — upload + auto-read</button>
+</div>
+<div id="manualWrap">
 <form method="post" action="/jobcard/new" id="jcForm">
   <input type="hidden" name="edit_id" value="{{ edit_id or '' }}">
 {% if edit_id %}
@@ -654,5 +658,32 @@ function syncSummary(){
   document.getElementById(id).addEventListener('input', syncSummary);
   document.getElementById(id).addEventListener('change', syncSummary);
 });
+</script>
+</div><!-- /manualWrap -->
+<div id="poWrap" style="display:none">
+  <div class="muted" style="font-size:12px;margin-bottom:8px">PO / WhatsApp photo daalo — system padhega, har S.No. ka <b>temporary job card</b> khud banega (naya blue format, editable). Save karte hi <b>naye tab me VERIFY</b> khulega — PO + Design window ke saath. Approve karte hi job card <b>process me</b> aa jayega.</div>
+  <iframe id="poFrame" style="width:100%;height:calc(100vh - 190px);border:1.5px solid var(--border);border-radius:12px;background:#fff" title="PO se Job Card"></iframe>
+</div>
+<script>
+(function(){
+  var tm = document.getElementById('tabManual'), tp = document.getElementById('tabPO');
+  var mw = document.getElementById('manualWrap'), pw = document.getElementById('poWrap');
+  var fr = document.getElementById('poFrame'), loaded = false;
+  function setTab(po){
+    mw.style.display = po ? 'none' : 'block';
+    pw.style.display = po ? 'block' : 'none';
+    tm.className = 'btn ' + (po ? 'btn-outline' : '');
+    tm.style.background = po ? '' : '#1e3a8a'; tm.style.color = po ? '' : '#fff'; tm.style.borderColor = po ? '' : '#1e3a8a';
+    tp.className = 'btn ' + (po ? '' : 'btn-outline');
+    tp.style.background = po ? '#1e3a8a' : ''; tp.style.color = po ? '#fff' : ''; tp.style.borderColor = '#1e3a8a';
+    if (po && !loaded) {
+      var t = new URLSearchParams(location.search).get('token') || '';
+      fr.src = '/po?embed=1' + (t ? '&token=' + encodeURIComponent(t) : '');
+      loaded = true;
+    }
+  }
+  tm.onclick = function(){ setTab(false); };
+  tp.onclick = function(){ setTab(true); };
+})();
 </script>
 {% endblock %}

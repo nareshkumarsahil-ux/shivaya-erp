@@ -3967,6 +3967,11 @@ def _po_ensure():
         db.execute("ALTER TABLE orders ADD COLUMN po_no TEXT DEFAULT ''")
     if "po_sno" not in _oc:
         db.execute("ALTER TABLE orders ADD COLUMN po_sno INTEGER DEFAULT 0")
+    _mc = [r["name"] for r in db.query("PRAGMA table_info(product_models)")]
+    if "design64" not in _mc:
+        db.execute("ALTER TABLE product_models ADD COLUMN design64 TEXT DEFAULT ''")
+    if "design_mime" not in _mc:
+        db.execute("ALTER TABLE product_models ADD COLUMN design_mime TEXT DEFAULT ''")
 
 
 _PO_MODEL_RE = re.compile(r"\b([A-Z]{2,4})\s*[-\u2013]?\s*([0-9][A-Z0-9\-_/\\.]*)", re.I)  # v3.84 generic prefix (IIS/SCPL/OM/OSI/LP/SB/DHL...)
@@ -4054,8 +4059,11 @@ def po_entry():
         "SELECT o.id, o.order_no, o.party, o.product, o.qty, o.po_sno, o.status FROM orders o "
         "WHERE IFNULL(o.po_no,'') != '' ORDER BY o.id DESC LIMIT 60")
     dup_pos = [r["po_no"] for r in db.query("SELECT DISTINCT po_no FROM po_files")]
-    return render_template("po.html", active="po", parties=parties, models=models, inv=inv,
-                           models_json=json.dumps(models), saved=saved, dup_pos=dup_pos)
+    ctx = dict(active="po", parties=parties, models=models, inv=inv,
+               models_json=json.dumps(models), saved=saved, dup_pos=dup_pos)
+    if request.args.get("embed"):   # v3.85: jobcard_new ke PO tab ke andar (iframe, sidebar nahi)
+        return render_template("po_embed.html", **ctx)
+    return render_template("po.html", **ctx)
 
 
 @app.route("/api/po/upload", methods=["POST"])
@@ -4169,7 +4177,7 @@ def po_save_line():
         "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
         (f"#{count + 1}", party, "Single Side", prod, qty,
          float(rate) * qty if rate.replace(".", "", 1).isdigit() and rate else 0,
-         PROCESS_STEPS[0], "pending", 0, (f.get("priority") or "normal"),
+         "", "pending", 0, (f.get("priority") or "normal"),  # v3.85: PO card REVIEW me — approve par process me
          (f.get("due") or ""), "", 0, 0,
          (f.get("odate") or _today_ist().isoformat()), qty_panel, ups, po_no, po_sno))
     db.execute(
@@ -4189,6 +4197,154 @@ def po_save_line():
                 f"PO S.No. {po_sno} · {po_no}", _now_dt()))
     ono = db.query("SELECT order_no FROM orders WHERE id=?", (oid,), one=True)["order_no"]
     return jsonify(ok=True, order_id=oid, order_no=ono)
+
+
+@app.route("/api/po/draft", methods=["POST"])
+@login_required
+@admin_required
+def po_draft():
+    """v3.85 — TEMPORARY JOB CARD: naye blue format ka live draft (save se pehle).
+    Kuch invent nahi: sirf form/model-master ki values dikhti hain."""
+    _po_ensure()
+    f = request.form
+    mid = int(f.get("model_id") or 0)
+    pm = db.query("SELECT * FROM product_models WHERE id=?", (mid,), one=True) if mid else None
+    model_code = (f.get("model") or "").strip() or ((pm["model_code"] or pm["name"]) if pm else "")
+    party = (f.get("party") or "").strip()
+    qty = int(f.get("qty") or 0)
+    rate = f.get("rate") or ""
+    x = float(f.get("x_size") or 0) or (float(pm["cutting_len"] or pm["panel_len"] or 0) if pm else 0)
+    y = float(f.get("y_size") or 0) or (float(pm["cutting_w"] or pm["panel_w"] or 0) if pm else 0)
+    ups = int(f.get("ups") or 0) or (int(pm["pcs_panel"] or 0) if pm else 0)
+    sheet_len = float(pm["sheet_len"] or 0) if pm else float(f.get("sheet_len") or 0)
+    sheet_w = float(pm["sheet_w"] or 0) if pm else float(f.get("sheet_w") or 0)
+    xa = int(sheet_len // x) if (x > 0 and sheet_len > 0) else 0   # sheet me panel across
+    yr = int(sheet_w // y) if (y > 0 and sheet_w > 0) else 0       # rows
+    pps = xa * yr if (xa and yr) else 0                            # panels/sheet
+    per_sheet_pcb = ups * pps if (ups and pps) else 0
+    panels = math.ceil(qty / ups) if ups else 0
+    sheets = math.ceil(qty / per_sheet_pcb) if per_sheet_pcb else 0
+    pcbx = float(pm["pcb_len"] or 0) if pm else 0
+    pcby = float(pm["pcb_w"] or 0) if pm else 0
+    jc_stub = {"party_model": (f.get("party_model") or "").strip(), "model": model_code,
+               "odate": (f.get("odate") or _today_ist().isoformat()), "order_via": "",
+               "po_no": (f.get("po_no") or ""), "exp_delivery": (f.get("due") or ""),
+               "created_by": session.get("user_name") or "", "actual_pcb_x": pcbx, "actual_pcb_y": pcby,
+               "x_size": x, "y_size": y, "x_qty": xa, "y_qty": yr, "pcb_gap": 0,
+               "cnc_margin_x": 0, "cnc_margin_y": 0, "panel_x": x, "panel_y": y,
+               "panels_per_sheet": pps, "pcs_panel": ups, "qty_panel": panels, "sheets": sheets,
+               "sheet_len": sheet_len, "sheet_w": sheet_w,
+               "sheet_material": (f.get("material") or ""), "sheet_thickness": (pm["sheet_thickness"] if pm else ""),
+               "total_qty": qty, "rs_pcb": rate, "price": (float(rate) * qty if rate.replace(".", "", 1).isdigit() and rate else 0),
+               "short_qty": 0, "short_reason": "", "handover_sign": "",
+               "instructions": (f.get("notes") or ""), "v_grooving": ""}
+    order_stub = {"order_no": "(PO DRAFT)", "party": party}
+    html = render_template("_jobcard_print.html", order=order_stub, jc=jc_stub, mix79=None, procs=[])
+    return jsonify(ok=True, html=html)
+
+
+@app.route("/po/verify/<int:oid>")
+@login_required
+@admin_required
+def po_verify(oid):
+    """v3.85 — VERIFY: saved job card (naya format) + PO window + Design window (movable) + APPROVE."""
+    _po_ensure()
+    order = db.query("SELECT * FROM orders WHERE id=?", (oid,), one=True)
+    if not order:
+        return "Order nahi mili.", 404
+    jc = ensure_jobcard(oid)
+    mix85 = None
+    try:
+        if (jc["actual_pcb_x"] or 0) > 0 and (jc["actual_pcb_y"] or 0) > 0 \
+                and (jc["sheet_len"] or 0) > 0 and (jc["sheet_w"] or 0) > 0:
+            _px = (jc["x_size"] or jc["panel_x"] or 0)
+            _py = (jc["y_size"] or jc["panel_y"] or 0)
+            _f = {"use": "1", "pcb_len": str(_px), "pcb_w": str(_py), "pcbs_x": "1", "pcbs_y": "1",
+                  "gap_x": "0", "gap_y": "0", "border_l": "0", "border_r": "0", "border_t": "0", "border_b": "0",
+                  "gang_x": "1", "gang_y": "1", "sheet_len": str(jc["sheet_len"]), "sheet_w": str(jc["sheet_w"]),
+                  "kerf_x": str(jc.get("kerf_x") or 0), "kerf_y": str(jc.get("kerf_y") or 0),
+                  "sheets": "1", "panel_len": "0", "panel_w": "0"}
+            _r = compute_layout(_f)
+            if _r and _r.get("best") == "mixed" and (_r.get("mixed_n") or 0) > 0 and (_r.get("mixed_m") or 0) > 0:
+                mix85 = {"xn": _r["mixed_n"], "xp": _r["per_normal"], "yn": _r["mixed_m"], "yp": _r["per_rot"],
+                         "xt": _r["mixed_n"] * (_r["per_normal"] or 0), "yt": _r["mixed_m"] * (_r["per_rot"] or 0),
+                         "total": _r["panels_per_sheet"] or 0}
+    except Exception:
+        mix85 = None
+    pfile = db.query("SELECT id, filename, mime FROM po_files WHERE po_no=? ORDER BY id DESC LIMIT 1",
+                     (order["po_no"] or "",), one=True) if (order["po_no"] or "") else None
+    pm = None
+    if jc["model"]:
+        pm = db.query("SELECT id, name, model_code FROM product_models WHERE model_code=? OR name=? ORDER BY id DESC LIMIT 1",
+                      (jc["model"], jc["model"]), one=True)
+    design = {"mid": pm["id"] if pm else 0,
+              "has": bool(pm and pm["id"] and db.query(
+                  "SELECT LENGTH(design64) L FROM product_models WHERE id=? AND IFNULL(design64,'')!=''",
+                  (pm["id"],), one=True)),
+              "url": (f"/api/model/design/{pm['id']}") if pm else ""}
+    in_process = (order["status"] == "running") or bool(order["current_process"])
+    return render_template("po_verify.html", active="orders", order=order, jc=jc, mix79=mix85,
+                           pfile=pfile, design=design, in_process=in_process,
+                           first_step=PROCESS_STEPS[0])
+
+
+@app.route("/api/po/approve/<int:oid>", methods=["POST"])
+@login_required
+@admin_required
+def po_approve(oid):
+    """v3.85 — APPROVE: job card process me aa jata hai (pehla step + running)."""
+    _po_ensure()
+    o = db.query("SELECT * FROM orders WHERE id=?", (oid,), one=True)
+    if not o:
+        return jsonify(ok=False, error="Order nahi mili."), 404
+    first = PROCESS_STEPS[0]
+    db.execute("UPDATE orders SET status='running', current_process=? WHERE id=?", (first, oid))
+    db.execute("INSERT INTO jobcard_log (order_id, process, action, operator, details, ts) VALUES (?,?,?,?,?,?)",
+               (oid, first, "approved", session.get("user_name") or "admin",
+                "PO verify + APPROVE — process me aa gaya", _now_dt()))
+    return jsonify(ok=True, process=first)
+
+
+@app.route("/api/model/design/<int:mid>", methods=["GET"])
+@login_required
+@admin_required
+def model_design_get(mid):
+    """v3.85 — Size Master ka PCB design (image/PDF) dikhao."""
+    _po_ensure()
+    r = db.query("SELECT design64, design_mime, name FROM product_models WHERE id=?", (mid,), one=True)
+    if not r or not r["design64"]:
+        return "Design nahi hai.", 404
+    try:
+        raw = base64.b64decode(r["design64"])
+    except Exception:
+        return "Design kharab hai.", 404
+    return Response(raw, mimetype=r["design_mime"] or "application/octet-stream",
+                    headers={"Content-Disposition": "inline"})
+
+
+@app.route("/api/model/design/<int:mid>", methods=["POST"])
+@login_required
+@admin_required
+def model_design_post(mid):
+    """v3.85 — Size Master par design upload (JPG/PNG/WebP/PDF, 10MB)."""
+    _po_ensure()
+    pm = db.query("SELECT id FROM product_models WHERE id=?", (mid,), one=True)
+    if not pm:
+        return jsonify(ok=False, error="Size Master nahi mila."), 404
+    f = request.files.get("file")
+    if not f or not f.filename:
+        return jsonify(ok=False, error="File nahi mili."), 400
+    blob = f.read()
+    if len(blob) > 10 * 1024 * 1024:
+        return jsonify(ok=False, error="File 10MB se chhoti honi chahiye."), 400
+    ext = (f.filename.rsplit(".", 1)[-1] if "." in f.filename else "").lower()
+    if ext not in ("pdf", "jpg", "jpeg", "png", "webp"):
+        return jsonify(ok=False, error="Sirf PDF / JPG / PNG / WebP."), 400
+    mime = {"pdf": "application/pdf", "jpg": "image/jpeg", "jpeg": "image/jpeg",
+            "png": "image/png", "webp": "image/webp"}[ext]
+    db.execute("UPDATE product_models SET design64=?, design_mime=? WHERE id=?",
+               (base64.b64encode(blob).decode("ascii"), mime, mid))
+    return jsonify(ok=True)
 
 
 
