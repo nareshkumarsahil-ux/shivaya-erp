@@ -1217,13 +1217,12 @@ function svgSheetLayout(sl, sw, cl, cw, gx2, gy2, gx, gy, kx, ky, pps, best, mN,
         pcbGrid(cx + a*(p + Kx), cy + b*(q + Ky), p, q, rot);
       }
     } else pcbGrid(cx, cy, Cl, Cw, rot);
-    /* v3.59 — dims label GANG PANEL size (margin nahi) + PCS/gang */
+    /* v3.82 — panel ke andar sirf EK size = CUTTING size (CUT/GANG words hataye) + edge dims bhi CUTTING size */
     if (gang && Cl > 60 && Cw > 30) {
       s += '<text x="' + (cx + Cl/2).toFixed(1) + '" y="' + (cy + Cw/2 + 15).toFixed(1) + '" text-anchor="middle" font-size="8.5" font-weight="700" fill="' + stroke + '" font-family="Segoe UI,Arial">' + pcsUnit + ' PCB</text>';
-      if (Cw > 62) s += '<text x="' + (cx + Cl/2).toFixed(1) + '" y="' + (cy + Cw/2 + 26).toFixed(1) + '" text-anchor="middle" font-size="7.5" font-weight="700" fill="#b45309" font-family="Segoe UI,Arial">CUT ' + fmtNum(Cl/scale) + '\u00d7' + fmtNum(Cw/scale) + ' mm</text>';
-      if (Cw > 78) s += '<text x="' + (cx + Cl/2).toFixed(1) + '" y="' + (cy + Cw/2 + 37).toFixed(1) + '" text-anchor="middle" font-size="7.5" font-weight="600" fill="#64748b" font-family="Segoe UI,Arial">GANG ' + fmtNum(rot ? _GGW : _GGL) + '\u00d7' + fmtNum(rot ? _GGL : _GGW) + ' mm</text>';
-      if (Cl > 26 && Cw > 15) lblW(cx + Cl/2, cy + 8.5, rot ? _GGW : _GGL);
-      if (Cw > 26 && Cl > 15) lblH(cx + 7.5, cy + Cw/2, rot ? _GGL : _GGW);
+      if (Cw > 62) s += '<text x="' + (cx + Cl/2).toFixed(1) + '" y="' + (cy + Cw/2 + 26).toFixed(1) + '" text-anchor="middle" font-size="7.5" font-weight="700" fill="#b45309" font-family="Segoe UI,Arial"> ' + fmtNum(Cl/scale) + '\u00d7' + fmtNum(Cw/scale) + ' mm</text>';
+      if (Cl > 26 && Cw > 15) lblW(cx + Cl/2, cy + 8.5, Cl / scale);
+      if (Cw > 26 && Cl > 15) lblH(cx + 7.5, cy + Cw/2, Cw / scale);
     } else {
       if (Cl > 26 && Cw > 15) lblW(cx + Cl/2, cy + 8.5, Cl / scale);
       if (Cw > 26 && Cl > 15) lblH(cx + 7.5, cy + Cw/2, Cw / scale);
