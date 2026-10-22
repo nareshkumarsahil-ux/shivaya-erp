@@ -3723,7 +3723,7 @@ def pdf_library():
     if mid:
         _w.append("model_id=?")
         _p.append(mid)
-    _sql = ("SELECT id, model_id, model_name, filename, LENGTH(data) AS sz, uploaded_on FROM model_pdfs")
+    _sql = ("SELECT id, model_id, model_name, filename, LENGTH(COALESCE(data64, data)) AS sz, uploaded_on FROM model_pdfs")  # v3.79: naye rows ka data NULL hota hai, data64 se size
     if _w:
         _sql += " WHERE " + " AND ".join(_w)
     _sql += " ORDER BY id DESC"
@@ -3783,8 +3783,11 @@ def model_pdf_upload():
     if not m:
         flash("Model nahi mila.", "error")
         return redirect_with_token(url_for("pdf_library"))
+    # v3.79 — PDF sirf EK baar store (data64 base64 TEXT — Turso/Vercel proven pattern,
+    # FP-attachment jaisa). Pehle blob+base64 DOUBLE hota tha -> row ~10MB -> VIEW par
+    # Turso/Vercel limit tut kar "server error" deta tha.
     db.execute("INSERT INTO model_pdfs (model_id, model_name, filename, data, uploaded_on, data64) VALUES (?,?,?,?,?,?)",
-               (mid, m["name"], file.filename, data, _today_ist().isoformat(),
+               (mid, m["name"], file.filename, None, _today_ist().isoformat(),
                 base64.b64encode(data).decode("ascii")))
     flash("PDF '" + file.filename + "' \u2192 " + m["name"] + " save ho gayi (Cutlist + Products + Library teeno jagah dikhegi).", "success")
     return redirect_with_token(url_for("pdf_library"))
@@ -3820,26 +3823,37 @@ def _pdf_bytes(raw):
 @app.route("/model-pdf/<int:pdf_id>/view")
 @login_required
 def model_pdf_view(pdf_id):
-    try:
-        r = db.query("SELECT filename, data, data64 FROM model_pdfs WHERE id=?", (pdf_id,), one=True)
-        if not r:
-            return "PDF nahi mili (delete ho gayi?).", 404
-        raw = _pdf_bytes(r["data64"]) if r["data64"] else _pdf_bytes(r["data"])
-        if not raw:
-            raw = _pdf_bytes(r["data"])
-        if not raw:
-            return "PDF data khali/adhoora store hua — isko delete karke dobara upload karo.", 404
-        fname = (r["filename"] or "model.pdf").replace('"', "").replace("\r", "").replace("\n", "")
+    """v3.79 — HALKA read: pehle sirf data64 (TEXT = aadha payload), phir data (BLOB).
+    Dono koshish alag-alag — ek toote to doosri chalti hai, aur error me ASLI wajah dikhti hai.
+    (Pehle ek hi SELECT me blob+base64 DONO aate the — badi PDF par Turso/Vercel limit
+     tut kar 500 'server error' aata tha.)"""
+    errs = []
+    for _col in ("data64", "data"):
         try:
-            fname.encode("ascii")
-            cd = "inline; filename=\"" + fname + "\""
-        except UnicodeEncodeError:
-            from urllib.parse import quote as _q
-            cd = "inline; filename*=UTF-8''" + _q(fname)
-        return Response(raw, mimetype="application/pdf", headers={"Content-Disposition": cd})
-    except Exception as e:
-        app.logger.error("PDF view fail id=%s: %r", pdf_id, e)
-        return "PDF kholne me server-dikkat aayi (log me likha gaya) — dobara upload try karo.", 500
+            r = db.query(f"SELECT filename, {_col} AS _pdf FROM model_pdfs WHERE id=?", (pdf_id,), one=True)
+            if not r:
+                return "PDF nahi mili (delete ho gayi?).", 404
+            fname = (r["filename"] or "model.pdf").replace('"', "").replace("\r", "").replace("\n", "")
+            raw = _pdf_bytes(r["_pdf"])
+            if raw and raw[:1024].lstrip()[:4] != b"%PDF":
+                raw = b""  # v3.79 — garbage bytes browser ko serve nahi karte
+            if raw:
+                try:
+                    fname.encode("ascii")
+                    cd = "inline; filename=\"" + fname + "\""
+                except UnicodeEncodeError:
+                    from urllib.parse import quote as _q
+                    cd = "inline; filename*=UTF-8''" + _q(fname)
+                return Response(raw, mimetype="application/pdf", headers={"Content-Disposition": cd})
+            errs.append(_col + "=khaali/adhoora")
+        except Exception as e:
+            errs.append(f"{_col}: {e!r}"[:180])
+            try:
+                app.logger.error("PDF view fail id=%s col=%s: %r", pdf_id, _col, e)
+            except Exception:
+                pass
+    return ("PDF kholne me dikkat aayi — " + " | ".join(errs)[:400]
+            + " — is PDF ko delete karke dobara upload karo (agar bar-bar aaye to chhoti PDF try karo).", 500)
 
 
 @app.route("/model-pdf/<int:pdf_id>/edit", methods=["POST"])
