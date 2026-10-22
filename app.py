@@ -5,6 +5,7 @@ Login: sahil / admin123
 """
 import os
 import re
+import json
 import datetime
 import calendar
 import io
@@ -3951,6 +3952,244 @@ def payment_delete(pmt_id):
         db.execute("DELETE FROM payments WHERE id=?", (pmt_id,))
         flash(f"Entry {pmt['ref_no']} delete ho gaya 🗑", "success")
     return redirect_with_token(url_for("payments"))
+
+
+
+
+# ---------------------------------------------------------------- v3.84 PO SE JOB CARD
+def _po_ensure():
+    """PO files store + orders par po_no/po_sno (self-heal)."""
+    db.execute("""CREATE TABLE IF NOT EXISTS po_files (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        po_no TEXT, filename TEXT, mime TEXT, data64 TEXT DEFAULT '', uploaded_on TEXT)""")
+    _oc = [r["name"] for r in db.query("PRAGMA table_info(orders)")]
+    if "po_no" not in _oc:
+        db.execute("ALTER TABLE orders ADD COLUMN po_no TEXT DEFAULT ''")
+    if "po_sno" not in _oc:
+        db.execute("ALTER TABLE orders ADD COLUMN po_sno INTEGER DEFAULT 0")
+
+
+_PO_MODEL_RE = re.compile(r"\b([A-Z]{2,4})\s*[-\u2013]?\s*([0-9][A-Z0-9\-_/\\.]*)", re.I)  # v3.84 generic prefix (IIS/SCPL/OM/OSI/LP/SB/DHL...)
+
+
+def _po_parse_text(text):
+    """PO text -> S.No. lines. KABHI invent nahi karte: model/qty jo PO me likha hai wahi.
+    Sparse serials (1,7,8,12) -> 12 slots pad (OCR-miss bhi row rahegi, editable)."""
+    rows = []
+    for l in (text or "").replace("\r", "").split("\n"):
+        l = l.strip()
+        if not l:
+            continue
+        sno = None
+        ms = re.match(r"^(\d{1,3})\s*[\.\)\-:]\s*(.+)$", l)
+        if ms:
+            sno = int(ms.group(1))
+            l = ms.group(2).strip()
+        mm = _PO_MODEL_RE.search(l)
+        if not mm and sno is None:
+            continue  # na serial na model -> entry nahi (header/noise)
+        qm = re.search(r"(\d[\d,\.]*)\s*(?:pcs|pcs\.|nos\.?|pc\b|pieces)", l, re.I)
+        qty = qm.group(1).replace(",", "") if qm else ""
+        if not qty:
+            body2 = l.replace(mm.group(0), " ") if mm else l  # model ka apna number qty nahi
+            big = re.search(r"\b(\d{3,})\b", body2)  # formal table: khada bada number = qty
+            qty = big.group(1) if big else ""
+        rm = re.search(r"(?:@|rs\.?|\u20b9)\s*(\d+(?:\.\d+)?)", l, re.I)
+        note = ""
+        if re.search(r"scan incomplete|adhura|incomplete", l, re.I):
+            note = "scan incomplete"
+        rows.append({"sno": sno,
+                     "model": (mm.group(1).upper() + "-" + mm.group(2)) if mm else "",
+                     "party_model": "", "qty": qty, "rate": rm.group(1) if rm else "", "note": note})
+    # same serial do baar (model + qty alag lines) -> merge
+    by = {}
+    merged = []
+    for r in rows:
+        if r["sno"] is not None and r["sno"] in by:
+            k = by[r["sno"]]
+            if not k["model"] and r["model"]:
+                k["model"] = r["model"]
+            if not k["qty"] and r["qty"]:
+                k["qty"] = r["qty"]
+            if not k["rate"] and r["rate"]:
+                k["rate"] = r["rate"]
+            continue
+        if r["sno"] is not None:
+            by[r["sno"]] = r
+        merged.append(r)
+    rows = merged
+    serials = [r["sno"] for r in rows if r["sno"]]
+    # "S.No. 12 - scan incomplete" hint bhi expected count batata hai (v3.84)
+    for _hl in (text or "").split("\n"):
+        _mh = re.search(r"s\.?\s*no\.?[^0-9]{0,6}(\d{1,3})", _hl, re.I)
+        if _mh and ("incomplete" in _hl.lower() or "scan" in _hl.lower()):
+            serials.append(int(_mh.group(1)))
+    if serials:
+        mx = max(serials)
+        have = {r["sno"] for r in rows if r["sno"]}
+        for n in range(1, mx + 1):
+            if n not in have:
+                rows.append({"sno": n, "model": "", "party_model": "", "qty": "", "rate": "",
+                             "note": "scan me nahi mila — khud bharo"})
+        rows.sort(key=lambda r: (r["sno"] is not None, r["sno"] or 0))  # bina-serial lines pehle (text ke order me), phir 1..N
+    else:
+        for i, r in enumerate(rows):
+            r["sno"] = i + 1
+    return rows
+
+
+@app.route("/po")
+@login_required
+@admin_required
+def po_entry():
+    """v3.84 — PO/WhatsApp upload -> auto-read -> har S.No. se ek job card."""
+    _po_ensure()
+    parties = [p["name"] for p in db.query("SELECT name FROM parties ORDER BY name")]
+    models = [dict(m) for m in db.query(
+        "SELECT id, name, model_code, pcb_len, pcb_w, panel_len, panel_w, pcs_panel, "
+        "cutting_len, cutting_w, sheet_len, sheet_w, sheet_thickness FROM product_models ORDER BY name")]
+    inv = [{"id": i["id"], "name": i["name"], "unit": i["unit"]} for i in db.query(
+        "SELECT id, name, unit FROM inventory ORDER BY name")]
+    saved = db.query(
+        "SELECT o.id, o.order_no, o.party, o.product, o.qty, o.po_sno, o.status FROM orders o "
+        "WHERE IFNULL(o.po_no,'') != '' ORDER BY o.id DESC LIMIT 60")
+    dup_pos = [r["po_no"] for r in db.query("SELECT DISTINCT po_no FROM po_files")]
+    return render_template("po.html", active="po", parties=parties, models=models, inv=inv,
+                           models_json=json.dumps(models), saved=saved, dup_pos=dup_pos)
+
+
+@app.route("/api/po/upload", methods=["POST"])
+@login_required
+@admin_required
+def po_upload():
+    """PDF/JPG/PNG/WebP save + (PDF ho to) text nikaal ke parse. Image par OCR browser karega."""
+    _po_ensure()
+    f = request.files.get("file")
+    po_no = (request.form.get("po_no") or "WhatsApp").strip() or "WhatsApp"
+    if not f or not f.filename:
+        return jsonify(ok=False, error="File nahi mili."), 400
+    blob = f.read()
+    if len(blob) > 10 * 1024 * 1024:
+        return jsonify(ok=False, error="File 10MB se chhoti honi chahiye."), 400
+    fn = f.filename
+    ext = (fn.rsplit(".", 1)[-1] if "." in fn else "").lower()
+    if ext not in ("pdf", "jpg", "jpeg", "png", "webp"):
+        return jsonify(ok=False, error="Sirf PDF / JPG / PNG / WebP chalega."), 400
+    mime = {"pdf": "application/pdf", "jpg": "image/jpeg", "jpeg": "image/jpeg",
+            "png": "image/png", "webp": "image/webp"}[ext]
+    text, needs_ocr = "", False
+    if ext == "pdf":
+        try:
+            import io as _io
+            from pypdf import PdfReader
+            rd = PdfReader(_io.BytesIO(blob))
+            text = "\n".join((pg.extract_text() or "") for pg in rd.pages)
+        except Exception:
+            text = ""
+        if not text.strip():
+            needs_ocr = True  # scanned-PDF: browser OCR / khud lines bharo
+    else:
+        needs_ocr = True
+    fid = db.execute("INSERT INTO po_files (po_no, filename, mime, data64, uploaded_on) VALUES (?,?,?,?,?)",
+                     (po_no, fn, mime, base64.b64encode(blob).decode("ascii"), _today_ist().isoformat()))
+    lines = _po_parse_text(text)
+    return jsonify(ok=True, file_id=fid, po_no=po_no, filename=fn, mime=mime, lines=lines,
+                   needs_ocr=needs_ocr, dup=po_no.upper() != "WHATSAPP")
+
+
+@app.route("/api/po/parse", methods=["POST"])
+@login_required
+@admin_required
+def po_parse():
+    """Browser-OCR (tesseract.js) ka text yahan same parser se lines banta hai."""
+    j = request.get_json(silent=True) or {}
+    return jsonify(ok=True, lines=_po_parse_text(j.get("text") or ""))
+
+
+@app.route("/api/po/file/<int:fid>")
+@login_required
+@admin_required
+def po_file_view(fid):
+    _po_ensure()
+    r = db.query("SELECT filename, mime, data64 FROM po_files WHERE id=?", (fid,), one=True)
+    if not r:
+        return "File nahi mili.", 404
+    try:
+        raw = base64.b64decode(r["data64"])
+    except Exception:
+        raw = b""
+    if not raw:
+        return "File khaali hai — dobara upload karo.", 404
+    fn = (r["filename"] or "po").replace('"', "")
+    return Response(raw, mimetype=r["mime"] or "application/octet-stream",
+                    headers={"Content-Disposition": "inline; filename=\"" + fn + "\"" })
+
+
+@app.route("/api/po/save", methods=["POST"])
+@login_required
+@admin_required
+def po_save_line():
+    """Ek S.No. = ek job card. Kuch bhi invent nahi — party/qty/model zaroori."""
+    _po_ensure()
+    f = request.form
+    party = (f.get("party") or "").strip()
+    qty = int(f.get("qty") or 0)
+    po_no = (f.get("po_no") or "WhatsApp").strip() or "WhatsApp"
+    try:
+        po_sno = int(f.get("po_sno") or 0)
+    except ValueError:
+        po_sno = 0
+    if not party:
+        return jsonify(ok=False, error="Party chuno."), 400
+    if qty <= 0:
+        return jsonify(ok=False, error="Quantity (PCS) zaroori hai."), 400
+    if po_sno <= 0:
+        return jsonify(ok=False, error="PO S.No. likho."), 400
+    mid = int(f.get("model_id") or 0)
+    pm = db.query("SELECT * FROM product_models WHERE id=?", (mid,), one=True) if mid else None
+    tmodel = (f.get("model") or "").strip()
+    if not pm and not tmodel:
+        return jsonify(ok=False, error="MODEL NO chuno ya likho (Size Master se aayega)."), 400
+    model_code = pm["model_code"] if pm and pm["model_code"] else (pm["name"] if pm else tmodel)
+    party_model = (f.get("party_model") or "").strip()
+    party_code = (f.get("party_code") or "").strip()
+    prod = f"{model_code}{(' · ' + party_model) if party_model else ''}"
+    x_size = float(f.get("x_size") or 0) or (float(pm["cutting_len"] or pm["panel_len"] or 0) if pm else 0)
+    y_size = float(f.get("y_size") or 0) or (float(pm["cutting_w"] or pm["panel_w"] or 0) if pm else 0)
+    ups = int(f.get("ups") or 0) or (int(pm["pcs_panel"] or 0) if pm else 0)
+    qty_panel = math.ceil(qty / ups) if ups else 0
+    extra = int(f.get("extra_panels") or 0)
+    if qty_panel:
+        qty_panel += extra
+    rate = f.get("rate") or ""
+    count = db.query("SELECT COUNT(*) c FROM orders", one=True)["c"]
+    oid = db.execute(
+        "INSERT INTO orders (order_no, party, board, product, qty, value, current_process, status, progress, "
+        "priority, delivery_date, operator, started_qty, finished_qty, created_on, qty_panel, pcs_panel, po_no, po_sno) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        (f"#{count + 1}", party, "Single Side", prod, qty,
+         float(rate) * qty if rate.replace(".", "", 1).isdigit() and rate else 0,
+         PROCESS_STEPS[0], "pending", 0, (f.get("priority") or "normal"),
+         (f.get("due") or ""), "", 0, 0,
+         (f.get("odate") or _today_ist().isoformat()), qty_panel, ups, po_no, po_sno))
+    db.execute(
+        "INSERT OR IGNORE INTO jobcard (order_id, party_model, model, odate, exp_delivery, price, total_qty, "
+        "actual_pcb_x, actual_pcb_y, panel_x, panel_y, panels_per_sheet, sheets, pcs_panel, sheet_len, sheet_w, "
+        "sheet_material, sheet_thickness, po_no) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        (oid, party_model or model_code, model_code, (f.get("odate") or _today_ist().isoformat()),
+         (f.get("due") or ""), float(rate) if rate.replace(".", "", 1).isdigit() and rate else 0, qty,
+         float(pm["pcb_len"] or 0) if pm else 0, float(pm["pcb_w"] or 0) if pm else 0,
+         x_size, y_size,
+         (int(pm["panels_sheet"] or 0) if pm else 0),
+         (int(pm["sheets"] or 0) if pm else 0),
+         ups, float(pm["sheet_len"] or 0) if pm else 0, float(pm["sheet_w"] or 0) if pm else 0,
+         (f.get("material") or ""), (pm["sheet_thickness"] if pm else ""), po_no))
+    db.execute("INSERT INTO jobcard_log (order_id, process, action, operator, details, ts) VALUES (?,?,?,?,?,?)",
+               (oid, "PO", "created", session.get("user_name") or "admin",
+                f"PO S.No. {po_sno} · {po_no}", _now_dt()))
+    ono = db.query("SELECT order_no FROM orders WHERE id=?", (oid,), one=True)["order_no"]
+    return jsonify(ok=True, order_id=oid, order_no=ono)
+
 
 
 # ---------------------------------------------------------------- employees
