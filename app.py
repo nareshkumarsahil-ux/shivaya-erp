@@ -4275,17 +4275,108 @@ def po_verify(oid):
                      (order["po_no"] or "",), one=True) if (order["po_no"] or "") else None
     pm = None
     if jc["model"]:
-        pm = db.query("SELECT id, name, model_code FROM product_models WHERE model_code=? OR name=? ORDER BY id DESC LIMIT 1",
+        pm = db.query("SELECT id, name, model_code, design64, design_mime FROM product_models WHERE model_code=? OR name=? ORDER BY id DESC LIMIT 1",
                       (jc["model"], jc["model"]), one=True)
     design = {"mid": pm["id"] if pm else 0,
-              "has": bool(pm and pm["id"] and db.query(
-                  "SELECT LENGTH(design64) L FROM product_models WHERE id=? AND IFNULL(design64,'')!=''",
-                  (pm["id"],), one=True)),
+              "has": bool(pm and pm["id"] and pm["design64"]),
+              "mime": (pm["design_mime"] if pm else "") or "",
               "url": (f"/api/model/design/{pm['id']}") if pm else ""}
+    models = [dict(m) for m in db.query(
+        "SELECT id, name, model_code, pcb_len, pcb_w, panel_len, panel_w, pcs_panel, "
+        "cutting_len, cutting_w, sheet_len, sheet_w, sheet_thickness FROM product_models ORDER BY name")]
     in_process = (order["status"] == "running") or bool(order["current_process"])
     return render_template("po_verify.html", active="orders", order=order, jc=jc, mix79=mix85,
                            pfile=pfile, design=design, in_process=in_process,
+                           models=models, models_json=json.dumps(models),
                            first_step=PROCESS_STEPS[0])
+
+
+@app.route("/api/po/update/<int:oid>", methods=["POST"])
+@login_required
+@admin_required
+def po_update_card(oid):
+    """v3.86 — VERIFY page ka editable job card save. MODEL select = Size Master se auto-fill.
+    Kuch invent nahi: jo bheja wahi update, master ke sizes sirf model select hone par."""
+    _po_ensure()
+    o = db.query("SELECT * FROM orders WHERE id=?", (oid,), one=True)
+    if not o:
+        return jsonify(ok=False, error="Order nahi mili."), 404
+    jc = ensure_jobcard(oid)
+    f = request.form
+    gv = lambda k: (f.get(k) or "").strip()
+
+    # ---- MODEL: select-id aaya to Size Master se AUTO-FILL (sizes/UPS/thickness/PCB)
+    mid = int(f.get("model_id") or 0)
+    pm = db.query("SELECT * FROM product_models WHERE id=?", (mid,), one=True) if mid else None
+    model_code = gv("model")
+    if pm:
+        model_code = pm["model_code"] or pm["name"]
+        for col, src in (("x_size", "cutting_len"), ("y_size", "cutting_w"),
+                         ("panel_x", "panel_len"), ("panel_y", "panel_w"),
+                         ("actual_pcb_x", "pcb_len"), ("actual_pcb_y", "pcb_w"),
+                         ("sheet_len", "sheet_len"), ("sheet_w", "sheet_w")):
+            if pm[src]:
+                db.execute(f"UPDATE jobcard SET {col}=? WHERE id=?", (float(pm[src]), jc["id"]))
+        if pm["pcs_panel"]:
+            db.execute("UPDATE jobcard SET pcs_panel=? WHERE id=?", (int(pm["pcs_panel"]), jc["id"]))
+        if pm["panels_sheet"]:
+            db.execute("UPDATE jobcard SET panels_per_sheet=? WHERE id=?", (int(pm["panels_sheet"]), jc["id"]))
+        if pm["sheets"]:
+            db.execute("UPDATE jobcard SET sheets=? WHERE id=?", (int(pm["sheets"]), jc["id"]))
+        if pm["sheet_thickness"]:
+            db.execute("UPDATE jobcard SET sheet_thickness=? WHERE id=?", (pm["sheet_thickness"], jc["id"]))
+    elif model_code:
+        db.execute("UPDATE jobcard SET model=? WHERE id=?", (model_code, jc["id"]))
+
+    # ---- simple jobcard fields
+    _jmap = {"odate": "odate", "order_via": "order_via", "party_model": "party_model", "po_no": "po_no",
+             "exp_delivery": "exp_delivery", "sheet_material": "sheet_material", "checked_by": "checked_by",
+             "created_by": "created_by", "instructions": "instructions", "short_reason": "short_reason",
+             "handover_sign": "handover_sign"}
+    for fk, col in _jmap.items():
+        if fk in f:
+            db.execute(f"UPDATE jobcard SET {col}=? WHERE id=?", (gv(fk), jc["id"]))
+    for fk, col in (("rs_pcb", "rs_pcb"), ("total_qty", "total_qty"), ("qty_panel", "qty_panel"),
+                    ("pcs_panel", "pcs_panel"), ("sheets", "sheets"), ("short_qty", "short_qty")):
+        if fk in f and gv(fk):
+            try:
+                db.execute(f"UPDATE jobcard SET {col}=? WHERE id=?", (float(gv(fk)), jc["id"]))
+            except ValueError:
+                pass
+
+    # ---- panel "x×y" parse (X/Y mm)
+    pan = gv("panel").replace("×", "x").replace("*", "x").lower().replace("mm", "")
+    if "x" in pan:
+        _xy = pan.split("x")
+        try:
+            _xv = float(_xy[0].strip()); _yv = float(_xy[1].strip())
+            db.execute("UPDATE jobcard SET x_size=?, y_size=?, panel_x=?, panel_y=? WHERE id=?",
+                       (_xv, _yv, _xv, _yv, jc["id"]))
+        except (ValueError, IndexError):
+            pass
+
+    # ---- UPS badla to panels recompute
+    ups = db.query("SELECT pcs_panel, total_qty FROM jobcard WHERE id=?", (jc["id"],), one=True)
+    if ups["pcs_panel"] and ups["total_qty"]:
+        db.execute("UPDATE jobcard SET qty_panel=? WHERE id=?",
+                   (math.ceil(ups["total_qty"] / ups["pcs_panel"]), jc["id"]))
+
+    # ---- orders sync
+    qty = int(float(gv("total_qty") or 0)) if gv("total_qty") else None
+    order_no = gv("order_no").lstrip("#")
+    _ojc = db.query("SELECT pcs_panel, qty_panel, model, party_model FROM jobcard WHERE id=?", (jc["id"],), one=True)
+    db.execute("""UPDATE orders SET order_no=COALESCE(?,order_no), party=COALESCE(?,party), po_no=COALESCE(?,po_no),
+                  priority=COALESCE(?,priority), delivery_date=COALESCE(?,delivery_date), qty=COALESCE(?,qty),
+                  product=COALESCE(?,product), pcs_panel=COALESCE(?,pcs_panel), qty_panel=COALESCE(?,qty_panel)
+                  WHERE id=?""",
+               (("#" + order_no) if order_no else None, gv("party") or None, gv("po_no") or None,
+                gv("priority") or None, gv("exp_delivery") or None, qty,
+                (model_code + ((" · " + gv("party_model")) if gv("party_model") and gv("party_model") != model_code else "")) if model_code else None,
+                int(_ojc["pcs_panel"] or 0) or None, int(_ojc["qty_panel"] or 0) or None, oid))
+    db.execute("INSERT INTO jobcard_log (order_id, process, action, operator, details, ts) VALUES (?,?,?,?,?,?)",
+               (oid, "PO", "edited", session.get("user_name") or "admin",
+                "VERIFY page se edit + save", _now_dt()))
+    return jsonify(ok=True)
 
 
 @app.route("/api/po/approve/<int:oid>", methods=["POST"])
