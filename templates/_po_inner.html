@@ -56,7 +56,7 @@
   <div class="po-pane">
     <div class="po-pane-head">👁️ PO Preview <span style="margin-left:auto;font-size:10px;font-weight:700;color:#64748b" id="stepBar">S.No. — / —</span></div>
     <div class="po-pane-body">
-      <div id="dupBanner" class="banner-warn" style="display:none">⚠️ Ye PO number pehle bhi upload hua hai — phir bhi Save kar sakte ho (duplicate sirf warning hai).</div>
+      <div id="poWarn" class="banner-warn" style="display:none"></div>
       <div id="preview" class="po-prev" style="display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:12px">File select hone par preview yahan dikhega</div>
       <div style="display:flex;gap:8px;margin:7px 0 12px;flex-wrap:wrap">
         <a class="btn btn-outline btn-xs" id="newTab" href="#" target="_blank" style="display:none">🔌 Naye tab me kholo</a>
@@ -97,10 +97,11 @@
         </div>
         <div class="frow3">
           <div class="fld"><label>X mm (master se auto)</label><input type="number" step="0.1" name="x_size" id="f_x"></div>
-          <div class="fld"><label>Y mm (master se auto)</label><input type="number" step="0.1" name="f_y" id="f_y"></div>
+          <div class="fld"><label>Y mm (master se auto)</label><input type="number" step="0.1" name="y_size" id="f_y"></div>
           <div class="fld"><label>UPS (PCS/panel)</label><input type="number" name="ups" id="f_ups"></div>
         </div>
         <div class="muted" style="font-size:11px;margin:2px 0 10px">MODEL select karte hi X/Y/UPS Size Master se bhar jayega. Master me na ho to khud bharo — kuch bhi andaze se nahi bhara jayega.</div>
+        <div id="fHint" style="display:none;background:#eef2ff;border:1.5px solid #6366f1;color:#3730a3;border-radius:8px;padding:7px 10px;font-size:11.5px;font-weight:700;margin:2px 0 8px"></div>
         <div style="display:flex;gap:8px;justify-content:flex-end">
           <button type="button" class="btn btn-outline" onclick="fileOnly()">📁 Sirf file rakho</button>
           <button type="submit" class="btn" id="saveBtn" style="background:#15803d">💾 Save S.No. <span id="saveK"></span> · job card</button>
@@ -121,6 +122,7 @@
 
 <div class="toast" id="toast"></div>
 
+<script src="/static/po.js"></script>
 <script>
 /* PO se Job Card — v3.84. Rules: kuch bhi invent nahi; N printed S.No. = N cards;
    sparse serials pad; duplicate PO sirf warning; har Save ke baad agla S.No. */
@@ -135,7 +137,7 @@ function toast(m, err){
   t.textContent = m; t.className = 'toast' + (err ? ' err' : ''); t.style.display = 'block';
   setTimeout(function(){ t.style.display = 'none'; }, 3200);
 }
-function esc(s){ return (s || '').replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+function esc(s){ s = String(s == null ? '' : s); return s.replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
 
 /* ---------- upload + preview ---------- */
 var drop = document.getElementById('drop'), fin = document.getElementById('file');
@@ -143,7 +145,7 @@ drop.onclick = function(){ fin.click(); };
 drop.ondragover = function(e){ e.preventDefault(); drop.classList.add('hot'); };
 drop.ondragleave = function(){ drop.classList.remove('hot'); };
 drop.ondrop = function(e){ e.preventDefault(); drop.classList.remove('hot'); if (e.dataTransfer.files.length) handleFiles(e.dataTransfer.files); };
-fin.onchange = function(){ if (fin.files.length) handleFiles(fin.files); };
+fin.onchange = function(){ if (fin.files.length) handleFiles(fin.files); fin.value = ''; };  /* reset: same file dobara -> change fire (dup check) */
 
 function handleFiles(fs){
   var poNo = document.getElementById('poNo').value.trim() || 'WhatsApp';
@@ -158,14 +160,17 @@ function handleFiles(fs){
         .then(function(j){
           if (!j.ok) { toast(j.error || 'Upload fail', true); return; }
           FILES.push(j);
-          if (j.dup) { dup = true; document.getElementById('dupBanner').style.display = 'block'; }
+          if (j.po_no) document.getElementById('poNo').value = j.po_no;   /* server ne PDF se PO no guess kiya */
+          showDups(j);
           if (j.mime === 'application/pdf') showPdf(j.file_id, j.needs_ocr);
           else showImg(j.file_id);
-          if (j.lines && j.lines.length) { LINES = LINES.concat(j.lines); }
-          else if (j.needs_ocr) { ocrImage(j); }
+          /* v3.86b: PCBFlow parser (po.js) text par; text na mile to browser OCR; server lines sirf non-formal fallback */
+          if (j.text && j.text.trim()) { applyPoText(j.text, j); }
+          else if (j.needs_ocr) { ocrFile(j); }
+          else if (j.lines && j.lines.length) { (j.lines || []).forEach(function(x){ x.file_id = j.file_id; LINES.push(x); }); }
           renderInbox();
-          document.getElementById('fileInfo').textContent = '✅ ' + j.filename + ' · ' + (j.lines ? j.lines.length : 0) + ' lines mili';
-          if (!j.needs_ocr && (!j.lines || !j.lines.length)) toast('PDF me S.No. lines nahi mili — ＋ Line jodo se banao', true);
+          if (LINES.length && SEL < 0) { SEL = 0; renderInbox(); fillForm(); }
+          document.getElementById('fileInfo').textContent = '✅ ' + j.filename + ' · ' + LINES.length + ' lines';
         });
     });
   });
@@ -197,32 +202,103 @@ function showImg(id){
   var a = document.getElementById('newTab'); a.href = url; a.style.display = 'inline-block';
   document.getElementById('preview').innerHTML = '<img src="' + url + '" style="max-width:100%;display:block;margin:auto">';
 }
-/* WhatsApp photo -> tesseract.js OCR (browser me; na ho to manual lines) */
-function ocrImage(j){
-  document.getElementById('ocrNote').textContent = '🔎 Photo padha ja raha hai (OCR)…';
+/* v3.86b: scanned-PDF / photo -> browser OCR (pdf.js pages 1-2 canvas scale 2 -> tesseract.js v5 PSM 6) */
+function ocrFile(j){
+  var on = document.getElementById('ocrNote');
+  if (on) on.textContent = '🔎 OCR chal raha hai (browser me)…';
   function done(){
     var n = document.getElementById('ocrNote');
-    if (n) n.textContent = 'OCR shuru nahi ho saka (offline?) — lines khud bharo, ＋ Line jodo.';
+    if (n) n.textContent = 'OCR nahi ho saka (offline?) — lines khud bharo, ＋ Line jodo.';
+  }
+  function loadScript(src, cb){
+    var sc = document.createElement('script');
+    sc.src = src; sc.onload = cb; sc.onerror = cb;
+    document.head.appendChild(sc);
+  }
+  function poPdfCanvas(url){
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    return pdfjsLib.getDocument(url).promise.then(function(pdf){
+      var pages = Math.min(2, pdf.numPages), jobs = [];
+      for (var i = 1; i <= pages; i++) jobs.push(pdf.getPage(i));
+      return Promise.all(jobs).then(function(pgs){
+        var cvs = pgs.map(function(pg){
+          var vp = pg.getViewport({ scale: 2 });
+          var c = document.createElement('canvas');
+          c.width = vp.width; c.height = vp.height;
+          pg.render({ canvasContext: c.getContext('2d'), viewport: vp });
+          return c;
+        });
+        var w = Math.max.apply(null, cvs.map(function(c){ return c.width; }));
+        var h = cvs.reduce(function(a, c){ return a + c.height; }, 0);
+        var out = document.createElement('canvas');
+        out.width = w; out.height = h;
+        var cx = out.getContext('2d'), y = 0;
+        cvs.forEach(function(c){ cx.drawImage(c, 0, y); y += c.height; });
+        return out;
+      });
+    });
   }
   try {
-    var s = document.createElement('script');
-    s.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';
-    s.onload = function(){
+    loadScript('https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js', function(){
+      if (!window.Tesseract) { done(); return; }
       var url = '/api/po/file/' + j.file_id + '?token=' + encodeURIComponent(T());
-      Tesseract.recognize(url, 'eng').then(function(r){
+      var prep;
+      if (j.mime === 'application/pdf') {
+        if (window.pdfjsLib) prep = poPdfCanvas(url);
+        else prep = new Promise(function(res, rej){
+          loadScript('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js', function(){
+            if (!window.pdfjsLib) { rej(); return; }
+            poPdfCanvas(url).then(res, rej);
+          });
+        });
+      } else prep = Promise.resolve(url);
+      prep.then(function(src){
+        return Tesseract.recognize(src, 'eng', { tessedit_pageseg_mode: '6' });
+      }).then(function(r){
         return fetch('/api/po/parse?token=' + encodeURIComponent(T()), {
           method: 'POST', headers: {'Content-Type': 'application/json'},
           body: JSON.stringify({text: r.data.text})
         }).then(function(x){ return x.json(); }).then(function(jj){
-          if (jj.ok && jj.lines.length) { LINES = LINES.concat(jj.lines); renderInbox(); toast(jj.lines.length + ' lines OCR se mili ✅'); }
-          else toast('OCR me lines nahi mili — khud bharo', true);
+          if (jj.ok && jj.lines.length) {
+            jj.lines.forEach(function(x){ x.file_id = j.file_id; LINES.push(x); });
+            renderInbox();
+            if (SEL < 0) { SEL = 0; renderInbox(); fillForm(); }
+            toast(jj.lines.length + ' lines OCR se mili ✅');
+          } else toast('OCR me lines nahi mili — khud bharo', true);
           var n2 = document.getElementById('ocrNote'); if (n2) n2.textContent = '';
         });
       }).catch(done);
-    };
-    s.onerror = done;
-    document.head.appendChild(s);
+    });
   } catch(e){ done(); }
+}
+
+/* v3.86b: PCBFlow parser ko text do — masters (Size Master) EXACT match ke saath */
+function applyPoText(text, j){
+  var masters = MODELS.map(function(m){
+    return { id: m.id, model: m.model_code || m.name, party: m.party_name || '' };
+  });
+  var ls = (window.PCBFlowPO ? PCBFlowPO.parsePoText(text, masters) : []);
+  if (!ls.length && j.lines && j.lines.length &&
+      !/(Purchase Order|GSTIN|Item & Description|Description of Goods|PROFORMA)/i.test(text)) {
+    ls = j.lines;   /* purana server parser sirf non-formal text par fallback */
+  }
+  ls.forEach(function(x){ x.file_id = j.file_id; LINES.push(x); });
+}
+/* v3.86b: duplicate PO warning (j.dups: order no / product / qty — sirf warning, save block nahi) */
+function showDups(j){
+  var w = document.getElementById('poWarn');
+  dup = false;
+  if (j.dup && j.dups && j.dups.length) {
+    var rows = j.dups.map(function(d){
+      return '#' + String(d.order_no || '').replace('#', '') + ' · ' + esc(d.product) + ' · ' + (d.qty || 0) + ' pcs';
+    });
+    w.innerHTML = '⚠️ <b>Ye PO pehle se orders me hai:</b> ' + rows.join(' &nbsp;|&nbsp; ') +
+      ' — phir bhi Save kar sakte ho (sirf warning hai).';
+    w.style.display = 'block'; dup = true;
+  } else if (j.dup) {
+    w.innerHTML = '⚠️ Ye PO number pehle bhi upload hua hai — phir bhi Save kar sakte ho (sirf warning hai).';
+    w.style.display = 'block'; dup = true;
+  } else w.style.display = 'none';
 }
 
 /* ---------- inbox chips ---------- */
@@ -231,7 +307,7 @@ function renderInbox(){
   document.getElementById('cnt').textContent = LINES.length ? '(' + LINES.length + ')' : '';
   if (!LINES.length) { box.innerHTML = '<div class="muted small">File upload karo — PO ki har S.No. line yahan chip banegi.</div>'; return; }
   box.innerHTML = LINES.map(function(l, i){
-    var cls = 'chip' + (i === SEL ? ' sel' : '') + (l.saved ? ' done' : '') + ((!l.model || !l.qty) ? ' warn' : '');
+    var cls = 'chip' + (i === SEL ? ' sel' : '') + (l.saved ? ' done' : '') + ((!l.model || !l.qty || l.warn) ? ' warn' : '');
     var act = l.saved ? ('openVerify(' + (l.oid || 0) + ')') : ('selLine(' + i + ')');
     return '<button type="button" class="' + cls + '" onclick="' + act + '">' +
       '<span class="sno">#' + (l.sno || (i + 1)) + '</span>' +
@@ -264,22 +340,72 @@ function fillForm(){
   document.getElementById('f_rate').value = l.rate || '';
   document.getElementById('f_model').value = l.model || '';
   document.getElementById('saveK').textContent = l.sno || (SEL + 1);
-  /* model match (Size Master) — hua to select karo, warna khali (never invent) */
-  var sel = document.getElementById('poModel');
-  sel.value = '';
-  if (l.model) {
-    var up = l.model.toUpperCase();
-    for (var i = 0; i < sel.options.length; i++) {
-      var t = sel.options[i].text.toUpperCase();
-      if (t.indexOf(up) !== -1 || up.indexOf((MODELS[i] ? '' : '')) !== -1) { /* match below via loop text */ }
-    }
-    for (var k = 0; k < sel.options.length; k++) {
-      if (sel.options[k].text.toUpperCase().indexOf(up.split('-')[0] + '-') !== -1 && sel.options[k].text.toUpperCase().indexOf(up) !== -1) { sel.selectedIndex = k; break; }
-      if (sel.options[k].value && sel.options[k].text.toUpperCase().indexOf(up) !== -1) { sel.selectedIndex = k; break; }
-    }
-  }
+  /* v3.86b: PO line ke po_no / date / due / priority bhi */
+  if (l.po_no) document.getElementById('f_pono').value = l.po_no;
+  if (l.order_date) document.getElementById('f_date').value = l.order_date;
+  if (l.due_date) document.getElementById('f_due').value = l.due_date;
+  document.getElementById('f_pri').value = (l.priority === 'urgent') ? 'urgent' : 'normal';
+  masterHitId = 0;
+  var hints86 = [];
+  [selectMasterModel(l), setParty(l), setMaterial(l)].forEach(function(m){ if (m) hints86.push(m); });
+  hint(hints86.join('  ·  '));
   autofill();
   scheduleDraft();
+}
+
+/* ---------- v3.86b: Size Master / Party / Material matching (kuch invent nahi) ---------- */
+var masterHitId = 0;
+function POnorm(sv){ return String(sv == null ? '' : sv).toUpperCase().replace(/[^A-Z0-9]/g, ''); }
+function hint(msg){
+  var h = document.getElementById('fHint');
+  if (!msg) { h.style.display = 'none'; return; }
+  h.textContent = msg; h.style.display = 'block';
+}
+function selectMasterModel(l){
+  var sel = document.getElementById('poModel');
+  sel.value = '';
+  if (!l.model) return 'MODEL PO me nahi mila — khud type/select karo (match hua to sizes auto)';
+  var nm = POnorm(l.model);
+  var hits = MODELS.filter(function(m){ return POnorm(m.model_code || m.name) === nm; });  /* EXACT: SCPL-19 vs SCPL-190 mix nahi */
+  if (!hits.length) {
+    return '"' + l.model + '" Size Master me EXACT nahi mila — X/Y/UPS khud bharo ya upar se master select karo';
+  }
+  var hit = hits[0];
+  if (hits.length > 1 && l.party) {
+    var bp = hits.filter(function(m){ return POnorm(m.party_name) === POnorm(l.party); });
+    if (bp.length) hit = bp[0];
+  }
+  sel.value = hit.id;
+  masterHitId = hit.id;
+  return 'MODEL Size Master se match: ' + (hit.model_code || hit.name) +
+       (hit.party_name ? ' · ' + hit.party_name : '') + ' — X/Y/UPS auto-fill';
+}
+function setParty(l){
+  if (!l.party) return '';
+  var sel = document.getElementById('f_party');
+  var np = POnorm(l.party);
+  for (var i = 1; i < sel.options.length; i++) {
+    if (POnorm(sel.options[i].text) === np) { sel.selectedIndex = i; return ''; }
+  }
+  var hits = [];
+  for (var k = 1; k < sel.options.length; k++) {
+    var ot = POnorm(sel.options[k].text);
+    if (ot && (np.indexOf(ot) !== -1 || ot.indexOf(np) !== -1)) hits.push(k);
+  }
+  if (hits.length === 1) { sel.selectedIndex = hits[0]; return ''; }
+  return 'Party "' + l.party + '" list me nahi mili — khud chuno';
+}
+function setMaterial(l){
+  if (!l.material) return '';
+  var sel = document.getElementById('f_mat');
+  var nm = POnorm(l.material);
+  var hits = [];
+  for (var i = 1; i < sel.options.length; i++) {
+    var ot = POnorm(sel.options[i].text);
+    if (ot && (ot.indexOf(nm) !== -1 || nm.indexOf(ot) !== -1)) hits.push(i);
+  }
+  if (hits.length === 1) { sel.selectedIndex = hits[0]; return ''; }   /* sirf EXACTLY ek match par */
+  return 'Material "' + l.material + '" inventory me clear match nahi — khud chuno (' + hits.length + ' possible)';
 }
 document.getElementById('poModel').addEventListener('change', autofill);
 
@@ -331,6 +457,8 @@ function saveLine(ev){
   if (SEL < 0) return;
   var fd = new FormData(document.getElementById('poForm'));
   if (dup) fd.append('dup_ok', '1');
+  fd.append('file_id', (LINES[SEL] && LINES[SEL].file_id) || (FILES[FILES.length - 1] && FILES[FILES.length - 1].file_id) || '');   /* v3.86b */
+  if (masterHitId) fd.set('model_id', masterHitId);   /* enhancer select reset kar de to bhi master pakka */
   var btn = document.getElementById('saveBtn'); btn.disabled = true;
   fetch('/api/po/save?token=' + encodeURIComponent(T()), { method: 'POST', body: fd })
     .then(function(r){ return r.json(); })

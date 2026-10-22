@@ -74,3 +74,11 @@ Vercel par data persist karne ke liye **Turso (free cloud SQLite)** use hota hai
 - `circuit.db` auto-create hota hai demo data ke saath (delete karke reset).
 - Login JS-based + token-auth hai — preview/iframe environments mein bhi kaam karta hai.
 - Topbar: Search (Ctrl+K), Create quick-menu, Print, Download (CSV export of live tracking).
+
+## PO se Job Card — PCBFlow parser (v3.86b)
+
+- `static/po.js` = PCBFlow ka PO parser — global `PCBFlowPO.parsePoText(text, masters)`. `/po` page isko use karta hai.
+- Upload par server PDF ka text bhejta hai (pypdf, max 30k chars); scanned PDF / WhatsApp photo par **OCR browser me** hota hai (pdf.js page 1–2 canvas + tesseract.js PSM 6) — server par koi OCR nahi (Vercel-safe).
+- Parse rules: PO me jo likha hai wahi — **kabhi invent nahi**. N printed S.No. = N job cards; sparse serials (1,7,8,12) → 12 slots pad; same model twice = two cards; qty×rate/GST mismatch = sirf warning.
+- PO number PDF me se guess hota hai (`PO26-27366`, `PO-02002` style) — WhatsApp photo par bhi. Duplicate PO = **sirf warning** (`/api/po/dups`), save kabhi block nahi.
+- MODEL Size Master se **EXACT normalized match** (SCPL-19 vs SCPL-190 mix nahi); party/material na mile to field khaali + hint (#fHint).

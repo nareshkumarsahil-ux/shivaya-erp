@@ -4043,6 +4043,54 @@ def _po_parse_text(text):
     return rows
 
 
+def _po_key(s):
+    """PO number compare-key: case/punctuation free. WHATSAPP = khaali (duplicate nahi maana)."""
+    k = re.sub(r"[^A-Z0-9]", "", (s or "").upper())
+    return "" if k in ("", "WHATSAPP") else k
+
+
+def _po_guess_no(text):
+    """PO text se PO number guess - sirf clear patterns (PO26-27366, PO-02002, Purchase Order #...)."""
+    t = text or ""
+    pats = [r"\bPO\d{2}-\d{2,}(?:/\d+)?\b",
+            r"\bPO-\d{3,}\b",
+            r"\bP\.?O\.?\s*#\s*([A-Z0-9][A-Z0-9\-/]*[A-Z0-9])",
+            r"Purchase Order\s*(?:No\.?|Number)?\s*[:#]\s*([A-Z0-9\-/]*[A-Z][A-Z0-9\-/]*)"]
+    for pat in pats:
+        m = re.search(pat, t, re.I)
+        if m:
+            g = (m.group(1) if m.groups() else m.group(0)).strip().upper()
+            if _po_key(g):
+                return g
+    return ""
+
+
+def _po_find_dups(po_no):
+    """Same PO ke purane orders (order_no/product/qty). WHATSAPP duplicate nahi maana."""
+    k = _po_key(po_no)
+    if not k:
+        return []
+    out = []
+    for r in db.query("SELECT order_no, product, qty, po_no FROM orders "
+                      "WHERE po_no IS NOT NULL AND po_no != ''"):
+        if _po_key(r["po_no"]) == k:
+            out.append({"order_no": r["order_no"], "product": r["product"], "qty": r["qty"]})
+            if len(out) >= 10:
+                break
+    return out
+
+
+@app.route("/api/po/dups")
+@login_required
+@admin_required
+def po_dups():
+    """v3.86b - PO number ke purane orders (warning ke liye; save kabhi block nahi hota)."""
+    _po_ensure()
+    po_no = request.args.get("po_no") or ""
+    dups = _po_find_dups(po_no)
+    return jsonify(ok=True, po_no=po_no, dups=dups, dup=bool(dups))
+
+
 @app.route("/po")
 @login_required
 @admin_required
@@ -4052,7 +4100,8 @@ def po_entry():
     parties = [p["name"] for p in db.query("SELECT name FROM parties ORDER BY name")]
     models = [dict(m) for m in db.query(
         "SELECT id, name, model_code, pcb_len, pcb_w, panel_len, panel_w, pcs_panel, "
-        "cutting_len, cutting_w, sheet_len, sheet_w, sheet_thickness FROM product_models ORDER BY name")]
+        "cutting_len, cutting_w, sheet_len, sheet_w, sheet_thickness, party_name "
+        "FROM product_models ORDER BY name")]
     inv = [{"id": i["id"], "name": i["name"], "unit": i["unit"]} for i in db.query(
         "SELECT id, name, unit FROM inventory ORDER BY name")]
     saved = db.query(
@@ -4098,11 +4147,16 @@ def po_upload():
             needs_ocr = True  # scanned-PDF: browser OCR / khud lines bharo
     else:
         needs_ocr = True
+    if po_no.upper() == "WHATSAPP" and text.strip():   # v3.86b: PDF me PO number mila to wahi folder naam
+        g = _po_guess_no(text)
+        if g:
+            po_no = g
     fid = db.execute("INSERT INTO po_files (po_no, filename, mime, data64, uploaded_on) VALUES (?,?,?,?,?)",
                      (po_no, fn, mime, base64.b64encode(blob).decode("ascii"), _today_ist().isoformat()))
     lines = _po_parse_text(text)
+    dups = _po_find_dups(po_no)
     return jsonify(ok=True, file_id=fid, po_no=po_no, filename=fn, mime=mime, lines=lines,
-                   needs_ocr=needs_ocr, dup=po_no.upper() != "WHATSAPP")
+                   needs_ocr=needs_ocr, text=text[:30000], dups=dups, dup=bool(dups))
 
 
 @app.route("/api/po/parse", methods=["POST"])
@@ -4153,6 +4207,15 @@ def po_save_line():
         return jsonify(ok=False, error="Quantity (PCS) zaroori hai."), 400
     if po_sno <= 0:
         return jsonify(ok=False, error="PO S.No. likho."), 400
+    try:
+        fid = int(f.get("file_id") or 0)
+    except (TypeError, ValueError):
+        fid = 0
+    if fid and po_no.upper() != "WHATSAPP":   # v3.86b: file folder = asli PO no (verify window ko file mile)
+        try:
+            db.execute("UPDATE po_files SET po_no=? WHERE id=?", (po_no, fid))
+        except Exception:
+            pass
     mid = int(f.get("model_id") or 0)
     pm = db.query("SELECT * FROM product_models WHERE id=?", (mid,), one=True) if mid else None
     tmodel = (f.get("model") or "").strip()
@@ -4283,7 +4346,8 @@ def po_verify(oid):
               "url": (f"/api/model/design/{pm['id']}") if pm else ""}
     models = [dict(m) for m in db.query(
         "SELECT id, name, model_code, pcb_len, pcb_w, panel_len, panel_w, pcs_panel, "
-        "cutting_len, cutting_w, sheet_len, sheet_w, sheet_thickness FROM product_models ORDER BY name")]
+        "cutting_len, cutting_w, sheet_len, sheet_w, sheet_thickness, party_name "
+        "FROM product_models ORDER BY name")]
     in_process = (order["status"] == "running") or bool(order["current_process"])
     return render_template("po_verify.html", active="orders", order=order, jc=jc, mix79=mix85,
                            pfile=pfile, design=design, in_process=in_process,
