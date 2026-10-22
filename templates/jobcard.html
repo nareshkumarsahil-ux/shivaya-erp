@@ -109,9 +109,9 @@
     <div class="ps-cell"><span class="ps-lbl">CNC MARGIN</span><span class="ps-val" id="pr_cnc">{% if jc.cnc_margin_x or jc.cnc_margin_y %}{{ jc.cnc_margin_x|gfmt }}x{{ jc.cnc_margin_y|gfmt }}mm{% elif jc.pcb_gap %}GAP {{ jc.pcb_gap|gfmt }}mm{% else %}—{% endif %}{% if jc.pcb_gap and (jc.cnc_margin_x or jc.cnc_margin_y) %} · GAP {{ jc.pcb_gap|gfmt }}mm{% endif %}</span></div>
     <div class="ps-cell"><span class="ps-lbl">PCB IN ONE PANEL</span><span class="ps-val" id="pr_pcs_panel">{% if jc.pcs_panel %}{{ jc.pcs_panel }}{% else %}—{% endif %}</span></div>
 
-    <div class="ps-cell"><span class="ps-lbl">X CUTTING SIZE</span><span class="ps-val" id="pr_xcut">{% if jc.x_size %}{% set cgx = (jc.x_size + 2 * (jc.cnc_margin_x or 0)) %}L-{{ cgx|gfmt }}({{ jc.sheet_len|gfmt }}){% if not mix79 %}×{{ jc.x_qty }}{% endif %}{% else %}—{% endif %}</span>{% if mix79 %}<div class="ps-mix">MIXED: {{ mix79.xn }} row × {{ mix79.xp }} = {{ mix79.xt }}</div>{% endif %}</div>
-    <div class="ps-cell"><span class="ps-lbl">Y CUTTING SIZE</span><span class="ps-val" id="pr_ycut">{% if jc.y_size %}{% set cgy = (jc.y_size + 2 * (jc.cnc_margin_y or 0)) %}W-{{ cgy|gfmt }}({{ jc.sheet_w|gfmt }}){% if not mix79 %}×{{ jc.y_qty }}{% endif %}{% else %}—{% endif %}</span>{% if mix79 %}<div class="ps-mix">MIXED: {{ mix79.yn }} row × {{ mix79.yp }} = {{ mix79.yt }}</div>{% endif %}</div>
-    <div class="ps-cell"><span class="ps-lbl">PCB IN ONE SHEET</span><span class="ps-val" id="pr_pcb_sheet">{% if jc.pcs_panel and jc.panels_per_sheet %}{{ jc.pcs_panel * jc.panels_per_sheet }}{% else %}—{% endif %}</span>{% if mix79 %}<div class="ps-mix">{{ mix79.xn }}×{{ mix79.xp }} + {{ mix79.yn }}×{{ mix79.yp }} = {{ mix79.total }} PANELS/SHEET (MIXED)</div>{% endif %}</div>
+    <div class="ps-cell"><span class="ps-lbl">X CUTTING SIZE</span><span class="ps-val" id="pr_xcut">{% if jc.x_size %}{% set cgx = (jc.x_size + 2 * (jc.cnc_margin_x or 0)) %}{{ cgx|gfmt }} ({{ jc.sheet_len|gfmt }}) {% if not mix79 %}×{{ jc.x_qty }}{% endif %}{% if jc.pcb_gap %} · GAP {{ jc.pcb_gap|gfmt }}mm{% endif %}{% else %}—{% endif %}</span>{% if mix79 %}<div class="ps-mix jcl-mix">MIXED: {{ mix79.xn }} row × {{ mix79.xp }} = {{ mix79.xt }}</div>{% endif %}</div>
+    <div class="ps-cell"><span class="ps-lbl">Y CUTTING SIZE</span><span class="ps-val" id="pr_ycut">{% if jc.y_size %}{% set cgy = (jc.y_size + 2 * (jc.cnc_margin_y or 0)) %}{{ cgy|gfmt }} ({{ jc.sheet_w|gfmt }}) {% if not mix79 %}×{{ jc.y_qty }}{% endif %}{% if jc.pcb_gap %} · GAP {{ jc.pcb_gap|gfmt }}mm{% endif %}{% else %}—{% endif %}</span>{% if mix79 %}<div class="ps-mix jcl-mix">MIXED: {{ mix79.yn }} row × {{ mix79.yp }} = {{ mix79.yt }}</div>{% endif %}</div>
+    <div class="ps-cell"><span class="ps-lbl">PCB IN ONE SHEET</span><span class="ps-val" id="pr_pcb_sheet">{% if jc.pcs_panel and jc.panels_per_sheet %}{{ jc.pcs_panel * jc.panels_per_sheet }}{% else %}—{% endif %}</span>{% if mix79 %}<div class="ps-mix jcl-mix">{{ mix79.xn }}×{{ mix79.xp }} + {{ mix79.yn }}×{{ mix79.yp }} = {{ mix79.total }} PANELS/SHEET (MIXED)</div>{% endif %}</div>
     <div class="ps-cell"><span class="ps-lbl">NO. OF SHEET</span><span class="ps-val" id="pr_sheets">{% if jc.sheets %}{{ jc.sheets }} SHEET{% else %}—{% endif %}</span></div>
 
     <div class="ps-cell"><span class="ps-lbl">SHEET MATERIAL</span><span class="ps-val" id="pr_sheet_material">{{ jc.sheet_material|dash }}{% if jc.sheet_thickness %} <span style="font-weight:800;color:#1d4ed8">({{ jc.sheet_thickness }})</span>{% endif %}</span></div>
@@ -751,7 +751,7 @@ function delProcRow(ev, oid, pid, name){
 
 <script>
 /* ---- orientation ---- */
-var orient = 'portrait';
+var orient = 'landscape';  /* v3.83 \u2014 naya job card format chauda (landscape) */
 function applyOrient(){
   var sheet = document.getElementById('printSheet');
   sheet.className = 'print-sheet ' + orient;
@@ -792,7 +792,7 @@ function printJobcard(){
 /* ---- live sync: form -> preview ---- */
 function val(id){ var el = document.getElementById(id); return el ? (el.value || '') : ''; }
 function fmt(v){ v = parseFloat(v); return isNaN(v) ? '0' : (Math.round(v*100)/100).toString(); }
-function set(id, v){ var el = document.getElementById(id); if (el) el.textContent = v; }
+function set(id, v){ var els = document.querySelectorAll('[id="' + id + '"]'); for (var _i = 0; _i < els.length; _i++) els[_i].textContent = v; }  /* v3.83 — classic + naya print sheet dono bharte hai */
 function inr(v){ v = parseFloat(v)||0; return '₹' + v.toLocaleString('en-IN'); }
 function syncPreview(){
   var pm = val('jc_party_model'), mo = val('jc_model'), qp = parseInt(val('jc_qty_pcs'))||0;
@@ -813,14 +813,15 @@ function syncPreview(){
   /* CUTTING SIZE = gang panel + 2×CNC margin (CNC margin add karke jo bana) */
   var _cgx = (parseFloat(val('jc_x_size')) || 0) > 0 ? (parseFloat(val('jc_x_size')) + 2 * (parseFloat(val('jc_cnc_margin_x')) || 0)) : (parseFloat(val('jc_panel_x')) || 0);
   var _cgy = (parseFloat(val('jc_y_size')) || 0) > 0 ? (parseFloat(val('jc_y_size')) + 2 * (parseFloat(val('jc_cnc_margin_y')) || 0)) : (parseFloat(val('jc_panel_y')) || 0);
-  set('pr_xcut', 'L-' + fmt(String(_cgx)) + '(' + fmt(val('jc_sheet_len')) + ')×' + (val('jc_x_qty')||'0'));
-  set('pr_ycut', 'W-' + fmt(String(_cgy)) + '(' + fmt(val('jc_sheet_w')) + ')×' + (val('jc_y_qty')||'0'));
+  set('pr_xcut', fmt(String(_cgx)) + ' (' + fmt(val('jc_sheet_len')) + ') \u00d7 ' + (val('jc_x_qty')||'0'));
+  set('pr_ycut', fmt(String(_cgy)) + ' (' + fmt(val('jc_sheet_w')) + ') \u00d7 ' + (val('jc_y_qty')||'0'));
   set('pr_pcb_sheet', (parseInt(val('jc_pcs_panel'))||0) * (parseInt(val('jc_panels_per_sheet'))||0));
   set('pr_sheets', (val('jc_sheets')||'0') + ' SHEET');
   set('pr_sheet_material', (val('jc_sheet_material') || '—') + (val('jc_sheet_thickness') ? ' (' + val('jc_sheet_thickness') + ')' : ''));
   /* BOARD SIDE — SINGLE SIDE / DOUBLE SIDE preview me bhi */
   var _bsEl = document.getElementById('jc_board_side');
   set('pr_board_side', (_bsEl && _bsEl.value) ? _bsEl.value : '—');
+  set('pr_vg', val('jc_v_grooving') || '—');  /* v3.83 \u2014 V-GROOVING preview me bhi */
   var instrEl = document.getElementById('pr_instructions');
   if (instrEl) {
     var iv = val('jc_instructions');

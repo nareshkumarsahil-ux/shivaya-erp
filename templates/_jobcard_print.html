@@ -1,117 +1,190 @@
-{# Shared job card print sheet markup — used by jobcard.html preview and jobcard_print.html download #}
-<div class="print-sheet" id="printSheet">
-  <div class="ps-head">
-    <div class="ps-company">
-      <div class="ps-logo">SC</div>
+{# v3.83 — JOB CARD naya format (sample photo ke hisaab se): blue professional boxes +
+   PRODUCTION ROUTING / JOB TRACKING (14 standard operations) + shortage/handover/remarks.
+   Shared: jobcard.html (live preview, JS pr_* IDs se bharta hai) + jobcard_print.html (download).
+   PURANE pr_* IDs yahin rakhe hai — jobcard.html ka syncPreview() bina badle chale. #}
+<style>
+  /* v3.83 — job card blue format (self-contained: dono wrappers me chale) */
+  @page { size: A4 landscape; margin: 8mm; }
+  .jcl-wrap{background:#fff;color:#111827;font-family:'Segoe UI',Arial,sans-serif;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .jcl-top{display:grid;grid-template-columns:250px 250px 1fr 330px;gap:6px;margin-bottom:6px}
+  .jcl-box{border:1.5px solid #1e3a8a;border-radius:6px;overflow:hidden;background:#fff}
+  .jcl-boxhead{background:#1e3a8a;color:#fff;font-weight:800;font-size:11px;letter-spacing:.4px;padding:4px 8px;display:flex;align-items:center;gap:5px}
+  .jcl-row{display:flex;border-top:1px solid #bfdbfe}
+  .jcl-row:first-child{border-top:none}
+  .jcl-lbl{flex:0 0 86px;background:#eaf1fb;color:#1e3a8a;font-size:9.5px;font-weight:800;padding:5px 6px;display:flex;align-items:center;gap:3px;line-height:1.15}
+  .jcl-val{flex:1;padding:5px 7px;font-size:11.5px;font-weight:700;display:flex;align-items:center}
+  .jcl-det{display:grid;grid-template-columns:78px 1fr 1fr;min-height:96px}
+  .jcl-rs{background:#1e3a8a;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:11px;text-align:center;padding:4px;line-height:1.2}
+  .jcl-detgrid{display:grid;grid-template-rows:repeat(3,1fr);flex:1}
+  .jcl-detgrid .jcl-row{border-left:1px solid #bfdbfe}
+  .jcl-3col{display:grid;grid-template-columns:1fr 1fr 92px}
+  .jcl-3col .jcl-cell{border-left:1px solid #bfdbfe;padding:5px 6px;font-size:11.5px;font-weight:800;display:flex;align-items:center;justify-content:center;text-align:center}
+  .jcl-3col .jcl-cell:first-child{border-left:none}
+  .jcl-banner{background:#1e3a8a;color:#fff;font-weight:800;font-size:12.5px;letter-spacing:.5px;padding:5px 10px;border-radius:5px;display:flex;align-items:center;gap:10px;margin:6px 0}
+  .jcl-banner .jcl-hint{font-size:10px;font-weight:700;color:#bfdbfe;font-style:italic;margin-left:auto}
+  table.jcl-route{width:100%;border-collapse:collapse;font-size:10px}
+  .jcl-route th{background:#1e3a8a;color:#fff;font-size:8.8px;letter-spacing:.3px;padding:4px 3px;border:1px solid #1e3a8a;text-transform:uppercase}
+  .jcl-route td{border:1px solid #93c5fd;padding:3.5px 4px;height:22px}
+  .jcl-route tr:nth-child(even) td{background:#f4f8ff}
+  .jcl-op{font-weight:800;color:#1e3a8a;font-size:9.6px;white-space:nowrap}
+  .jcl-sr{font-weight:800;color:#3730a3;text-align:center}
+  .jcl-bottom{display:grid;grid-template-columns:1.1fr 1.2fr 1.2fr;gap:6px;margin-top:6px}
+  .jcl-foot{display:flex;gap:24px;margin-top:10px;font-size:10.5px;font-weight:700;color:#1e3a8a}
+  .jcl-foot .jcl-line{flex:1;border-bottom:1.5px solid #64748b;min-height:16px;margin-left:4px}
+  .jcl-mono{font-family:ui-monospace,Consolas,monospace}
+  .jcl-mix{font-size:9px;color:#b3401c;font-weight:800}
+  @media print{ .jcl-wrap{box-shadow:none} }
+</style>
+<div class="jcl-wrap" id="printSheet">
+  <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:2.5px solid #1e3a8a;padding-bottom:6px;margin-bottom:6px">
+    <div style="display:flex;align-items:center;gap:8px">
+      <div style="width:34px;height:34px;border-radius:8px;background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#192338;font-weight:800;display:flex;align-items:center;justify-content:center;font-size:13px">SC</div>
       <div>
-        <div class="ps-co">SHIVAYA CIRCUIT PVT. LTD.</div>
-        <div class="ps-tag">PCB Manufacturing · Job Card</div>
+        <div style="font-size:15px;font-weight:800;color:#192338;letter-spacing:.4px">SHIVAYA CIRCUIT PVT. LTD.</div>
+        <div style="font-size:9.5px;color:#8a8f98">PCB Manufacturing · Production Job Card</div>
       </div>
     </div>
-    <div class="ps-jc">JOB CARD <b>#{{ order.order_no }}</b></div>
+    <div style="font-size:12.5px;font-weight:800;color:#1e3a8a;border:2px solid #1e3a8a;padding:4px 12px;border-radius:7px">JOB CARD <b>#{{ order.order_no }}</b></div>
   </div>
 
-  <div class="ps-grid">
-    <div class="ps-cell"><span class="ps-lbl">ORDER NO.</span><span class="ps-val mono" id="pr_order_no">{{ order.order_no }}</span></div>
-    <div class="ps-cell"><span class="ps-lbl">MODEL</span><span class="ps-val" id="pr_model">{{ jc.model|dash }}</span></div>
-    <div class="ps-cell"><span class="ps-lbl">PARTY MODEL</span><span class="ps-val" id="pr_party_model">{{ jc.party_model|dash }}</span></div>
-    <div class="ps-cell"><span class="ps-lbl">DATE</span><span class="ps-val" id="pr_odate">{{ jc.odate|dash }}</span></div>
-
-    <div class="ps-cell"><span class="ps-lbl">PARTY</span><span class="ps-val" id="pr_party">{{ order.party|dash }}</span></div>
-    <div class="ps-cell"><span class="ps-lbl">ORDER VIA</span><span class="ps-val" id="pr_order_via">{{ jc.order_via|dash }}{% if jc.odate %} ({{ jc.odate }}){% endif %}</span></div>
-    <div class="ps-cell"><span class="ps-lbl">PARTY PO NO.</span><span class="ps-val" id="pr_po_no">{% if jc.po_no %}{{ jc.po_no }}{% else %}—{% endif %}</span></div>
-    <div class="ps-cell"><span class="ps-lbl">DELIVERY</span><span class="ps-val" id="pr_exp_delivery">{{ jc.exp_delivery|dash }}</span></div>
-    <div class="ps-cell"><span class="ps-lbl">CREATED BY</span><span class="ps-val" id="pr_created_by">{{ jc.created_by|dash }}</span></div>
-
-    <div class="ps-cell"><span class="ps-lbl">ACTUAL PCB SIZE</span><span class="ps-val" id="pr_actual">{% if jc.actual_pcb_x %}{{ jc.actual_pcb_x|gfmt }}×{{ jc.actual_pcb_y|gfmt }}mm{% else %}—{% endif %}</span></div>
-    <div class="ps-cell"><span class="ps-lbl">ACTUAL PANEL SIZE</span><span class="ps-val" id="pr_panel">{% set pgx = jc.x_size if jc.x_size else jc.panel_x %}{% set pgy = jc.y_size if jc.y_size else jc.panel_y %}{% if pgx %}{{ pgx|gfmt }}x{{ pgy|gfmt }}mm{% else %}—{% endif %}</span></div>
-    <div class="ps-cell"><span class="ps-lbl">CNC MARGIN</span><span class="ps-val" id="pr_cnc">{% if jc.cnc_margin_x or jc.cnc_margin_y %}{{ jc.cnc_margin_x|gfmt }}x{{ jc.cnc_margin_y|gfmt }}mm{% elif jc.pcb_gap %}GAP {{ jc.pcb_gap|gfmt }}mm{% else %}—{% endif %}{% if jc.pcb_gap and (jc.cnc_margin_x or jc.cnc_margin_y) %} · GAP {{ jc.pcb_gap|gfmt }}mm{% endif %}</span></div>
-    <div class="ps-cell"><span class="ps-lbl">PCB IN ONE PANEL</span><span class="ps-val" id="pr_pcs_panel">{% if jc.pcs_panel %}{{ jc.pcs_panel }}{% else %}—{% endif %}</span></div>
-
-    <div class="ps-cell"><span class="ps-lbl">X CUTTING SIZE</span><span class="ps-val" id="pr_xcut">{% if jc.x_size %}{% set cgx = (jc.x_size + 2 * (jc.cnc_margin_x or 0)) %}L-{{ cgx|gfmt }}({{ jc.sheet_len|gfmt }}){% if not mix79 %}×{{ jc.x_qty }}{% endif %}{% else %}—{% endif %}</span>{% if mix79 %}<div class="ps-mix">MIXED: {{ mix79.xn }} row × {{ mix79.xp }} = {{ mix79.xt }}</div>{% endif %}</div>
-    <div class="ps-cell"><span class="ps-lbl">Y CUTTING SIZE</span><span class="ps-val" id="pr_ycut">{% if jc.y_size %}{% set cgy = (jc.y_size + 2 * (jc.cnc_margin_y or 0)) %}W-{{ cgy|gfmt }}({{ jc.sheet_w|gfmt }}){% if not mix79 %}×{{ jc.y_qty }}{% endif %}{% else %}—{% endif %}</span>{% if mix79 %}<div class="ps-mix">MIXED: {{ mix79.yn }} row × {{ mix79.yp }} = {{ mix79.yt }}</div>{% endif %}</div>
-    <div class="ps-cell"><span class="ps-lbl">PCB IN ONE SHEET</span><span class="ps-val" id="pr_pcb_sheet">{% if jc.pcs_panel and jc.panels_per_sheet %}{{ jc.pcs_panel * jc.panels_per_sheet }}{% else %}—{% endif %}</span>{% if mix79 %}<div class="ps-mix">{{ mix79.xn }}×{{ mix79.xp }} + {{ mix79.yn }}×{{ mix79.yp }} = {{ mix79.total }} PANELS/SHEET (MIXED)</div>{% endif %}</div>
-    <div class="ps-cell"><span class="ps-lbl">NO. OF SHEET</span><span class="ps-val" id="pr_sheets">{% if jc.sheets %}{{ jc.sheets }} SHEET{% else %}—{% endif %}</span></div>
-
-    <div class="ps-cell"><span class="ps-lbl">SHEET MATERIAL</span><span class="ps-val" id="pr_sheet_material">{{ jc.sheet_material|dash }}{% if jc.sheet_thickness %} <span style="font-weight:800;color:#1d4ed8">({{ jc.sheet_thickness }})</span>{% endif %}</span></div>
-    <div class="ps-cell"><span class="ps-lbl">BOARD SIDE</span><span class="ps-val" id="pr_board_side" style="font-weight:800;color:#1d4ed8">{% set _bs = (jc.board_side or '').strip().upper() %}{% if _bs %}{{ _bs }}{% elif 'SINGLE' in (jc.board_type or '')|upper %}SINGLE SIDE{% elif 'DOUBLE' in (jc.board_type or '')|upper %}DOUBLE SIDE{% else %}—{% endif %}</span></div>
-    <div class="ps-cell"><span class="ps-lbl">COPPER</span><span class="ps-val" id="pr_copper">{{ jc.copper_finish|dash }}</span></div>
-    <div class="ps-cell"><span class="ps-lbl">LEGEND</span><span class="ps-val" id="pr_legend">{{ jc.legend_printing|dash }}</span></div>
-    <div class="ps-cell"><span class="ps-lbl">FINISH</span><span class="ps-val" id="pr_finish">{{ jc.finish|dash }}</span></div>
-
-    <div class="ps-cell"><span class="ps-lbl">MASKING</span><span class="ps-val" id="pr_masking">{{ jc.masking|dash }}</span></div>
-    <div class="ps-cell"><span class="ps-lbl">TYPE</span><span class="ps-val" id="pr_type">{{ jc.pcb_type|dash }}</span></div>
-    <div class="ps-cell"><span class="ps-lbl">QTY OF PANEL</span><span class="ps-val" id="pr_qty_panel">{% if jc.qty_panel %}{{ jc.qty_panel }} PANEL{% else %}—{% endif %}</span></div>
-    <div class="ps-cell"><span class="ps-lbl">NO OF PCB</span><span class="ps-val" id="pr_qty_pcs">{{ order.qty }} PCS</span></div>
-
-    <div class="ps-cell"><span class="ps-lbl">PRICE (₹)/PC</span><span class="ps-val" id="pr_price">{% if jc.price %}{{ jc.price|inr }}{% else %}—{% endif %}</span></div>
-    <div class="ps-cell"><span class="ps-lbl">RATE/SQ.INCH</span><span class="ps-val" id="pr_rs_pcb">{% if jc.rs_pcb %}{{ jc.rs_pcb|gfmt }}{% else %}—{% endif %}</span></div>
-    <div class="ps-cell"><span class="ps-lbl">PRIORITY</span><span class="ps-val" id="pr_priority" style="font-weight:800;color:{{'#b45309' if order.priority=='urgent' else 'inherit'}}">{{ order.priority|upper }}</span></div>
-    <div class="ps-cell"><span class="ps-lbl">CHECKED BY</span><span class="ps-val" id="pr_checked_by">{{ jc.checked_by|dash }}</span></div>
+  <div class="jcl-top">
+    <!-- BOX 1: Date / Job No. / Model -->
+    <div class="jcl-box">
+      <div class="jcl-row"><span class="jcl-lbl">📅 Date</span><span class="jcl-val" id="pr_odate">{{ jc.odate|dash }}</span></div>
+      <div class="jcl-row"><span class="jcl-lbl">💼 Job No.</span><span class="jcl-val jcl-mono">{{ order.order_no }}</span></div>
+      <div class="jcl-row"><span class="jcl-lbl">📦 Model</span><span class="jcl-val" id="pr_model">{{ jc.model|dash }}</span></div>
+    </div>
+    <!-- BOX 2: What's App / Party / Production -->
+    <div class="jcl-box">
+      <div class="jcl-row"><span class="jcl-lbl">📞 What's App{% if jc.odate %} ({{ jc.odate[8:10] }}-{{ jc.odate[5:7] }}-{{ jc.odate[:4] }}){% endif %}</span><span class="jcl-val" id="pr_order_via">{{ jc.order_via|dash }}</span></div>
+      <div class="jcl-row"><span class="jcl-lbl">🏢 Party / Customer</span><span class="jcl-val" id="pr_party">{{ order.party|dash }}</span></div>
+      <div class="jcl-row"><span class="jcl-lbl">🏭 PRODUCTION</span><span class="jcl-val" id="pr_party_model">{{ jc.party_model|dash }}</span></div>
+    </div>
+    <!-- BOX 3: JOB CARD DETAILS -->
+    <div class="jcl-box">
+      <div class="jcl-boxhead">📋 JOB CARD DETAILS</div>
+      <div class="jcl-det">
+        <div class="jcl-rs">{% if jc.rs_pcb %}{{ jc.rs_pcb|gfmt }}<br>RS/PCB{% else %}RATE<br>RS/PCB{% endif %}</div>
+        <div class="jcl-detgrid">
+          <div class="jcl-row"><span class="jcl-lbl">PCS/PANEL</span><span class="jcl-val" id="pr_pcs_panel">{% if jc.pcs_panel %}{{ jc.pcs_panel }}{% else %}—{% endif %}</span></div>
+          <div class="jcl-row"><span class="jcl-lbl">Panel Size X (mm)</span><span class="jcl-val" id="pr_xcut">{% if jc.x_size %}{% set cgx = (jc.x_size + 2 * (jc.cnc_margin_x or 0)) %}{{ cgx|gfmt }} ({{ jc.sheet_len|gfmt }}) {% if mix79 %}<span class="jcl-mix">MIXED: {{ mix79.xn }} row × {{ mix79.xp }} = {{ mix79.xt }}</span>{% else %}×{{ jc.x_qty }}{% endif %}{% if jc.pcb_gap %} · GAP {{ jc.pcb_gap|gfmt }}mm{% endif %}{% else %}—{% endif %}</span></div>
+          <div class="jcl-row"><span class="jcl-lbl">PCB Size Y (mm)</span><span class="jcl-val" id="pr_ycut">{% if jc.y_size %}{% set cgy = (jc.y_size + 2 * (jc.cnc_margin_y or 0)) %}{{ cgy|gfmt }} ({{ jc.sheet_w|gfmt }}) {% if mix79 %}<span class="jcl-mix">MIXED: {{ mix79.yn }} row × {{ mix79.yp }} = {{ mix79.yt }}</span>{% else %}×{{ jc.y_qty }}{% endif %}{% if jc.pcb_gap %} · GAP {{ jc.pcb_gap|gfmt }}mm{% endif %}{% else %}—{% endif %}</span></div>
+        </div>
+        <div class="jcl-detgrid">
+          <div class="jcl-row"><span class="jcl-lbl">TOTAL SHEET</span><span class="jcl-val" id="pr_sheets">{% if jc.sheets %}{{ jc.sheets }}{% else %}—{% endif %}</span></div>
+          <div class="jcl-row"><span class="jcl-lbl">TOTAL PANEL</span><span class="jcl-val" id="pr_qty_panel">{% if jc.qty_panel %}{{ jc.qty_panel }}{% else %}—{% endif %}</span></div>
+          <div class="jcl-row"><span class="jcl-lbl">TOTAL PCB</span><span class="jcl-val" id="pr_pcb_sheet">{% if mix79 %}{{ mix79.total }} PANELS/SHEET (MIXED){% elif jc.pcs_panel and jc.panels_per_sheet %}{{ jc.pcs_panel * jc.panels_per_sheet }}{% else %}—{% endif %}</span></div>
+        </div>
+      </div>
+    </div>
+    <!-- BOX 4: Sheet / Panel / V-Grooving / Created-Checked -->
+    <div class="jcl-box">
+      <div class="jcl-row jcl-3col"><span class="jcl-cell" style="justify-content:space-between"><span style="font-size:9px;color:#1e3a8a;font-weight:800">Sheet (mm)</span><b>{{ jc.sheet_len|gfmt }}</b></span><span class="jcl-cell"><b>{{ jc.sheet_w|gfmt }}</b></span><span class="jcl-cell" style="background:#eaf1fb" id="pr_sheet_material">{{ jc.sheet_material|dash }}{% if jc.sheet_thickness %} <b style="color:#1d4ed8">{{ jc.sheet_thickness }}</b>{% endif %}</span></div>
+      <div class="jcl-row jcl-3col"><span class="jcl-cell" style="justify-content:space-between"><span style="font-size:9px;color:#1e3a8a;font-weight:800">ACTUAL PANEL SIZE</span><b id="pr_panel">{% set pgx = jc.x_size if jc.x_size else jc.panel_x %}{% set pgy = jc.y_size if jc.y_size else jc.panel_y %}{% if pgx %}{{ pgx|gfmt }}x{{ pgy|gfmt }}mm{% else %}—{% endif %}</b></span><span class="jcl-cell"><b>{% if jc.actual_pcb_x %}{{ jc.actual_pcb_x|gfmt }} × {{ jc.actual_pcb_y|gfmt }}{% else %}—{% endif %}</b></span><span class="jcl-cell" style="background:#eaf1fb">{% if jc.pcs_panel and jc.panels_per_sheet %}{{ jc.pcs_panel * jc.panels_per_sheet }} PCS{% else %}—{% endif %}</span></div>
+      <div class="jcl-row"><span class="jcl-lbl">📦 V-GROOVING</span><span class="jcl-val" style="justify-content:space-between"><span style="font-size:9px;color:#1e3a8a;font-weight:800">X Size / Length (mm)</span><b id="pr_vg">{{ jc.v_grooving|dash }}</b></span></div>
+      <div class="jcl-row"><span class="jcl-lbl" style="flex-basis:50%">CREATED BY</span><span class="jcl-val" id="pr_created_by" style="border-left:1px solid #bfdbfe">{{ jc.created_by|dash }}</span></div>
+      <div class="jcl-row"><span class="jcl-lbl" style="flex-basis:50%">CHECKED BY</span><span class="jcl-val" id="pr_checked_by" style="border-left:1px solid #bfdbfe">{{ jc.checked_by|dash }}</span></div>
+    </div>
   </div>
 
   {% if dispatch %}
-  <div class="ps-dispatch">🚚 DISPATCH: {{ dispatch.mode|upper }} · {{ dispatch.ddate }} {{ dispatch.dtime }} · by {{ dispatch.dispatched_by }}{% if dispatch.details %} · {{ dispatch.details }}{% endif %}</div>
+  <div style="border:1.5px solid #1e3a8a;background:#eaf1fb;border-radius:5px;padding:4px 8px;font-size:10.5px;font-weight:700;color:#1e3a8a;margin-bottom:5px">🚚 DISPATCH: {{ dispatch.mode|upper }} · {{ dispatch.ddate }} {{ dispatch.dtime }} · by {{ dispatch.dispatched_by }}{% if dispatch.details %} · {{ dispatch.details }}{% endif %}</div>
   {% endif %}
-  <table class="ps-proc">
-    <thead>
-      <tr>
-        <th style="width:120px">PROCESS</th>
-        <th>DATE</th><th>TIME</th><th>NAME</th>
-        <th>DATE</th><th>TIME</th><th>NAME</th>
-        <th style="width:70px">TOTAL TIME</th>
-        <th style="width:70px">QTY</th>
-      </tr>
-    </thead>
+
+  <div class="jcl-banner">📋 PRODUCTION ROUTING / JOB TRACKING <span style="font-style:italic;font-size:10px;color:#bfdbfe">///</span> <span class="jcl-hint">ENTER ACTUAL VALUES ONLY</span></div>
+  {% set _ops = [
+    ('CUTTING', ['CUTTING', 'CUT']),
+    ('CNC DRL', ['CNC DRL', 'CNC DRILL', 'CNC']),
+    ('PRINTING', ['PRINT']),
+    ('ETCHING', ['ETCH']),
+    ('CENTER', ['CENTER']),
+    ('MARKING', ['MARK']),
+    ('TOP PRL', ['TOP PRL', 'TOP']),
+    ('BACK PRL', ['BACK PRL', 'BACK']),
+    ('DIE', ['DIE']),
+    ('CNC ROL', ['CNC ROL', 'ROL']),
+    ('TRIMMING/FINAL', ['TRIM', 'FINAL']),
+    ('V CUT', ['V CUT', 'V-CUT', 'VCUT', 'GROOV']),
+    ('LACKER', ['LACKER', 'LACQUER']),
+    ('PACKING', ['PACK', 'DISPATCH'])
+  ] %}
+  {% set _used = namespace(ids=[]) %}
+  <table class="jcl-route">
+    <thead><tr>
+      <th style="width:26px">SR. NO.</th><th style="width:96px">OPERATION / PROCESS</th><th style="width:74px">MACHINE / TOOL</th>
+      <th style="width:60px">DATE</th><th style="width:48px">START TIME</th><th style="width:48px">END TIME</th><th style="width:70px">OPERATOR</th>
+      <th style="width:42px">TOTAL TIME (HRS)</th><th style="width:44px">F.T. / STATUS</th>
+      <th style="width:38px">QTY IN</th><th style="width:38px">QTY OUT</th><th style="width:70px">NEXT PROCESS</th>
+      <th style="width:46px">HANDOVER TIME</th><th style="width:64px">REMARKS</th><th style="width:40px">SIGN</th>
+    </tr></thead>
     <tbody>
-      {% for p in procs %}
-      {% set is_disp = ('DISPATCH' in (p.process|upper)) or ('PACK' in (p.process|upper)) %}
-      {% set dd = dispatch if is_disp else none %}
-      <tr class="proc-{{ p.id }}">
-        <td class="ps-procname">{% if p.idx %}<span class="pnum">{{ p.idx }}.</span>{% endif %} {{ p.process }}{% if p.skipped %} <b style="color:#b3401c">⏭ SKIPPED</b>{% endif %}
-          {% if dd %}<div style="font-size:9px;color:#b3401c;font-weight:700;margin-top:2px">🚚 {{ dd.mode|upper }}{% if dd.details %} · {{ dd.details }}{% endif %}</div>{% endif %}
-        </td>
-        <td class="s-date">{{ p.start_date or (dd.ddate if dd else '') }}</td>
-        <td class="s-time">{{ p.start_time or (dd.dtime if dd else '') }}</td>
-        <td class="s-name">{{ p.start_name or (dd.dispatched_by if dd else '') }}</td>
-        <td class="e-date">{{ p.end_date or (dd.ddate if dd else '') }}</td>
-        <td class="e-time">{{ p.end_time or (dd.dtime if dd else '') }}</td>
-        <td class="e-name">{{ p.end_name or (dd.dispatched_by if dd else '') }}</td>
-        <td class="t-total">{{ p.total }}</td>
-        <td class="t-qty">{{ p.qty or '' }}</td>
+      {% for op in _ops %}
+      {% set _p = namespace(m=none) %}
+      {% for p in procs %}{% if _p.m is none and p.id not in _used.ids %}
+        {% set PU = (p.process or '')|upper %}
+        {% for k in op[1] %}{% if _p.m is none and k in PU %}{% set _p.m = p %}{% set _used.ids = _used.ids + [p.id] %}{% endif %}{% endfor %}
+      {% endif %}{% endfor %}
+      <tr>
+        <td class="jcl-sr">{{ loop.index }}</td>
+        <td class="jcl-op">{{ op[0] }}</td>
+        <td></td>
+        <td>{{ _p.m.start_date if _p.m else '' }}</td>
+        <td>{{ _p.m.start_time if _p.m else '' }}</td>
+        <td>{{ _p.m.end_time if _p.m else '' }}</td>
+        <td>{{ _p.m.start_name if _p.m else '' }}</td>
+        <td style="text-align:center;font-weight:700">{{ _p.m.total if _p.m else '' }}</td>
+        <td style="text-align:center">{% if _p.m %}{% if _p.m.skipped %}⏭ SKIPPED{% elif _p.m.end_name %}OK{% endif %}{% endif %}</td>
+        <td style="text-align:center">{{ _p.m.qty if _p.m else '' }}</td>
+        <td style="text-align:center">{% if _p.m and _p.m.end_name %}{{ _p.m.qty }}{% endif %}</td>
+        <td style="font-size:9px;color:#1e3a8a;font-weight:700">{{ _ops[loop.index % 14][0] if loop.index < 14 else '' }}</td>
+        <td></td><td></td><td></td>
       </tr>
       {% endfor %}
+      {% for p in procs %}{% if p.id not in _used.ids %}
+      <tr>
+        <td class="jcl-sr">+</td>
+        <td class="jcl-op">{{ p.process }}{% if p.skipped %} ⏭{% endif %}</td>
+        <td></td><td>{{ p.start_date }}</td><td>{{ p.start_time }}</td><td>{{ p.end_time }}</td><td>{{ p.start_name }}</td>
+        <td style="text-align:center;font-weight:700">{{ p.total }}</td>
+        <td style="text-align:center">{% if p.skipped %}SKIPPED{% elif p.end_name %}OK{% endif %}</td>
+        <td style="text-align:center">{{ p.qty }}</td>
+        <td style="text-align:center">{% if p.end_name %}{{ p.qty }}{% endif %}</td><td></td><td></td><td></td><td></td>
+      </tr>
+      {% endif %}{% endfor %}
     </tbody>
   </table>
 
-  <div class="ps-bottom">
-    <div class="ps-cell" style="flex:1"><span class="ps-lbl">TOTAL QUANTITY</span><span class="ps-val" id="pr_total_qty">{{ jc.total_qty }}</span></div>
-    <div class="ps-cell" style="flex:1"><span class="ps-lbl">SHORT QUANTITY OF PCB</span><span class="ps-val" id="pr_short_qty">{{ jc.short_qty }}</span></div>
-    <div class="ps-cell" style="flex:1.6"><span class="ps-lbl">REASON OF SHORT PCB</span><span class="ps-val" id="pr_short_reason">{{ jc.short_reason|dash }}</span></div>
+  <div class="jcl-bottom">
+    <div class="jcl-box">
+      <div class="jcl-boxhead">📊 TOTAL QUANTITY / SHORTAGE</div>
+      <div class="jcl-row"><span class="jcl-lbl" style="flex-basis:55%">Total Quantity</span><span class="jcl-val" style="border-left:1px solid #bfdbfe" id="pr_total_qty">{{ jc.total_qty|dash }}</span></div>
+      <div class="jcl-row"><span class="jcl-lbl" style="flex-basis:55%">Short Quantity of PCB</span><span class="jcl-val" style="border-left:1px solid #bfdbfe" id="pr_short_qty">{{ jc.short_qty|dash }}</span></div>
+      <div class="jcl-row"><span class="jcl-lbl" style="flex-basis:55%">Reason for Short PCB</span><span class="jcl-val" style="border-left:1px solid #bfdbfe" id="pr_short_reason">{{ jc.short_reason|dash }}</span></div>
+    </div>
+    <div class="jcl-box">
+      <div class="jcl-boxhead">🤝 HANDOVER / SIGNATURE</div>
+      <div class="jcl-row"><span class="jcl-lbl" style="flex-basis:52%">Handover Order No. / Date / Qty</span><span class="jcl-val" style="border-left:1px solid #bfdbfe;min-height:52px" id="pr_handover">{{ jc.handover_sign|dash }}</span></div>
+    </div>
+    <div class="jcl-box">
+      <div class="jcl-boxhead">📝 REMARKS / SPECIAL INSTRUCTIONS</div>
+      <div style="padding:5px 7px;font-size:10.5px;font-weight:600;min-height:64px" id="pr_instructions">{% if jc.instructions %}{{ jc.instructions }}{% else %}—{% endif %}</div>
+    </div>
   </div>
-  {% if jc.instructions %}
-  <div class="ps-dispatch" id="pr_instructions" style="background:#eff6ff;border:1.5px solid var(--blue,#2563eb)">📋 EXTRA INSTRUCTIONS: {{ jc.instructions }}</div>
-  {% endif %}
-  <div class="ps-sign">
-    <span class="ps-lbl">SIGNATURE OF HANDOVER, ORDER NO. AND DATE</span>
-    <div class="ps-sign-line" id="pr_handover">{{ jc.handover_sign|dash }}</div>
+
+  <div class="jcl-foot">
+    <span style="display:flex;align-items:flex-end">👤 Prepared By :<span class="jcl-line"></span></span>
+    <span style="display:flex;align-items:flex-end">✅ Checked By :<span class="jcl-line"></span></span>
+    <span style="display:flex;align-items:flex-end">🖋 Approved By :<span class="jcl-line"></span></span>
   </div>
 
   {% if issues %}
-  <div style="margin-top:10px">
-    <span class="ps-lbl" style="display:block;margin-bottom:4px">MATERIALS ISSUED FROM STOCK (TOTAL CONSUMED)</span>
-    <table class="ps-proc" style="width:100%">
-      <thead>
-        <tr><th>ITEM</th><th style="width:80px">QTY</th><th style="width:150px">WORKER</th><th style="width:140px">DATE/TIME</th></tr>
-      </thead>
+  <div style="margin-top:8px">
+    <span style="display:block;font-size:9.5px;font-weight:800;color:#1e3a8a;margin-bottom:3px">MATERIALS ISSUED FROM STOCK (TOTAL CONSUMED)</span>
+    <table class="jcl-route">
+      <thead><tr><th>ITEM</th><th style="width:80px">QTY</th><th style="width:150px">WORKER</th><th style="width:140px">DATE/TIME</th></tr></thead>
       <tbody>
         {% for mi in issues %}
-        <tr>
-          <td class="ps-procname">{{ mi.item_name }}</td>
-          <td class="t-qty">− {{ mi.qty|gfmt }} {{ mi.unit }}</td>
-          <td class="s-name">{{ mi.worker }}</td>
-          <td class="s-name">{{ mi.taken_on }}</td>
-        </tr>
+        <tr><td class="jcl-op">{{ mi.item_name }}</td><td style="text-align:center">− {{ mi.qty|gfmt }} {{ mi.unit }}</td><td>{{ mi.worker }}</td><td>{{ mi.taken_on }}</td></tr>
         {% endfor %}
       </tbody>
     </table>

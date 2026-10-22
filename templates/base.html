@@ -83,7 +83,7 @@
     <div class="saved-note"><span class="dot"></span> All changes saved</div>
     <a href="/my-password" style="display:flex;align-items:center;gap:6px;font:700 12px Segoe UI,Arial;color:#cbd5e1;text-decoration:none;padding:6px 8px;border-radius:8px" onmouseover="this.style.background='rgba(255,255,255,.08)'" onmouseout="this.style.background='none'">🔑 Mera Password</a>
     <div class="user-chip">👤 {{ current_user_name }}<span class="role">{{ current_user_role|upper }}</span></div>
-    <div class="ver-chip" title="App version — agar ye purana dikhe to naya ZIP deploy nahi hua">🛰 App v3.82 · Sheet preview: panel me sirf EK size (CUTTING) — CUT/GANG words hataye, dims bhi cutting · Columns alag scroll + drag-bar · PDF VIEW fix · Role OTHER</div>
+    <div class="ver-chip" title="App version — agar ye purana dikhe to naya ZIP deploy nahi hua">🛰 App v3.83 · JOB CARD naya format (blue routing sheet) + MODEL type-search · Preview sirf CUTTING size · Columns alag scroll + drag-bar · PDF VIEW fix · Role OTHER</div>
     <div style="display:flex;gap:8px;justify-content:space-between;align-items:center">
       <a class="logout" href="/switch-user" title="Doosre user ke naam par switch karo (login dobara nahi)" style="font-size:11.5px">🔄 Switch</a>
       <a class="logout" href="/logout">Logout ↩</a>
@@ -235,7 +235,7 @@
     sync();
   }
   function init(){
-    var sels = ['#pccModel', '#pdfModelSel', '#pdfEditSel'].map(function(s){ return document.querySelector(s); })
+    var sels = ['#pccModel', '#pdfModelSel', '#pdfEditSel', '#prodSel'].map  /* v3.83 \u2014 job card ka MODEL bhi type-search */(function(s){ return document.querySelector(s); })
       .filter(Boolean);
     Array.prototype.push.apply(sels, Array.prototype.slice.call(document.querySelectorAll('select[name="model_id"], select[name="save_select"]')));
     for (var i = 0; i < sels.length; i++) enhance(sels[i]);
@@ -244,6 +244,7 @@
   else init();
 })();
 </script>
+<script>
 /* Mobile sidebar drawer */
 (function(){
   var hb = document.getElementById('hamburger');
