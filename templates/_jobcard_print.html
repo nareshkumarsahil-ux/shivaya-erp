@@ -136,6 +136,7 @@
           <div class="jcl-row"><span class="jcl-lbl">TOTAL PCB</span><span class="jcl-val" id="pr_pcb_sheet">{% if mix79 %}{{ mix79.total }} PANELS/SHEET (MIXED){% elif jc.pcs_panel and jc.panels_per_sheet %}{{ jc.pcs_panel * jc.panels_per_sheet }}{% else %}—{% endif %}</span></div>
         </div>
       </div>
+      <div class="jcl-row" style="border-top:1px solid #bfdbfe;min-height:26px"><span class="jcl-lbl" style="flex-basis:auto;font-weight:800;font-size:12px;color:#1e3a8a" id="pr_sheet_panel">1 SHEET = {% if jc.panels_per_sheet %}{{ jc.panels_per_sheet }} PANEL{% else %}—{% endif %}</span></div>
     </div>
     <!-- BOX 4: Sheet / Panel / V-Grooving / Created-Checked -->
     <div class="jcl-box">
