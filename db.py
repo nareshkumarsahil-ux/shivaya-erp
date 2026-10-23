@@ -1814,6 +1814,26 @@ def multi(sqls):
     return out
 
 
+def execute_many(sql, seq, chunk=300):
+    """v4.09: ek hi SQL, kai param-sets — IMPORT fast (2352 rows = ~8 HTTP calls,
+    Vercel 60s timeout safe). Turso: batch_fetch chunks (har step VERIFIED, error par raise);
+    sqlite: ek transaction me executemany."""
+    seq = list(seq)
+    if not seq:
+        return 0
+    conn = get_db()
+    try:
+        if conn._turso:
+            for i in range(0, len(seq), chunk):
+                _turso().batch_fetch([(sql, list(prm)) for prm in seq[i:i + chunk]])
+        else:
+            conn.executemany(sql, seq)
+            conn.commit()
+        return len(seq)
+    finally:
+        conn.close()
+
+
 def query(sql, params=(), one=False):
     conn = get_db()
     cur = conn.execute(sql, params)

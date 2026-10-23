@@ -2593,6 +2593,11 @@ def products():
     _sql += " ORDER BY m.id DESC"
     rows = db.query(_sql, _prm)
     total_models = db.query("SELECT COUNT(*) AS n FROM product_models", one=True)["n"]
+    # v4.09: 2352+ models ek page par = 7-10MB HTML (Vercel response limit ~4.5MB par page 502).
+    # Page pehle 400 dikhata hai (naye pehle — ORDER BY id DESC), baaki search/filter/download se.
+    _sheet_cap = 400
+    models_total = len(rows)
+    models_shown = rows[:_sheet_cap]
     party_opts = [r["party_name"] for r in
                   db.query("SELECT DISTINCT party_name FROM product_models WHERE IFNULL(party_name,'')!='' ORDER BY party_name")]
     # v3.18 HSN sweep — koi bhi naya model (apply-order/import) bina HSN na rahe (PCB default 85340000)
@@ -2646,7 +2651,8 @@ def products():
     _ib = request.args.get("import_batch")
     if _ib and not _import_preview(_ib):
         flash("\u26a0\ufe0f Import preview nahi mila (session expire/dua server par chala gaya) \u2014 file dobara upload karo.", "error")
-    return render_template("products.html", active="products", models=rows, pdf_counts=pdf_counts,
+    return render_template("products.html", active="products", models=models_shown, pdf_counts=pdf_counts,
+                           models_total=models_total, sheet_cap=_sheet_cap,
                            bom_map=bom_map, history=history,
                            show_add=request.args.get("add"),
                            edit_model=edit_model,
@@ -3160,6 +3166,11 @@ def products_import_confirm():
     headers = _json.loads(header_row["data"])
     mapping = _map_headers(headers)
     added = updated = skipped = 0
+    # v4.09: saare existing names EK query me (2352x per-row SELECT = Vercel timeout ka risk nahi)
+    existing_map = {}
+    for _er in db.query("SELECT id, name FROM product_models"):
+        existing_map[_er["name"]] = _er["id"]   # baad wali (highest id) jeete — purane behavior jaisa
+    ins_rows, upd_rows = [], []   # v4.09: writes BATCH me (2352 inserts = ~8 HTTP calls)
     for r in rows:
         if r["row_no"] == 0:
             continue
@@ -3171,7 +3182,7 @@ def products_import_confirm():
         if not name:
             skipped += 1
             continue
-        existing = db.query("SELECT id FROM product_models WHERE name=?", (name,), one=True)
+        existing_id = existing_map.get(name)
         gang_x = max(1, int(fields.get("gang_x") or 1))
         gang_y = max(1, int(fields.get("gang_y") or 1))
         vals = (
@@ -3199,28 +3210,33 @@ def products_import_confirm():
             int(fields.get("sheets") or 1),
             max(0, int(fields.get("x_qty") or 0)), max(0, int(fields.get("y_qty") or 0)),
         )
-        if existing:
+        if existing_id:
             if do_update:
-                db.execute(
-                    "UPDATE product_models SET model_code=?, party=?, note=?, pcb_len=?, pcb_w=?, pcbs_x=?, "
-                    "pcbs_y=?, gap_x=?, gap_y=?, border_l=?, border_r=?, border_t=?, border_b=?, gang_x=?, "
-                    "gang_y=?, sheet_len=?, sheet_w=?, panel_len=?, panel_w=?, cutting_len=?, cutting_w=?, "
-                    "kerf_x=?, kerf_y=?, cnc_margin_x=?, cnc_margin_y=?, orientation=?, pcs_panel=?, "
-                    "panels_sheet=?, sheets=?, x_qty=?, y_qty=?, party_code=?, cnc_tool=?, "
-                    "sheet_thickness=?, per_sq_inch=?, pcb_price=? WHERE id=?", vals + (existing["id"],))
-                updated += 1
+                upd_rows.append(vals + (existing_id,))
             else:
                 skipped += 1
         else:
-            db.execute(
-                "INSERT INTO product_models (name, model_code, party, note, party_code, cnc_tool, "
-                "sheet_thickness, per_sq_inch, pcb_price, pcb_len, pcb_w, pcbs_x, pcbs_y, "
-                "gap_x, gap_y, border_l, border_r, border_t, border_b, gang_x, gang_y, sheet_len, sheet_w, "
-                "panel_len, panel_w, cutting_len, cutting_w, kerf_x, kerf_y, cnc_margin_x, cnc_margin_y, "
-                "orientation, pcs_panel, panels_sheet, sheets, x_qty, y_qty, created_on) "
-                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                (name,) + vals + (_today_ist().isoformat(),))
-            added += 1
+            ins_rows.append((name,) + vals + (_today_ist().isoformat(),))
+    # v4.09: ek-ek row ka HTTP call nahi — poora batch ek saath (verified Turso batch)
+    if ins_rows:
+        db.execute_many(
+            "INSERT INTO product_models (name, model_code, party, note, party_code, cnc_tool, "
+            "sheet_thickness, per_sq_inch, pcb_price, pcb_len, pcb_w, pcbs_x, pcbs_y, "
+            "gap_x, gap_y, border_l, border_r, border_t, border_b, gang_x, gang_y, sheet_len, sheet_w, "
+            "panel_len, panel_w, cutting_len, cutting_w, kerf_x, kerf_y, cnc_margin_x, cnc_margin_y, "
+            "orientation, pcs_panel, panels_sheet, sheets, x_qty, y_qty, created_on) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            ins_rows)
+        added = len(ins_rows)
+    if upd_rows:
+        db.execute_many(
+            "UPDATE product_models SET model_code=?, party=?, note=?, party_code=?, cnc_tool=?, "
+            "sheet_thickness=?, per_sq_inch=?, pcb_price=?, pcb_len=?, pcb_w=?, pcbs_x=?, pcbs_y=?, "
+            "gap_x=?, gap_y=?, border_l=?, border_r=?, border_t=?, border_b=?, gang_x=?, gang_y=?, "
+            "sheet_len=?, sheet_w=?, panel_len=?, panel_w=?, cutting_len=?, cutting_w=?, "
+            "kerf_x=?, kerf_y=?, cnc_margin_x=?, cnc_margin_y=?, orientation=?, pcs_panel=?, "
+            "panels_sheet=?, sheets=?, x_qty=?, y_qty=? WHERE id=?", upd_rows)   # v4.09: SET order == vals order (pehle shift ho raha tha!)
+        updated = len(upd_rows)
     db.execute("DELETE FROM import_staging WHERE batch=?", (batch,))
     msg = f"✅ Import complete: {added} naye products add hue"
     if do_update:

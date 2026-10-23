@@ -104,7 +104,7 @@
 <div class="panel" style="border-left:4px solid #4338ca">
   <div class="panel-head">
     <h3>📄 SHEET — Size Master (Excel jaisi · cell par click karo, value badlo, Enter = save)</h3>
-    <span class="muted small">Cut List se save / Add Manually / Import — sab yahin aa jate hain. PO read isko hi match karta hai.
+    <span class="muted small">Total <b style="color:#1d4ed8">{{ models_total }} models</b>{% if models_total > models|length %} — pehle {{ models|length }} dikhe (baaki: upar 🔍 search/filter ya ⬇ Download SHEET){% endif %}. PO read isko hi match karta hai.
       <a class="btn btn-outline btn-sm" style="background:#eff6ff;color:#1d4ed8" href="/products/sheet/download{{ '?token=' ~ request.args.get('token') if request.args.get('token') else '' }}" title="Yehi SHEET aapki Excel ke format me (2-row header) download">&#11015;&#65039; Download SHEET (Excel)</a>
     </span>
   </div>
