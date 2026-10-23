@@ -55,14 +55,15 @@
   }
 
   var KNOWN = ['IIS', 'SCPL', 'OM', 'OSI', 'SB', 'DHL', 'LP'];
-  var HEADER_RE = /^\s*(purchase order|tax invoice|proforma|description of goods|supplier|buyer|consignee|sr\.?\s*no|s\.?\s*no\.?\s*description|payment terms|terms of delivery|dispatch through|gst[in]|hsn|unit|quantity|rate\b|amount|delivery date|date\b|po no|p\.?o\.?\s*no|notes|reference)/i;
+  var HEADER_RE = /^\s*(purchase order|tax invoice|proforma|description of goods|supplier|buyer|consignee|sr\.?\s*no|s\.?\s*no\.?\s*description|payment terms|terms of delivery|dispatch through|gst[in]|hsn|unit|quantity|rate\b|amount|delivery date|date\b|po no|p\.?o\.?\s*no|notes|reference|thickness)/i;   /* v4.08: THICKNESS-1.5MM spec-line noise (fake model NESS-x nahi bane) */
 
   function parseLine(raw, ctx) {
     var l = String(raw || '').replace(/\r/g, '').trim();
     if (!l) return null;
     if (HEADER_RE.test(l)) return null;                    /* table/header/date lines = data nahi */
     var sno = null, body = l;
-    var ms = l.match(/^(\d{1,3})\s*[\.\)\-:]\s*(.+)$/) || l.match(/^(\d{1,3})\s+(.+)$/);
+    /* v4.08: separator ke baad SPACE mandatory — "175.000" jaisa decimal S.No. 175 nahi banega */
+    var ms = l.match(/^(\d{1,3})\s*[\.\)\-:]\s+(.+)$/) || l.match(/^(\d{1,3})\s+(.+)$/);
     if (ms) { sno = +ms[1]; body = ms[2].trim(); }
     /* model tokens: pehla = MODEL; doosra KNOWN-prefix = PARTY MODEL (kabhi copy nahi karte) */
     MODEL_RE.lastIndex = 0;
@@ -71,7 +72,12 @@
       var code = tm[1].toUpperCase() + '-' + tm[2];
       if (!toks.some(function (t) { return norm(t) === norm(code); })) toks.push(code);
     }
-    var model = toks.length ? toks[0] : '';
+    /* v4.08: masters me jo token EXACT mile wahi MODEL ("RM 902 ... SCPL-110" -> SCPL-110), warna pehla */
+    var model = '';
+    for (var mi = 0; mi < toks.length; mi++) {
+      if ((ctx.masters || []).some(function (m) { return norm(m.model) === norm(toks[mi]); })) { model = toks[mi]; break; }
+    }
+    if (!model) model = toks.length ? toks[0] : '';
     var party_model = '';
     for (var ti = 1; ti < toks.length; ti++) {
       var pf = toks[ti].split('-')[0];
@@ -168,7 +174,7 @@
       lines = grouped;
     }
     lines.forEach(function (l) {
-      var r = parseLine(l, { po_no: po_no, priority: priority });
+      var r = parseLine(l, { po_no: po_no, priority: priority, masters: masters });
       if (r) { rows.push(r); if (r.sno) snos.push(r.sno); }
     });
     /* same serial do baar (model/qty alag lines) -> merge */
@@ -209,9 +215,14 @@
           note: 'scan me nahi mila \u2014 khud bharo'
         });
       }
-      rows.dropped = Math.max(0, rows.length - canon.length);
+      canon.dropped = Math.max(0, rows.length - canon.length);   /* v4.08: property FINAL array par */
       rows = canon;
     } else {
+      /* v4.08: serial nahi mile (OCR ka tukda-text) to bhi junk-flood nahi —
+         sirf CONTENT-wali lines (model, ya qty+rate dono) rakho, baaki fragments drop */
+      var keep208 = merged.filter(function (r) { return r.model || (r.qty && r.rate); });
+      keep208.dropped = Math.max(0, merged.length - keep208.length);   /* v4.08: final par */
+      rows = keep208;
       rows.forEach(function (r, i) { if (r.sno == null) r.sno = i + 1; });
     }
     rows.forEach(function (r) {

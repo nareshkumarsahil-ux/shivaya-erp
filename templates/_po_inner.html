@@ -15,6 +15,10 @@
   .chip.sel{border-color:#4338ca;background:#eef2ff}
   .chip .sno{font-weight:800;color:#4338ca;min-width:34px}
   .chip .st{margin-left:auto;font-size:10px;font-weight:800;padding:2px 7px;border-radius:99px;background:#f1f5f9;color:#64748b}
+  .chip .st.ok{background:#dcfce7;color:#15803d}
+  .chip .st.bad{background:#fef2f2;color:#b91c1c}
+  .chip.done{border-color:#86efac;background:#f0fdf4}
+  .chip.warn:not(.done){border-color:#fecaca;background:#fff;}
   .chip.done .st{background:#dcfce7;color:#15803d}
   /* v3.97: PO FOLDER — saved PO list + re-process */
   .frow97{display:flex;align-items:center;gap:8px;border:1.5px solid var(--border);border-radius:9px;padding:7px 9px;margin-bottom:6px;background:#fff;font-size:12px}
@@ -191,13 +195,16 @@ function handleFiles(fs){
           showDups(j);
           if (j.mime === 'application/pdf') showPdf(j.file_id, j.needs_ocr);
           else showImg(j.file_id);
+          var before208 = LINES.length;
           /* v3.86b: PCBFlow parser (po.js) text par; text na mile to browser OCR; server lines sirf non-formal fallback */
           if (j.text && j.text.trim()) { applyPoText(j.text, j); }
           else if (j.needs_ocr) { ocrFile(j); }
-          else if (j.lines && j.lines.length) { (j.lines || []).forEach(function(x){ x.file_id = j.file_id; LINES.push(x); }); }
+          else if (j.lines && j.lines.length) { (j.lines || []).filter(function(x){ return x.model || (x.qty && x.rate); }).forEach(function(x){ x.file_id = j.file_id; LINES.push(x); }); }
           renderInbox();
           if (LINES.length) autoSaveAll();   /* v3.94: seedha temp job cards */
-          document.getElementById('fileInfo').textContent = '✅ ' + j.filename + ' · ' + LINES.length + ' lines';
+          document.getElementById('fileInfo').textContent = (LINES.length - before208)
+            ? '✅ ' + j.filename + ' · ' + LINES.length + ' lines'
+            : (j.needs_ocr ? '🔎 ' + j.filename + ' · OCR chal raha — lines thodi der me aayengi' : '✅ ' + j.filename + ' · 0 lines (item nahi mila)');
         });
     });
   });
@@ -365,7 +372,7 @@ function applyPoText(text, j){
   var ls = (window.PCBFlowPO ? PCBFlowPO.parsePoText(text, masters) : []);
   if (!ls.length && j.lines && j.lines.length &&
       !/(Purchase Order|GSTIN|Item & Description|Description of Goods|PROFORMA)/i.test(text)) {
-    ls = j.lines;   /* purana server parser sirf non-formal text par fallback */
+    ls = j.lines.filter(function(x){ return x.model || (x.qty && x.rate); });   /* v4.08: server-lines me bhi junk drop */
   }
   /* v4.06 HARD RULE: jitne S.No., utni hi windows. Banner me item-count + junk-drop dikhao */
   if (ls.length) {
@@ -406,7 +413,7 @@ function renderInbox(){
       '<span>' + esc(l.model || '(model bharo)') + '</span>' +
       '<span class="muted">' + (l.qty ? esc(l.qty) + ' pcs' : 'qty?') + '</span>' +
       '<span class="muted">' + (l.rate ? '\u20B9' + esc(l.rate) : '') + '</span>' +
-      '<span class="st">' + (l.saved ? '\u2705 VERIFY' : (l.saving ? 'saving\u2026' : (l.saveErr ? esc(l.saveErr) : 'Edit'))) + '</span></button>' +
+      '<span class="st ' + (l.saved && l.model ? 'ok' : 'bad') + '">' /* v4.08: khaali saved card bhi VERIFY (bharo) */ + (l.saved && l.model ? '\u2714 REVIEW' : (l.saving ? 'saving\u2026' : (l.saveErr ? '\u2716 VERIFY' : 'VERIFY'))) + '</span></button>' +
       '<button type="button" class="btn btn-outline btn-xs" style="background:#fef2f2;color:#b91c1c;padding:2px 7px" ' +
         'onclick="delLine(' + i + ')" title="Ye galat/junk line hai — hatao (approved order ho to block hoga)">\u2715</button>' +
       '<div class="chedit" id="ced' + i + '" style="display:' + (i === SEL ? 'block' : 'none') + '">' +
@@ -753,7 +760,7 @@ function reprocess(fid){
       if (j.mime === 'application/pdf') showPdf(fid, j.needs_ocr); else showImg(fid);
       if (j.text && j.text.trim()) applyPoText(j.text, j);
       else if (j.needs_ocr) ocrFile(j);
-      else if (j.lines && j.lines.length) j.lines.forEach(function(x){ x.file_id = fid; LINES.push(x); });
+      else if (j.lines && j.lines.length) j.lines.filter(function(x){ return x.model || (x.qty && x.rate); }).forEach(function(x){ x.file_id = fid; LINES.push(x); });
       renderInbox();
       if (LINES.length) autoSaveAll();
       toast('PO re-process: ' + LINES.length + ' lines — temp cards ban rahe hain\u2026');
