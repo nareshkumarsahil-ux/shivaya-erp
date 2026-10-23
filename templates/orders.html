@@ -7,7 +7,7 @@
 <div class="panel no-print" style="border-left:4px solid var(--blue)">
   <div class="panel-head"><h3>➕ New Job Order</h3><a class="btn btn-outline btn-sm" href="/orders">✕ Close</a></div>
   <div class="panel-body">
-    <a class="btn" href="/jobcard/new" style="font-size:15px;font-weight:800;padding:12px 20px;background:#16a34a;color:#fff;text-decoration:none;display:inline-flex;gap:8px;align-items:center">🆕 ADVANCED JOB CARD →</a>
+    <a class="btn" href="/po" style="font-size:15px;font-weight:800;padding:12px 20px;background:#16a34a;color:#fff;text-decoration:none;display:inline-flex;gap:8px;align-items:center">📄 PO se Job Card →</a>
     <p class="muted small" style="margin-top:8px">Naya advanced format: <b>Party → Board Type → Priority</b> → Product select karte hi saare details (single PCB size, panel size, panels/sheet side-wise, PCB/panel + PCB/sheet) → <b>QTY dalte hi auto calculation</b> (panels, sheets, total value — cut list ki tarah) → Sheet material + thickness dropdown → Employee instructions → Create.</p>
   </div>
 </div>
@@ -26,7 +26,7 @@
       <button class="btn btn-outline btn-sm" type="submit">Search</button>
     </form>
     {% if current_user_role == 'admin' %}
-    <a class="btn" href="/jobcard/new" style="background:#16a34a;color:#fff;font-weight:800">🆕 New Job Card</a>
+    <a class="btn" href="/po" style="background:#16a34a;color:#fff;font-weight:800">📄 PO se Job Card</a>
     {% endif %}
   </div>
 </div>
@@ -43,11 +43,11 @@
     <div class="kanban-body">
       {% for o in cols[cidx] %}
       <!-- v2.74: ORDER CARD click = JOB ORDER PREVIEW (edit ka button preview ke andar) -->
-      <a class="kcard" {% if current_user_role == 'admin' %}href="/jobcard/{{ o.id }}" title="Click — JOB ORDER PREVIEW khulega — edit ka button preview me hai"{% else %}href="/operator"{% endif %}>
+      <a class="kcard" {% if current_user_role == 'admin' %}href="/po/verify/{{ o.id }}" title="Click — VERIFY khulega: card dekho/edit karo, APPROVE se process me jayega"{% else %}href="/operator"{% endif %}>
         <div class="kcard-top">
           <b class="mono">Order {{ o.order_no }}</b>
           {% if o.priority=='urgent' %}<span class="badge b-urgent">URGENT</span>{% endif %}
-          {% if current_user_role == 'admin' %}<span class="badge b-blue" style="margin-left:auto;font-size:9px">👁 PREVIEW</span>{% endif %}
+          {% if o.po_no and not o.current_process and o.status == 'pending' %}<span class="badge" style="margin-left:auto;font-size:9px;background:#fef3c7;color:#92400e;border:1px solid #f59e0b">REVIEW</span>{% elif current_user_role == 'admin' %}<span class="badge b-blue" style="margin-left:auto;font-size:9px">✅ VERIFY</span>{% endif %}
         </div>
         <div class="kparty">{{ o.party }}</div>
         <div class="kproduct">{{ o.product }}</div>
@@ -84,7 +84,7 @@
           {% if o.disp %}<div><span class="badge b-blue" style="margin-top:4px">🚚 {{ o.disp.mode }} · {{ o.disp.ddate }} {{ o.disp.dtime }}</span></div>{% endif %}
         </td>
         <td><b>{{ o.party }}</b><div class="muted small">{{ o.product }}{% if o.qty_panel or o.pcs_panel %} · 🔲 {{ o.qty_panel or '—' }} panels · {{ o.pcs_panel or '—' }} pcs/panel{% endif %}</div></td>
-        <td class="t-right">{% if current_user_role == 'admin' %}<a class="btn btn-outline btn-xs" href="/jobcard/{{ o.id }}">📋 Job Card</a>{% endif %}</td>
+        <td class="t-right">{% if current_user_role == 'admin' %}<a class="btn btn-outline btn-xs" href="/po/verify/{{ o.id }}">✅ VERIFY / APPROVE</a>{% endif %}</td>
       </tr>
       {% endfor %}
     </table>

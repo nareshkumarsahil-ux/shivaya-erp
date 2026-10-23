@@ -723,7 +723,9 @@ def orders():
         if r["cur_status"] != "done" and _is_held(r["id"], r["cur_proc"]):
             r["cur_status"] = "hold"
         r["qty_panel"], r["pcs_panel"] = _panel_info(r)
-        cols[kanban_col(r["current_process"])].append(r)
+        # v3.87: REVIEW card (PO se bana, approve nahi hua) pehle column me dikhe
+        _kc = 0 if (not r["current_process"] and r["status"] == "pending") else kanban_col(r["current_process"])
+        cols[_kc].append(r)
     done = [dict(r) for r in done_rows]
     for r in done:
         r["disp"] = dmap.get(r["id"])
@@ -6011,10 +6013,12 @@ def prep_jobcard(order_id):
 @app.route("/jobcard/new", methods=["GET", "POST"])
 @login_required
 def jobcard_new():
-    """🆕 ADVANCED JOB CARD creation — party → board → priority → product select par
-    saare details (PCB size, panel size, panels/sheet side-wise, PCB/panel+sheet) →
-    QTY par cut-list jaisi live calculation → sheet material + thickness dropdown →
-    extra instructions → create."""
+    """v3.87: ADVANCED (manual) job card CREATION band — ab job cards sirf PO se bante hain (/po).
+    ?edit=ID wala purana edit-mode chalu rahega (existing card ki editing). Naya card = /po."""
+    _edit87 = request.args.get("edit") if request.method == "GET" else (request.form.get("edit_id") or "")
+    if not _edit87:
+        # v3.87: naya (manual/advanced) job card banana band — PO se banao (edit-mode chalu)
+        return redirect("/po")
     parties = [p["name"] for p in db.query("SELECT name FROM parties ORDER BY name")]
     models = db.query("SELECT * FROM product_models ORDER BY name")
     inv_items = db.query("SELECT * FROM inventory ORDER BY CASE WHEN stock<=min_stock THEN 0 ELSE 1 END, category, name")

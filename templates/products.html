@@ -399,7 +399,7 @@ function pmThickRate(){
           <td class="small muted">{{ m.created_on }}</td>
           <td class="t-right" style="white-space:nowrap">
             <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;max-width:120px;margin-left:auto">
-            <a class="btn btn-xs" style="background:#2563eb;color:#fff;justify-content:center" href="/jobcard/new?model={{ m.id }}" title="Isi model ka ORDER banao — jobcard khulega, product + party pre-selected">🧾 MAKE ORDER</a>
+            <a class="btn btn-xs" style="background:#2563eb;color:#fff;justify-content:center" href="/po" title="PO upload karke job card banao — model select par details auto">🧾 MAKE ORDER (PO se)</a>
             <button type="button" class="btn btn-xs" style="background:#16a34a;color:#fff;justify-content:center" onclick="toggleProduce({{ m.id }})">🏭 Produce</button>
             <a class="btn btn-outline btn-xs" style="justify-content:center" href="/products?edit={{ m.id }}">✏️ Edit</a>
             <a class="btn btn-outline btn-xs" style="justify-content:center" href="/cutlist?model={{ m.id }}">📂 Load</a>
