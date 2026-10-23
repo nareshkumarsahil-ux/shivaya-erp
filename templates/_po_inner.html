@@ -23,7 +23,9 @@
   .fld input:focus,.fld select:focus{border-color:#6366f1;outline:none}
   .frow{display:grid;grid-template-columns:1fr 1fr;gap:9px}
   .frow3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:9px}
-  .po-prev{width:100%;border:1px solid var(--border);border-radius:8px;background:#fff;min-height:120px;max-height:46vh;overflow:auto}
+  .po-prev{width:100%;border:1px solid var(--border);border-radius:8px;background:#fff;min-height:120px}
+  /* v3.94: confirm-form BAND — OCR ke baad seedha temp job card save (VERIFY = editor) */
+  #poForm,#noSel{display:none !important}
   .banner-warn{background:#fffbeb;border:1.5px solid #f59e0b;color:#92400e;border-radius:8px;padding:8px 10px;font-size:12px;font-weight:700;margin-bottom:9px}
   .toast{position:fixed;bottom:18px;right:18px;background:#15803d;color:#fff;font-weight:800;padding:10px 16px;border-radius:10px;z-index:99999;display:none;box-shadow:0 10px 30px rgba(0,0,0,.3)}
   .toast.err{background:#b91c1c}
@@ -171,7 +173,7 @@ function handleFiles(fs){
           else if (j.needs_ocr) { ocrFile(j); }
           else if (j.lines && j.lines.length) { (j.lines || []).forEach(function(x){ x.file_id = j.file_id; LINES.push(x); }); }
           renderInbox();
-          if (LINES.length && SEL < 0) { SEL = 0; renderInbox(); fillForm(); }
+          if (LINES.length) autoSaveAll();   /* v3.94: seedha temp job cards */
           document.getElementById('fileInfo').textContent = '✅ ' + j.filename + ' · ' + LINES.length + ' lines';
         });
     });
@@ -182,20 +184,31 @@ function showPdf(id, needsOcr){
   var box = document.getElementById('preview');
   var url = '/api/po/file/' + id + '?token=' + encodeURIComponent(T());
   var a = document.getElementById('newTab'); a.href = url; a.style.display = 'inline-block';
-  box.innerHTML = '<canvas style="max-width:100%"></canvas>';
-  var cv = box.querySelector('canvas');
+  box.innerHTML = '<div class="muted small" style="padding:14px">PO preview load ho raha\u2026</div>';
   if (window.pdfjsLib) {
     pdfjsLib.GlobalWorkerOptions.workerSrc = '/static/vendor/pdfjs/pdf.worker.min.js';
     pdfjsLib.getDocument(url).promise.then(function(pdf){
-      return pdf.getPage(1).then(function(pg){
-        var sc = Math.min(1.4, 760 / pg.getViewport({scale:1}).width);
-        var vp = pg.getViewport({scale: sc});
-        cv.width = vp.width; cv.height = vp.height;
-        pg.render({canvasContext: cv.getContext('2d'), viewport: vp});
+      var n = Math.min(4, pdf.numPages), jobs = [];
+      for (var i = 1; i <= n; i++) jobs.push(pdf.getPage(i));
+      return Promise.all(jobs);
+    }).then(function(pgs){
+      box.innerHTML = '';
+      var seq = Promise.resolve();
+      pgs.forEach(function(pg){
+        seq = seq.then(function(){
+          var sc = Math.min(1.5, 900 / pg.getViewport({scale:1}).width);
+          var vp = pg.getViewport({ scale: sc });
+          var c = document.createElement('canvas');
+          c.width = vp.width; c.height = vp.height;
+          c.style.cssText = 'width:100%;display:block;margin-bottom:6px;border:1px solid #e2e8f0';
+          box.appendChild(c);
+          return pg.render({ canvasContext: c.getContext('2d'), viewport: vp }).promise;
+        });
       });
+      return seq.then(function(){ box.scrollTop = 0; });   /* v3.94: hamesha UPAR se */
     }).catch(function(){ box.innerHTML = '<div style="padding:14px">Preview nahi ban paaya — <a href="' + url + '" target="_blank">Computer se kholo</a></div>'; });
   } else {
-    box.innerHTML = '<iframe src="' + url + '" style="width:100%;height:44vh;border:0"></iframe>';
+    box.innerHTML = '<iframe src="' + url + '" style="width:100%;height:70vh;border:0"></iframe>';
   }
   document.getElementById('ocrNote').textContent = needsOcr ? 'Ye scanned PDF lagti hai — lines OCR se nahi mili, khud bharo (ya ＋ Line jodo).' : '';
 }
@@ -287,7 +300,7 @@ function ocrFile(j){
   function tessDone(j, ls){
     ls.forEach(function(x){ x.file_id = j.file_id; LINES.push(x); });
     renderInbox();
-    if (SEL < 0) { SEL = 0; renderInbox(); fillForm(); }
+    autoSaveAll();   /* v3.94: seedha temp job cards */
     toast(ls.length + ' lines OCR se mili \u2705');
     var n2 = document.getElementById('ocrNote'); if (n2) n2.textContent = '';
   }
@@ -352,16 +365,54 @@ function renderInbox(){
       '<span>' + esc(l.model || '(model bharo)') + '</span>' +
       '<span class="muted">' + (l.qty ? esc(l.qty) + ' pcs' : 'qty?') + '</span>' +
       '<span class="muted">' + (l.rate ? '₹' + esc(l.rate) : '') + '</span>' +
-      '<span class="st">' + (l.saved ? 'Job card ' + esc(l.saved) : 'Edit') + '</span></button>';
+      '<span class="st">' + (l.saved ? '\u2705 VERIFY' : (l.saving ? 'saving\u2026' : (l.saveErr ? esc(l.saveErr) : 'Edit'))) + '</span></button>';
   }).join('');
   var done = LINES.filter(function(l){ return l.saved; }).length;
   document.getElementById('stepBar').textContent = 'S.No. ' + (SEL >= 0 ? (SEL + 1) : '—') + ' / ' + LINES.length + ' · saved ' + done + ' · baki ' + (LINES.length - done);
 }
 function addLine(){
   LINES.push({sno: LINES.length + 1, model: '', party_model: '', qty: '', rate: '', note: ''});
-  SEL = LINES.length - 1; renderInbox(); fillForm();
+  renderInbox();
+  autoSaveLine(LINES.length - 1);   /* v3.94: khali temp card — VERIFY me bharo */
 }
-function selLine(i){ SEL = i; renderInbox(); fillForm(); }
+/* ---------- v3.94: AUTO-SAVE (bina form) — har S.No. seedha TEMP JOB CARD (REVIEW) ---------- */
+function autoSaveLine(i){
+  var l = LINES[i]; if (!l || l.saved || l.saving) return Promise.resolve();
+  l.saving = true; renderInbox();
+  var fd = new FormData();
+  fd.append('auto', '1');
+  fd.append('po_sno', l.sno || (i + 1));
+  fd.append('model', l.model || '');
+  if (l.master_id) fd.append('model_id', l.master_id);
+  fd.append('qty', l.qty || '0');
+  fd.append('rate', l.rate || '');
+  fd.append('party', l.party || '');
+  if (l.party_model) fd.append('party_model', l.party_model);
+  fd.append('po_no', l.po_no || (FILES[0] && FILES[0].po_no) || document.getElementById('poNo').value || 'WhatsApp');   /* v3.94: OCR-guess pehle */
+  fd.append('odate', l.order_date || '');
+  fd.append('due', l.due_date || '');
+  fd.append('priority', l.priority || 'normal');
+  if (l.material) fd.append('material', l.material);
+  fd.append('file_id', l.file_id || (FILES[FILES.length - 1] && FILES[FILES.length - 1].file_id) || '');
+  fd.append('dup_ok', '1');
+  return fetch('/api/po/save?token=' + encodeURIComponent(T()), { method: 'POST', body: fd })
+    .then(function(r){ return r.json(); })
+    .then(function(j){
+      l.saving = false;
+      if (j.ok) { l.saved = '#' + String(j.order_no).replace('#', ''); l.oid = j.order_id; l.saveErr = ''; }
+      else { l.saveErr = j.error || 'save fail'; }
+      renderInbox();
+    }).catch(function(){ l.saving = false; l.saveErr = 'network fail'; renderInbox(); });
+}
+function autoSaveAll(){
+  var seq = Promise.resolve();
+  LINES.forEach(function(l, i){ seq = seq.then(function(){ return autoSaveLine(i); }); });
+  seq.then(function(){
+    var done = LINES.filter(function(x){ return x.saved; }).length;
+    toast(done + '/' + LINES.length + ' temp job cards ban gayi \u2705 — chip click = VERIFY, APPROVE = process');
+  });
+}
+function selLine(i){ SEL = i; renderInbox(); }
 
 /* ---------- confirm form ---------- */
 function fillForm(){

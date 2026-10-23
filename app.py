@@ -4232,10 +4232,12 @@ def po_file_view(fid):
 @login_required
 @admin_required
 def po_save_line():
-    """Ek S.No. = ek job card. Kuch bhi invent nahi — party/qty/model zaroori."""
+    """Ek S.No. = ek job card. Kuch bhi invent nahi — party/qty/model zaroori.
+    v3.94: auto=1 (PO direct-save, bina form) — party/qty khali chalega, VERIFY par bharte hain."""
     _po_ensure()
     f = request.form
-    party = (f.get("party") or "").strip()
+    auto = (f.get("auto") or "") == "1"
+    party = (f.get("party") or "").strip() or (("PO-" + ((f.get("po_no") or "WhatsApp").strip() or "WhatsApp")) if auto else "")
     qty = int(f.get("qty") or 0)
     po_no = (f.get("po_no") or "WhatsApp").strip() or "WhatsApp"
     try:
@@ -4244,7 +4246,7 @@ def po_save_line():
         po_sno = 0
     if not party:
         return jsonify(ok=False, error="Party chuno."), 400
-    if qty <= 0:
+    if qty <= 0 and not auto:
         return jsonify(ok=False, error="Quantity (PCS) zaroori hai."), 400
     if po_sno <= 0:
         return jsonify(ok=False, error="PO S.No. likho."), 400
@@ -4260,12 +4262,13 @@ def po_save_line():
     mid = int(f.get("model_id") or 0)
     pm = db.query("SELECT * FROM product_models WHERE id=?", (mid,), one=True) if mid else None
     tmodel = (f.get("model") or "").strip()
-    if not pm and not tmodel:
+    if not pm and not tmodel and not auto:
         return jsonify(ok=False, error="MODEL NO chuno ya likho (Size Master se aayega)."), 400
     model_code = pm["model_code"] if pm and pm["model_code"] else (pm["name"] if pm else tmodel)
     party_model = (f.get("party_model") or "").strip()
     party_code = (f.get("party_code") or "").strip()
-    prod = f"{model_code}{(' · ' + party_model) if party_model else ''}"
+    prod = (f"{model_code}{(' · ' + party_model) if party_model else ''}"
+            if model_code else f"(S.No. {po_sno} — khud bharo)")
     x_size = float(f.get("x_size") or 0) or (float(pm["cutting_len"] or pm["panel_len"] or 0) if pm else 0)
     y_size = float(f.get("y_size") or 0) or (float(pm["cutting_w"] or pm["panel_w"] or 0) if pm else 0)
     ups = int(f.get("ups") or 0) or (int(pm["pcs_panel"] or 0) if pm else 0)
