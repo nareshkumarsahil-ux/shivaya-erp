@@ -2736,10 +2736,10 @@ FIELD_ALIASES = {
                 "panel size y", "panel size w", "panel y size", "w"],
     "cutting_len": ["cutting length", "cutting l", "cutting x", "cutting size x",
                     "cut size x", "x cutting size", "cutting length (mm)", "gang length",
-                    "gang l", "cutting size l", "gang size x", "gang size l", "4a", "cut l"],
+                    "gang l", "cutting size l", "gang size x", "gang size l", "4a", "48", "cut l"],
     "cutting_w": ["cutting width", "cutting w", "cutting y", "cutting size y",
                   "cut size y", "y cutting size", "cutting width (mm)", "gang width",
-                  "gang w", "cutting size w", "gang size y", "gang size w", "4b", "cut w"],
+                  "gang w", "cutting size w", "gang size y", "gang size w", "4b", "40", "cut w"],
     "kerf_x": ["kerf x", "panel gap x", "cutting gap x", "kerf x (mm)", "panel gap / kerf x (mm)"],
     "kerf_y": ["kerf y", "panel gap y", "cutting gap y", "kerf y (mm)", "panel gap / kerf y (mm)"],
     "cnc_margin_x": ["cnc margin x", "margin x", "cnc x", "cnc margin x (mm)"],
@@ -3023,8 +3023,11 @@ def _import_preview(batch):
     for r in data_rows:
         mapped.append(_row_to_fields(headers, mapping, _json.loads(r["data"])))
     existing = {m["name"] for m in db.query("SELECT name FROM product_models")}
-    new_count = sum(1 for m in mapped if m.get("name") and m["name"] not in existing)
-    upd_count = sum(1 for m in mapped if m.get("name") and m["name"] in existing)
+    # v4.07: preview bhi MODEL NO.-fallback samjhe (confirm jaisa hi) — warna 0 naye dikhta hai
+    def _nm(m):
+        return (str(m.get("name") or "")).strip() or (str(m.get("model_code") or "")).strip()
+    new_count = sum(1 for m in mapped if _nm(m) and _nm(m) not in existing)
+    upd_count = sum(1 for m in mapped if _nm(m) and _nm(m) in existing)
     skip_count = sum(1 for m in mapped if not m.get("name") and not m.get("model_code"))
     ignored = [h for idx, h in enumerate(headers) if idx not in mapping and _norm_hdr(h)]
     return {
@@ -4477,8 +4480,8 @@ def products_sheet_download():
     ws = wb.active
     ws.title = "SIZE SHEET"
     grp = ["", "", "", "", "SINGLE PCB SIZE", "SINGLE PANEL", "", "", "CUTTING SIZE", "", "", "", "", "", "", "", ""]
-    sub = ["S.N", "PARTY", "MODEL NO.", "PARTY CODE", "", "L", "W", "PCS", "4a", "X#", "4b", "Y#",
-           "UPS", "CNC/TOOL", "PER SQ.INCH", "MATERIAL", "PER SQ.INCH"]
+    sub = ["S.N.", "PARTY", "MODEL NO.", "PARTY CODE", "", "L", "W", "PCS", "4a", "X#", "4b", "Y#",
+           "UPS", "CNC/TOOL", "PER SQ INCH", "MATERIAL", "PRICE"]
     ws.append(grp)
     ws.append(sub)
     from openpyxl.styles import Font, Alignment
@@ -4488,10 +4491,15 @@ def products_sheet_download():
     ws.merge_cells("F1:H1")
     ws.merge_cells("I1:L1")
     i = 0
+    def _fnum(v):
+        try:
+            return float(v)
+        except (TypeError, ValueError):
+            return 0.0
     for m in rows:
         i += 1
-        _pl, _pw = (m["pcb_len"] or 0), (m["pcb_w"] or 0)
-        pcb = ("%g X %g" % (_pl, _pw)) if (_pl and _pw) else (("%g" % _pl) if _pl else (("%g" % _pw) if _pw else ""))
+        _pl, _pw = _fnum(m["pcb_len"]), _fnum(m["pcb_w"])
+        pcb = ("%g X %g" % (_pl, _pw)) if (_pl and _pw) else ((f"{_pl:g}") if _pl else ((f"{_pw:g}") if _pw else ""))
         ws.append([i, m["party_name"] or m["party"] or "", m["model_code"] or m["name"] or "", m["party_code"] or "",
                    pcb, m["panel_len"] or "", m["panel_w"] or "", "",
                    m["cutting_len"] or "", m["x_qty"] or "", m["cutting_w"] or "", m["y_qty"] or "",
