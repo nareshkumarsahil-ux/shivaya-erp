@@ -77,27 +77,36 @@
       var pf = toks[ti].split('-')[0];
       if (KNOWN.indexOf(pf) !== -1 && norm(toks[ti]) !== norm(model)) { party_model = toks[ti]; break; }
     }
-    var rest = body;
-    if (model) rest = rest.replace(new RegExp(model.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&'), 'i'), ' ');
+    /* v4.04: model SPAN sahi se hatao ("RM 209" jaisa spaced token bhi) — warna 209 qty ban jata tha */
+    var rest = body, mmatch = null;
+    MODEL_RE.lastIndex = 0;
+    mmatch = MODEL_RE.exec(body);
+    if (mmatch) rest = body.slice(0, mmatch.index) + ' ' + body.slice(mmatch.index + mmatch[0].length);
     var warn = false, note = '';
-    /* numeric tail: last letter-token ke baad ke numbers = qty/rate/amount columns (formal table) */
-    var tailm = rest.match(/^(.*[A-Za-z][A-Za-z0-9\-_\/\\.]*)\s+(.*)$/);
-    var desc = rest, tail = rest;
-    if (tailm) { desc = tailm[1]; tail = tailm[2]; }   /* last letter-token ke baad = numeric columns */
+    /* v4.04: parenthesis me party-codes/references hote hain — unke numbers qty/rate NAHI */
+    rest = rest.replace(/\([^)]*\)/g, ' ');
+    /* v4.04: spec-numbers (12W, 1.5MM, 5V...) qty/rate NAHI — pehle hi hatao */
+    rest = rest.replace(/\b\d+(?:\.\d+)?\s*(?:w|kw|mm|cm|v|hz|amp|um|oz)\b\.?/gi, ' ');
+    var desc = rest;
     var qm = rest.match(/(\d[\d,\.]*)\s*(?:pcs\.?|nos\.?|pc\b|pieces)/i);
     var qmv = qm ? parseFloat(qm[1].replace(/,/g, '')) : 0;
     var rm = rest.match(/(?:@|rs\.?|\u20B9)\s*(\d+(?:\.\d+)?)/i);
     var qty = '', rate = '';
-    var nums = numsIn(tail.replace(/@|rs\.?|\u20B9/gi, ' ')).filter(function (n) { return n.v >= 3; });
-    if (nums.length && nums[0].v >= 1000000) nums.shift();   /* HSN jaisa bada code skip */
+    var nums = numsIn(rest.replace(/@|rs\.?|\u20B9/gi, ' ')).filter(function (n) { return n.v >= 0.5 && n.v < 1000000; });
     if (qm && qmv < 1000000) qty = qm[1].replace(/,/g, '');  /* pcs-suffix (chhota = sach ka qty) */
-    else if (nums.length) qty = qtyStr(nums[0].v);           /* formal table: tail ka pehla number */
+    else if (nums.length) {
+      qty = qtyStr(nums[0].v);                               /* formal table: pehla number = qty */
+      /* v4.04: rate = qty ke BAAD ka pehla decimal-number jo qty se alag ho
+         (3.750/100.000/22.500). 13500/175000/85340000 jaise Taxable/HSN ints rate NAHI. */
+      for (var ri = 1; ri < nums.length; ri++) {
+        if (/\.\d{1,3}$/.test(String(nums[ri].raw)) && nums[ri].v !== nums[0].v) { rate = String(nums[ri].raw); break; }
+      }
+    }
     if (!qty) {
       var big = rest.match(/\b(\d{3,})\b/);
       qty = big ? big[1] : '';
     }
     if (rm) rate = rm[1];
-    else if (nums.length > 1) rate = String(nums[1].v);
     /* qty x rate vs taxable amount — mismatch sirf warning */
     if (qty && rate && nums.length > 2) {
       var val = parseFloat(qty) * parseFloat(rate);
@@ -141,6 +150,23 @@
       }
     });
     var rows = [], snos = [];
+    /* v4.04: scanned/table PO me ek item 4-5 physical lines me toota hota hai
+       (description + (DHL-xxxx/IIS nnn) + THICKNESS-mm + numeric columns).
+       Serial-lines >= 3 ho to table-mode: naya item sirf serial-line par,
+       baaki lines pichhli row me judti hain. WhatsApp text (serial nahi) as-is. */
+    var SER_RE = /^\s*(\d{1,3})\s*[\.\)]?\s+(?=[A-Z(])/;
+    var serialCount = 0;
+    lines.forEach(function (l) { if (SER_RE.test(l)) serialCount++; });
+    if (serialCount >= 3) {
+      var grouped = [];
+      lines.forEach(function (l) {
+        var t = String(l).trim();
+        if (!t) return;
+        if (SER_RE.test(t) || !grouped.length) grouped.push(t);
+        else grouped[grouped.length - 1] += ' ' + t;
+      });
+      lines = grouped;
+    }
     lines.forEach(function (l) {
       var r = parseLine(l, { po_no: po_no, priority: priority });
       if (r) { rows.push(r); if (r.sno) snos.push(r.sno); }
@@ -207,6 +233,8 @@
         }
       }
     });
+    /* v4.04: OCR ne bahut lines banayi ho to flag — UI warning dikhata hai */
+    if (rows.length > 30) rows.tooMany = rows.length;
     return rows;
   }
 

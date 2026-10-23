@@ -4398,6 +4398,22 @@ def po_file_delete(fid):
     return jsonify(ok=True, msg="PO folder se delete ho gaya.")
 
 
+@app.route("/api/po/discard/<int:oid>", methods=["POST"])
+@login_required
+@admin_required
+def po_discard(oid):
+    """v4.04: inbox ki ek junk line hatao (uska temp order + card). Approved/running block."""
+    _po_ensure()
+    o = db.query("SELECT id, po_no, status FROM orders WHERE id=?", (oid,), one=True)
+    if not o:
+        return jsonify(ok=True, msg="Pehle hi hat chuki.")
+    if (o["status"] or "pending") not in ("pending", ""):
+        return jsonify(ok=False, msg="Ye order APPROVE ho chuka hai — discard nahi hoga.")
+    db.execute("DELETE FROM jobcard WHERE order_id=?", (oid,))
+    db.execute("DELETE FROM orders WHERE id=?", (oid,))
+    return jsonify(ok=True, msg="Line hat gayi.")
+
+
 @app.route("/api/po/reprocess/<int:fid>")
 @login_required
 @admin_required
@@ -4423,10 +4439,20 @@ def po_reprocess(fid):
         po_no = g or r["po_no"]
     else:
         po_no = r["po_no"]
+    # v4.04: reprocess = pehle isi PO ki PURANI pending lines/cards hatao (junk OCR lines
+    # dobara na jame), approved/running orders bilkul chhupe nahi rahte.
+    purged = 0
+    _oids = [x["id"] for x in db.query("SELECT id FROM orders WHERE po_no=? AND IFNULL(status,'')='pending'", (po_no,))]
+    if _oids:
+        _q = ",".join("?" * len(_oids))
+        db.execute(f"DELETE FROM jobcard WHERE order_id IN ({_q})", tuple(_oids))
+        db.execute(f"DELETE FROM orders WHERE id IN ({_q})", tuple(_oids))
+        purged = len(_oids)
     lines = _po_parse_text(text)
     dups = _po_find_dups(po_no)
     return jsonify(ok=True, file_id=fid, po_no=po_no, filename=fn, mime=r["mime"], lines=lines,
-                   needs_ocr=needs_ocr, text=text[:30000], dups=dups, dup=bool(dups), imgs=imgs64[:2])
+                   needs_ocr=needs_ocr, text=text[:30000], dups=dups, dup=bool(dups), imgs=imgs64[:2],
+                   purged=purged)
 
 
 # v3.97: SHEET inline edit (Excel-jaisi sheet se direct save)

@@ -306,6 +306,10 @@ function ocrFile(j){
         return { id: m.id, model: m.model_code || m.name, party: m.party_name || '' };
       });
       var ls = (window.PCBFlowPO ? PCBFlowPO.parsePoText(text, masters) : []);
+  if (ls.tooMany) {
+    var w2 = document.getElementById('poWarn');
+    if (w2) { w2.innerHTML = '\u26a0\ufe0f OCR ne <b>' + ls.tooMany + ' lines</b> banayi (asli items isse kam lagte hain — scan ke columns toot jate hain). Sirf sahi wali VERIFY karo, baaki \u2715 se hatao — ya PO FOLDER me RE-PROCESS dabao (naya parser purani junk lines khud hata dega).'; w2.style.display = 'block'; }
+  }
       if (!ls.length && window.PCBFlowPO) {
         fetch('/api/po/parse?token=' + encodeURIComponent(T()), {
           method: 'POST', headers: {'Content-Type': 'application/json'},
@@ -351,6 +355,10 @@ function applyPoText(text, j){
     return { id: m.id, model: m.model_code || m.name, party: m.party_name || '' };
   });
   var ls = (window.PCBFlowPO ? PCBFlowPO.parsePoText(text, masters) : []);
+  if (ls.tooMany) {
+    var w2 = document.getElementById('poWarn');
+    if (w2) { w2.innerHTML = '\u26a0\ufe0f OCR ne <b>' + ls.tooMany + ' lines</b> banayi (asli items isse kam lagte hain — scan ke columns toot jate hain). Sirf sahi wali VERIFY karo, baaki \u2715 se hatao — ya PO FOLDER me RE-PROCESS dabao (naya parser purani junk lines khud hata dega).'; w2.style.display = 'block'; }
+  }
   if (!ls.length && j.lines && j.lines.length &&
       !/(Purchase Order|GSTIN|Item & Description|Description of Goods|PROFORMA)/i.test(text)) {
     ls = j.lines;   /* purana server parser sirf non-formal text par fallback */
@@ -388,6 +396,8 @@ function renderInbox(){
       '<span class="muted">' + (l.qty ? esc(l.qty) + ' pcs' : 'qty?') + '</span>' +
       '<span class="muted">' + (l.rate ? '\u20B9' + esc(l.rate) : '') + '</span>' +
       '<span class="st">' + (l.saved ? '\u2705 VERIFY' : (l.saving ? 'saving\u2026' : (l.saveErr ? esc(l.saveErr) : 'Edit'))) + '</span></button>' +
+      '<button type="button" class="btn btn-outline btn-xs" style="background:#fef2f2;color:#b91c1c;padding:2px 7px" ' +
+        'onclick="delLine(' + i + ')" title="Ye galat/junk line hai — hatao (approved order ho to block hoga)">\u2715</button>' +
       '<div class="chedit" id="ced' + i + '" style="display:' + (i === SEL ? 'block' : 'none') + '">' +
         '<div class="crow">' +
           '<div><label>MODEL NO (Size Master se match hoga)</label><input id="ce_m' + i + '" list="mdlLst" value="' + esc(l.model || '') + '" placeholder="e.g. SCPL-462"></div>' +
@@ -649,6 +659,19 @@ function openVerify(oid){
   window.open('/po/verify/' + oid + '?token=' + encodeURIComponent(T()), '_blank');
 }
 function fileOnly(){ toast('File upload ho chuki hai — library me safe hai. (Job card bina confirm nahi banta)', true); }
+
+/* v4.04: ek junk line hatao (temp order bhi server se delete; approved block hoga) */
+function delLine(i){
+  var l = LINES[i]; if (!l) return;
+  if (!window.confirm('Line #' + (l.sno || (i + 1)) + ' (' + (l.model || '\u2014') + ') hatani hai?')) return;
+  var done = function(){ LINES.splice(i, 1); renderInbox(); };
+  if (l.oid) {
+    fetch('/api/po/discard/' + l.oid + '?token=' + encodeURIComponent(T()), { method: 'POST' })
+      .then(function(r){ return r.json(); })
+      .then(function(j){ if (!j.ok) toast(j.msg || 'Discard nahi hua', true); done(); })
+      .catch(function(){ toast('Network fail', true); });
+  } else done();
+}
 /* ---------- v3.97: PO FOLDER + RE-PROCESS ---------- */
 function loadFolder(){
   fetch('/api/po/list?token=' + encodeURIComponent(T()))
