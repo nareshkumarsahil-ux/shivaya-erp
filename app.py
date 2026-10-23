@@ -4786,6 +4786,10 @@ def po_update_card(oid):
         db.execute("UPDATE jobcard SET model=? WHERE id=?", (model_code, jc["id"]))
 
     # ---- simple jobcard fields
+    if gv("po_no"):   # v4.05: PO NO edit-window se badla to orders par bhi
+        db.execute("UPDATE orders SET po_no=? WHERE id=?", (gv("po_no"), oid))
+    if gv("odate"):
+        db.execute("UPDATE orders SET created_on=? WHERE id=?", (gv("odate"), oid))
     _jmap = {"odate": "odate", "order_via": "order_via", "party_model": "party_model", "po_no": "po_no",
              "party_code": "party_code", "sheet_thickness": "sheet_thickness",
              "exp_delivery": "exp_delivery", "sheet_material": "sheet_material", "checked_by": "checked_by",

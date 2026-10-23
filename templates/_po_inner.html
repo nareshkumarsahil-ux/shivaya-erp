@@ -309,6 +309,10 @@ function ocrFile(j){
   if (ls.tooMany) {
     var w2 = document.getElementById('poWarn');
     if (w2) { w2.innerHTML = '\u26a0\ufe0f OCR ne <b>' + ls.tooMany + ' lines</b> banayi (asli items isse kam lagte hain — scan ke columns toot jate hain). Sirf sahi wali VERIFY karo, baaki \u2715 se hatao — ya PO FOLDER me RE-PROCESS dabao (naya parser purani junk lines khud hata dega).'; w2.style.display = 'block'; }
+  } else if (ls.length) {
+    var mxsn = 0; ls.forEach(function(x){ if (x.sno && x.sno > mxsn) mxsn = x.sno; });
+    var w3 = document.getElementById('poWarn');
+    if (w3) { w3.innerHTML = '\u2705 PO read: <b>S.No. 1\u2013' + mxsn + '</b> = <b>' + mxsn + ' job cards</b> banenge (S.No. hi item-count hai). PO NO + DATE har line me auto bhar hai.'; w3.style.display = 'block'; }
   }
       if (!ls.length && window.PCBFlowPO) {
         fetch('/api/po/parse?token=' + encodeURIComponent(T()), {
@@ -400,6 +404,11 @@ function renderInbox(){
         'onclick="delLine(' + i + ')" title="Ye galat/junk line hai — hatao (approved order ho to block hoga)">\u2715</button>' +
       '<div class="chedit" id="ced' + i + '" style="display:' + (i === SEL ? 'block' : 'none') + '">' +
         '<div class="crow">' +
+          '<div><label>PO NO (PO se auto)</label><input id="ce_po' + i + '" value="' + esc(l.po_no || '') + '"></div>' +
+          '<div><label>DATE (PO se auto)</label><input id="ce_dt' + i + '" type="date" value="' + esc(l.order_date || '') + '"></div>' +
+          '<div><label>S.NO (job-card isi se)</label><input value="' + esc('#' + (l.sno || (i + 1))) + '" disabled></div>' +
+        '</div>' +
+        '<div class="crow">' +
           '<div><label>MODEL NO (Size Master se match hoga)</label><input id="ce_m' + i + '" list="mdlLst" value="' + esc(l.model || '') + '" placeholder="e.g. SCPL-462"></div>' +
           '<div><label>PARTY MODEL NO</label><input id="ce_pm' + i + '" value="' + esc(l.party_model || '') + '" placeholder="party ka code"></div>' +
           '<div><label>SHEET THICKNESS</label><input id="ce_th' + i + '" value="' + esc(l.sheet_thickness || '') + '" placeholder="e.g. 1.0MM"></div>' +
@@ -470,11 +479,16 @@ function saveEdit(i){
   var l = LINES[i]; if (!l) return;
   var m = gv_('ce_m' + i), pm = gv_('ce_pm' + i), th = gv_('ce_th' + i),
       q = gv_('ce_q' + i), r = gv_('ce_r' + i);
+  var pn = gv_('ce_po' + i), dt = gv_('ce_dt' + i);   /* v4.05: PO NO + DATE PO se auto */
+  if (pn) l.po_no = pn;
+  if (dt) l.order_date = dt;
   var msg = document.getElementById('ce_msg' + i);
   var fd = new FormData();
   fd.append('model', m);
   fd.append('party_model', pm);
   fd.append('sheet_thickness', th);
+  if (pn) fd.append('po_no', pn);
+  if (dt) fd.append('odate', dt);
   if (q) fd.append('total_qty', q);
   if (r) fd.append('rs_pcb', r);
   /* Size Master EXACT match -> model_id (sizes auto) */
