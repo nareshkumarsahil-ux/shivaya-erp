@@ -1052,6 +1052,9 @@ def migrate(conn):
         conn.execute("ALTER TABLE orders ADD COLUMN po_no TEXT DEFAULT ''")
     if ocols and "po_sno" not in ocols:
         conn.execute("ALTER TABLE orders ADD COLUMN po_sno INTEGER DEFAULT 0")
+    _pmc = [r[1] for r in conn.execute("PRAGMA table_info(product_models)")]
+    if _pmc and "cnc_tool" not in _pmc:
+        conn.execute("ALTER TABLE product_models ADD COLUMN cnc_tool TEXT DEFAULT ''")
 
     # order_assignments: per-PROCESS assignment (order_id + process unique) —
     # pending process par operator/machine assign hota hai, order-level nahi

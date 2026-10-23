@@ -16,6 +16,12 @@
   .chip .sno{font-weight:800;color:#4338ca;min-width:34px}
   .chip .st{margin-left:auto;font-size:10px;font-weight:800;padding:2px 7px;border-radius:99px;background:#f1f5f9;color:#64748b}
   .chip.done .st{background:#dcfce7;color:#15803d}
+  /* v3.97: PO FOLDER — saved PO list + re-process */
+  .frow97{display:flex;align-items:center;gap:8px;border:1.5px solid var(--border);border-radius:9px;padding:7px 9px;margin-bottom:6px;background:#fff;font-size:12px}
+  .frow97:hover{border-color:#6366f1}
+  .frow97 .fno{font-weight:800;color:#4338ca;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .frow97 .ffn{color:#64748b;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .frow97 .fmeta{margin-left:auto;font-size:10.5px;color:#94a3b8;white-space:nowrap}
   /* v3.95: chip ke niche INLINE EDITOR (MODEL/PARTY MODEL/THICKNESS/QTY/PRICE) */
   .chiprow{margin-bottom:7px}
   .chiprow .chip{margin-bottom:0}
@@ -62,6 +68,13 @@
         <button class="btn btn-outline btn-xs" onclick="addLine()">＋ Line jodo</button>
       </div>
       <div id="inbox"><div class="muted small">File upload karo — PO ki har S.No. line yahan chip banegi. Har line = ek job card.</div></div>
+
+      <!-- v3.97: PO FOLDER — saare saved PO, koi bhi dobara process karo -->
+      <div style="display:flex;justify-content:space-between;align-items:center;margin:12px 0 7px">
+        <b style="font-size:12.5px">📁 PO FOLDER <span class="muted small">(dobara process karo)</span></b>
+        <button class="btn btn-outline btn-xs" onclick="loadFolder()">↻ Refresh</button>
+      </div>
+      <div id="poFolder"><div class="muted small">Saved PO yahan dikhenge — RE-PROCESS dabao, wahi PO phir read hoga.</div></div>
     </div>
   </div>
 
@@ -636,5 +649,45 @@ function openVerify(oid){
   window.open('/po/verify/' + oid + '?token=' + encodeURIComponent(T()), '_blank');
 }
 function fileOnly(){ toast('File upload ho chuki hai — library me safe hai. (Job card bina confirm nahi banta)', true); }
+/* ---------- v3.97: PO FOLDER + RE-PROCESS ---------- */
+function loadFolder(){
+  fetch('/api/po/list?token=' + encodeURIComponent(T()))
+    .then(function(r){ return r.json(); })
+    .then(function(j){
+      var box = document.getElementById('poFolder');
+      if (!j.ok || !j.files.length) { box.innerHTML = '<div class="muted small">Abhi koi PO saved nahi.</div>'; return; }
+      box.innerHTML = j.files.map(function(f){
+        return '<div class="frow97">' +
+          '<span class="fno">' + esc(f.po_no || '(WhatsApp)') + '</span>' +
+          '<span class="ffn" title="' + esc(f.filename) + '">' + esc(f.filename) + '</span>' +
+          '<span class="fmeta">' + esc(f.uploaded_on || '') + ' · ' + (f.orders || 0) + ' orders</span>' +
+          '<button type="button" class="btn btn-outline btn-xs" style="background:#eef2ff;color:#3730a3" ' +
+            'onclick="reprocess(' + f.id + ')" title="Is PO ko dobara read karke job cards banao">\u21bb RE-PROCESS</button>' +
+        '</div>';
+      }).join('');
+    }).catch(function(){});
+}
+function reprocess(fid){
+  /* v3.97: bina confirm — seedha process (same PO to warning khud dikhegi) */
+  fetch('/api/po/reprocess/' + fid + '?token=' + encodeURIComponent(T()))
+    .then(function(r){ return r.json(); })
+    .then(function(j){
+      if (!j.ok) { toast(j.error || 'Re-process fail', true); return; }
+      LINES = LINES.filter(function(l){ return l.file_id !== fid; });   /* isi PO ki purani lines hatao */
+      FILES = FILES.filter(function(f){ return f.file_id !== fid; });
+      FILES.push(j);
+      if (j.po_no) document.getElementById('poNo').value = j.po_no;
+      showDups(j);
+      if (j.mime === 'application/pdf') showPdf(fid, j.needs_ocr); else showImg(fid);
+      if (j.text && j.text.trim()) applyPoText(j.text, j);
+      else if (j.needs_ocr) ocrFile(j);
+      else if (j.lines && j.lines.length) j.lines.forEach(function(x){ x.file_id = fid; LINES.push(x); });
+      renderInbox();
+      if (LINES.length) autoSaveAll();
+      toast('PO re-process: ' + LINES.length + ' lines — temp cards ban rahe hain\u2026');
+      loadFolder();
+    }).catch(function(){ toast('Network fail', true); });
+}
+loadFolder();
 renderInbox();
 </script>

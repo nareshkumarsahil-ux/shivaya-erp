@@ -4210,6 +4210,137 @@ def po_parse():
     return jsonify(ok=True, lines=_po_parse_text(j.get("text") or ""))
 
 
+def _po_extract(blob, ext):
+    """v3.97: blob -> (text, needs_ocr, imgs64) — upload aur re-process dono use karte hain."""
+    text, needs_ocr, imgs64 = "", False, []
+    if ext == "pdf":
+        try:
+            import io as _io
+            from pypdf import PdfReader
+            rd = PdfReader(_io.BytesIO(blob))
+            text = "\n".join((pg.extract_text() or "") for pg in rd.pages)
+        except Exception:
+            text = ""
+        if not text.strip():
+            needs_ocr = True
+    else:
+        needs_ocr = True
+    if needs_ocr and ext == "pdf":
+        try:
+            import io as _io2
+            from pypdf import PdfReader as _PR2
+            _rd2 = _PR2(_io2.BytesIO(blob))
+            for _pg2 in _rd2.pages[:2]:
+                for _im in _pg2.images:
+                    try:
+                        _d = _im.data
+                        _mt = "image/png"
+                        if _d[:3] == b"\xff\xd8\xff":
+                            _mt = "image/jpeg"
+                        elif _d[:4] == b"\x89PNG":
+                            _mt = "image/png"
+                        elif _d[:2] == b"BM":
+                            _mt = "image/bmp"
+                        imgs64.append("data:" + _mt + ";base64," + base64.b64encode(_d).decode("ascii"))
+                    except Exception:
+                        try:
+                            _buf = _io2.BytesIO()
+                            _im.image.save(_buf, format="JPEG")
+                            imgs64.append("data:image/jpeg;base64," + base64.b64encode(_buf.getvalue()).decode("ascii"))
+                        except Exception:
+                            pass
+                if imgs64:
+                    break
+        except Exception:
+            imgs64 = []
+    return text, needs_ocr, imgs64
+
+
+@app.route("/api/po/list")
+@login_required
+@admin_required
+def po_list():
+    """v3.97: PO FOLDER — saare saved PO (re-process ke liye) + kitne orders ban chuke."""
+    _po_ensure()
+    rows = db.query("SELECT id, po_no, filename, uploaded_on FROM po_files ORDER BY id DESC LIMIT 100")
+    out = []
+    for r in rows:
+        n = db.query("SELECT COUNT(*) c FROM orders WHERE po_no=?", (r["po_no"],), one=True)["c"]
+        out.append({"id": r["id"], "po_no": r["po_no"], "filename": r["filename"],
+                    "uploaded_on": (r["uploaded_on"] or "")[:10], "orders": n})
+    return jsonify(ok=True, files=out)
+
+
+@app.route("/api/po/reprocess/<int:fid>")
+@login_required
+@admin_required
+def po_reprocess(fid):
+    """v3.97: saved PO ko DOBARA process karo (same response jaisa upload ka — lines/OCR/imgs/dups)."""
+    _po_ensure()
+    r = db.query("SELECT * FROM po_files WHERE id=?", (fid,), one=True)
+    if not r:
+        return jsonify(ok=False, error="PO file nahi mili."), 404
+    try:
+        blob = base64.b64decode(r["data64"])
+    except Exception:
+        blob = b""
+    if not blob:
+        return jsonify(ok=False, error="File data khali hai."), 400
+    fn = r["filename"] or "po"
+    ext = (fn.rsplit(".", 1)[-1] if "." in fn else "pdf").lower()
+    if ext not in ("pdf", "jpg", "jpeg", "png", "webp"):
+        ext = "pdf"
+    text, needs_ocr, imgs64 = _po_extract(blob, ext)
+    if r["po_no"].upper() == "WHATSAPP" and text.strip():
+        g = _po_guess_no(text)
+        po_no = g or r["po_no"]
+    else:
+        po_no = r["po_no"]
+    lines = _po_parse_text(text)
+    dups = _po_find_dups(po_no)
+    return jsonify(ok=True, file_id=fid, po_no=po_no, filename=fn, mime=r["mime"], lines=lines,
+                   needs_ocr=needs_ocr, text=text[:30000], dups=dups, dup=bool(dups), imgs=imgs64[:2])
+
+
+# v3.97: SHEET inline edit (Excel-jaisi sheet se direct save)
+_SHEET_FIELDS = {"model_code": str, "name": str, "party_code": str, "party_name": str,
+                 "pcb_len": float, "pcb_w": float, "panel_len": float, "panel_w": float,
+                 "pcs_panel": int, "cutting_len": float, "cutting_w": float,
+                 "x_qty": int, "y_qty": int, "panels_sheet": int, "sheets": int,
+                 "sheet_thickness": str, "per_sq_inch": float, "pcb_price": float, "cnc_tool": str}
+
+
+@app.route("/api/product/<int:pid>/sheet_edit", methods=["POST"])
+@login_required
+@admin_required
+def product_sheet_edit(pid):
+    """v3.97: SHEET cell-edit — sirf whitelist fields, kuch invent nahi."""
+    j = request.get_json(silent=True) or {}
+    sets, vals = [], []
+    for k, v in j.items():
+        if k not in _SHEET_FIELDS:
+            continue
+        t = _SHEET_FIELDS[k]
+        try:
+            if t is str:
+                vals.append(str(v or "").strip())
+            elif t is int:
+                vals.append(int(float(v or 0)))
+            else:
+                vals.append(float(v or 0))
+        except (TypeError, ValueError):
+            return jsonify(ok=False, error="Galat value: " + k), 400
+        sets.append(f"{k}=?")
+    if not sets:
+        return jsonify(ok=False, error="Koi valid field nahi mila."), 400
+    m = db.query("SELECT id FROM product_models WHERE id=?", (pid,), one=True)
+    if not m:
+        return jsonify(ok=False, error="Model nahi mila."), 404
+    vals.append(pid)
+    db.execute(f"UPDATE product_models SET {', '.join(sets)} WHERE id=?", tuple(vals))
+    return jsonify(ok=True)
+
+
 @app.route("/api/po/file/<int:fid>")
 @login_required
 @admin_required

@@ -11,6 +11,99 @@
   </div>
 </div>
 
+<!-- ================= v3.97: SHEET (apni Excel wali — sab models, inline edit) ================= -->
+<div class="panel" style="border-left:4px solid #4338ca">
+  <div class="panel-head">
+    <h3>📄 SHEET — Size Master (Excel jaisi · cell par click karo, value badlo, Enter = save)</h3>
+    <span class="muted small">Cut List se save / Add Manually / Import — sab yahin aa jate hain. PO read isko hi match karta hai.</span>
+  </div>
+  <div class="panel-body" style="max-height:60vh;overflow:auto">
+    <table class="stable" id="sheet97" style="border-collapse:collapse;width:100%;font-size:11.5px;background:#fff">
+      <thead>
+        <tr style="background:#eef2ff;position:sticky;top:0;z-index:2">
+          <th style="border:1px solid #cbd5e1;padding:5px 6px">S.N</th>
+          <th style="border:1px solid #cbd5e1;padding:5px 6px">PARTY</th>
+          <th style="border:1px solid #cbd5e1;padding:5px 6px">MODEL NO.</th>
+          <th style="border:1px solid #cbd5e1;padding:5px 6px">PARTY CODE</th>
+          <th style="border:1px solid #cbd5e1;padding:5px 6px">PCB SIZE</th>
+          <th style="border:1px solid #cbd5e1;padding:5px 6px">PANEL L</th>
+          <th style="border:1px solid #cbd5e1;padding:5px 6px">PANEL W</th>
+          <th style="border:1px solid #cbd5e1;padding:5px 6px">PCS/PANEL</th>
+          <th style="border:1px solid #cbd5e1;padding:5px 6px">CUT L</th>
+          <th style="border:1px solid #cbd5e1;padding:5px 6px">X#</th>
+          <th style="border:1px solid #cbd5e1;padding:5px 6px">CUT W</th>
+          <th style="border:1px solid #cbd5e1;padding:5px 6px">Y#</th>
+          <th style="border:1px solid #cbd5e1;padding:5px 6px">PANELS/SHEET</th>
+          <th style="border:1px solid #cbd5e1;padding:5px 6px">SHEETS</th>
+          <th style="border:1px solid #cbd5e1;padding:5px 6px">CNC/TOOL</th>
+          <th style="border:1px solid #cbd5e1;padding:5px 6px">PER SQ INCH</th>
+          <th style="border:1px solid #cbd5e1;padding:5px 6px">MATERIAL</th>
+          <th style="border:1px solid #cbd5e1;padding:5px 6px">RATE ₹</th>
+          <th style="border:1px solid #cbd5e1;padding:5px 6px">FIN. STOCK</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for m in models %}
+        <tr data-id="{{ m.id }}">
+          <td style="border:1px solid #e2e8f0;padding:4px 6px;text-align:center;color:#94a3b8">{{ loop.index }}</td>
+          {% for f, val in [('party_name', m.party_name or m.party or ''), ('model_code', m.model_code or ''), ('party_code', m.party_code or ''),
+                            ('pcb_len', m.pcb_len or 0), ('pcb_w', m.pcb_w or 0),
+                            ('panel_len', m.panel_len or 0), ('panel_w', m.panel_w or 0), ('pcs_panel', m.pcs_panel or 0),
+                            ('cutting_len', m.cutting_len or 0), ('x_qty', m.x_qty or 0), ('cutting_w', m.cutting_w or 0), ('y_qty', m.y_qty or 0),
+                            ('panels_sheet', m.panels_sheet or 0), ('sheets', m.sheets or 0), ('cnc_tool', m.cnc_tool or ''),
+                            ('per_sq_inch', m.per_sq_inch or 0), ('sheet_thickness', m.sheet_thickness or ''), ('pcb_price', m.pcb_price or 0)] %}
+          <td class="sc" data-f="{{ f }}" style="border:1px solid #e2e8f0;padding:4px 6px;cursor:cell;min-width:44px">{{ '' if val is none else val }}</td>
+          {% endfor %}
+          <td style="border:1px solid #e2e8f0;padding:4px 6px;text-align:center;font-weight:800;color:{{ '#15803d' if (m.fg_stock or 0) > 0 else '#cbd5e1' }}">{{ m.fg_stock or 0 }}</td>
+        </tr>
+        {% endfor %}
+        {% if not models %}
+        <tr><td colspan="19" style="border:1px solid #e2e8f0;padding:12px;text-align:center;color:#94a3b8">Abhi koi model nahi — Cut List Optimizer se save karo ya Add Manually.</td></tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+<script>
+/* v3.97: SHEET cell edit — click -> input -> Enter/blur = save */
+(function(){
+  var NUM = ['pcb_len','pcb_w','panel_len','panel_w','pcs_panel','cutting_len','x_qty','cutting_w','y_qty',
+             'panels_sheet','sheets','per_sq_inch','pcb_price'];
+  var T = (document.cookie.match(/(?:^|; )token=([^;]*)/) || [])[1];
+  function tok(){ return T || (window.T ? window.T() : ''); }
+  document.querySelectorAll('#sheet97 td.sc').forEach(function(td){
+    td.addEventListener('click', function(){
+      if (td.querySelector('input')) return;
+      var old = td.textContent.trim();
+      td.innerHTML = '';
+      var inp = document.createElement('input');
+      inp.value = old;
+      inp.style.cssText = 'width:100%;box-sizing:border-box;font:inherit;font-weight:700;border:1.5px solid #4338ca;border-radius:4px;padding:1px 3px';
+      td.appendChild(inp);
+      inp.focus(); inp.select();
+      function done(save){
+        var v = inp.value.trim();
+        if (save && v !== old) {
+          var tr = td.closest('tr');
+          var body = {}; body[td.dataset.f] = v;
+          fetch('/api/product/' + tr.dataset.id + '/sheet_edit?token=' + encodeURIComponent(tok()), {
+            method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)
+          }).then(function(r){ return r.json(); }).then(function(j){
+            if (j.ok) { td.textContent = v; td.style.background = '#dcfce7'; setTimeout(function(){ td.style.background = ''; }, 900); }
+            else { td.textContent = old; alert(j.error || 'save fail'); }
+          }).catch(function(){ td.textContent = old; });
+        } else td.textContent = old;
+      }
+      inp.addEventListener('keydown', function(e){
+        if (e.key === 'Enter') { e.preventDefault(); inp.blur(); }
+        if (e.key === 'Escape') { inp.value = old; inp.blur(); }
+      });
+      inp.addEventListener('blur', function(){ done(true); });
+    });
+  });
+})();
+</script>
+
 {% if request.args.get('import') and not import_preview %}
 <div class="panel" style="border-left:4px solid #16a34a">
   <div class="panel-head"><h3>📥 Import Finished Products — Google Sheet / Excel / CSV</h3><a class="btn btn-outline btn-sm" href="/products">✕ Close</a></div>
