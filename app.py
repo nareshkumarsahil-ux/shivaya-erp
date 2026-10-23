@@ -4144,6 +4144,7 @@ def po_upload():
     mime = {"pdf": "application/pdf", "jpg": "image/jpeg", "jpeg": "image/jpeg",
             "png": "image/png", "webp": "image/webp"}[ext]
     text, needs_ocr = "", False
+    imgs64 = []
     if ext == "pdf":
         try:
             import io as _io
@@ -4156,6 +4157,37 @@ def po_upload():
             needs_ocr = True  # scanned-PDF: browser OCR / khud lines bharo
     else:
         needs_ocr = True
+    if needs_ocr and ext == "pdf":
+        # v3.93: scanned PDF ke andar ki asli image seedha nikaalo (browser me pdf.js render ki zaroorat nahi)
+        try:
+            import io as _io2
+            from pypdf import PdfReader as _PR2
+            _rd2 = _PR2(_io2.BytesIO(blob))
+            for _pg2 in _rd2.pages[:2]:
+                for _im in _pg2.images:
+                    try:
+                        _d = _im.data
+                        _mt = "image/png"
+                        if _d[:3] == b"\xff\xd8\xff":
+                            _mt = "image/jpeg"
+                        elif _d[:4] == b"\x89PNG":
+                            _mt = "image/png"
+                        elif _d[:2] == b"BM":
+                            _mt = "image/bmp"
+                        else:
+                            _im.image.save(_io2.BytesIO(), format="PNG")
+                        imgs64.append("data:" + _mt + ";base64," + base64.b64encode(_d).decode("ascii"))
+                    except Exception:
+                        try:
+                            _buf = _io2.BytesIO()
+                            _im.image.save(_buf, format="JPEG")
+                            imgs64.append("data:image/jpeg;base64," + base64.b64encode(_buf.getvalue()).decode("ascii"))
+                        except Exception:
+                            pass
+                if imgs64:
+                    break
+        except Exception:
+            imgs64 = []
     if po_no.upper() == "WHATSAPP" and text.strip():   # v3.86b: PDF me PO number mila to wahi folder naam
         g = _po_guess_no(text)
         if g:
@@ -4165,7 +4197,7 @@ def po_upload():
     lines = _po_parse_text(text)
     dups = _po_find_dups(po_no)
     return jsonify(ok=True, file_id=fid, po_no=po_no, filename=fn, mime=mime, lines=lines,
-                   needs_ocr=needs_ocr, text=text[:30000], dups=dups, dup=bool(dups))
+                   needs_ocr=needs_ocr, text=text[:30000], dups=dups, dup=bool(dups), imgs=imgs64[:2])
 
 
 @app.route("/api/po/parse", methods=["POST"])

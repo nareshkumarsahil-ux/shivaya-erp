@@ -30,6 +30,8 @@
   .jced{border:1.5px dashed #1e3a8a;border-radius:4px;font-weight:700;padding:1px 4px;width:100%;min-width:46px;font-size:inherit;font-family:inherit;box-sizing:border-box;background:#fffbea;color:#111827}
   .jced:focus{outline:none;background:#eef2ff}
 </style>
+<script src="/static/vendor/pdfjs/pdf.min.js"></script>
+<script>if (window.pdfjsLib) { pdfjsLib.GlobalWorkerOptions.workerSrc = '/static/vendor/pdfjs/pdf.worker.min.js'; }</script>
 
 <div class="po-grid">
   <!-- ============ LEFT: upload + inbox ============ -->
@@ -183,7 +185,7 @@ function showPdf(id, needsOcr){
   box.innerHTML = '<canvas style="max-width:100%"></canvas>';
   var cv = box.querySelector('canvas');
   if (window.pdfjsLib) {
-    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    pdfjsLib.GlobalWorkerOptions.workerSrc = '/static/vendor/pdfjs/pdf.worker.min.js';
     pdfjsLib.getDocument(url).promise.then(function(pdf){
       return pdf.getPage(1).then(function(pg){
         var sc = Math.min(1.4, 760 / pg.getViewport({scale:1}).width);
@@ -208,7 +210,7 @@ function ocrFile(j){
   if (on) on.textContent = '🔎 OCR chal raha hai (browser me)…';
   function done(){
     var n = document.getElementById('ocrNote');
-    if (n) n.textContent = 'OCR nahi ho saka (offline?) — lines khud bharo, ＋ Line jodo.';
+    if (n) n.textContent = 'OCR engine load nahi hua — lines khud bharo, ＋ Line jodo. (File library me safe hai)';
   }
   function loadScript(src, cb){
     var sc = document.createElement('script');
@@ -216,7 +218,7 @@ function ocrFile(j){
     document.head.appendChild(sc);
   }
   function poPdfCanvas(url){
-    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    pdfjsLib.GlobalWorkerOptions.workerSrc = '/static/vendor/pdfjs/pdf.worker.min.js';
     return pdfjsLib.getDocument(url).promise.then(function(pdf){
       var pages = Math.min(2, pdf.numPages), jobs = [];
       for (var i = 1; i <= pages; i++) jobs.push(pdf.getPage(i));
@@ -225,49 +227,85 @@ function ocrFile(j){
           var vp = pg.getViewport({ scale: 2 });
           var c = document.createElement('canvas');
           c.width = vp.width; c.height = vp.height;
-          pg.render({ canvasContext: c.getContext('2d'), viewport: vp });
-          return c;
+          return pg.render({ canvasContext: c.getContext('2d'), viewport: vp }).promise.then(function(){ return c; });
         });
-        var w = Math.max.apply(null, cvs.map(function(c){ return c.width; }));
-        var h = cvs.reduce(function(a, c){ return a + c.height; }, 0);
-        var out = document.createElement('canvas');
-        out.width = w; out.height = h;
-        var cx = out.getContext('2d'), y = 0;
-        cvs.forEach(function(c){ cx.drawImage(c, 0, y); y += c.height; });
-        return out;
+        return Promise.all(cvs).then(function(done_){
+          var w = Math.max.apply(null, done_.map(function(c){ return c.width; }));
+          var h = done_.reduce(function(a, c){ return a + c.height; }, 0);
+          var out = document.createElement('canvas');
+          out.width = w; out.height = h;
+          var cx = out.getContext('2d'), y2 = 0;
+          done_.forEach(function(c){ cx.drawImage(c, 0, y2); y2 += c.height; });
+          return out;
+        });
       });
     });
   }
-  try {
-    loadScript('https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js', function(){
-      if (!window.Tesseract) { done(); return; }
-      var url = '/api/po/file/' + j.file_id + '?token=' + encodeURIComponent(T());
-      var prep;
-      if (j.mime === 'application/pdf') {
-        if (window.pdfjsLib) prep = poPdfCanvas(url);
-        else prep = new Promise(function(res, rej){
-          loadScript('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js', function(){
-            if (!window.pdfjsLib) { rej(); return; }
-            poPdfCanvas(url).then(res, rej);
-          });
-        });
-      } else prep = Promise.resolve(url);
-      prep.then(function(src){
-        return Tesseract.recognize(src, 'eng', { tessedit_pageseg_mode: '6' });
-      }).then(function(r){
-        return fetch('/api/po/parse?token=' + encodeURIComponent(T()), {
+  function tessRun(src){
+    return Tesseract.createWorker('eng', 1, {
+        workerPath: '/static/vendor/tess/worker.min.js',
+        corePath: '/static/vendor/tess/core',
+        langPath: '/static/vendor/tess/lang',
+        workerBlobURL: false,
+        logger: function(m){
+          if (m && m.status === 'recognizing text') {
+            var n0 = document.getElementById('ocrNote');
+            if (n0) n0.textContent = '\ud83d\udd0e OCR chal raha hai (browser me)\u2026 ' + Math.round((m.progress || 0) * 100) + '%';
+          }
+        }
+      }).then(function(w){
+        return w.setParameters({ tessedit_pageseg_mode: '6' }).then(function(){ return w; });
+      }).then(function(w){
+        return w.recognize(src).then(function(r){ try { w.terminate(); } catch (e2) {} return r; });
+      });
+  }
+  function tessGo(j){
+    var url = '/api/po/file/' + j.file_id + '?token=' + encodeURIComponent(T());
+    var prep;
+    if (j.imgs && j.imgs.length) prep = Promise.resolve(j.imgs[0]);   /* v3.93: server ne asli image nikaal di */
+    else if (j.mime === 'application/pdf') prep = poPdfCanvas(url);
+    else prep = Promise.resolve(url);
+    prep.then(function(src){ return tessRun(src); }).then(function(r){
+      var text = (r && r.data && r.data.text) || '';
+      var masters = MODELS.map(function(m){
+        return { id: m.id, model: m.model_code || m.name, party: m.party_name || '' };
+      });
+      var ls = (window.PCBFlowPO ? PCBFlowPO.parsePoText(text, masters) : []);
+      if (!ls.length && window.PCBFlowPO) {
+        fetch('/api/po/parse?token=' + encodeURIComponent(T()), {
           method: 'POST', headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({text: r.data.text})
+          body: JSON.stringify({text: text})
         }).then(function(x){ return x.json(); }).then(function(jj){
-          if (jj.ok && jj.lines.length) {
-            jj.lines.forEach(function(x){ x.file_id = j.file_id; LINES.push(x); });
-            renderInbox();
-            if (SEL < 0) { SEL = 0; renderInbox(); fillForm(); }
-            toast(jj.lines.length + ' lines OCR se mili ✅');
-          } else toast('OCR me lines nahi mili — khud bharo', true);
-          var n2 = document.getElementById('ocrNote'); if (n2) n2.textContent = '';
+          if (jj.ok && jj.lines && jj.lines.length) tessDone(j, jj.lines);
+          else tessZero();
+        }).catch(tessZero);
+        return;
+      }
+      tessDone(j, ls);
+    }).catch(done);
+  }
+  function tessDone(j, ls){
+    ls.forEach(function(x){ x.file_id = j.file_id; LINES.push(x); });
+    renderInbox();
+    if (SEL < 0) { SEL = 0; renderInbox(); fillForm(); }
+    toast(ls.length + ' lines OCR se mili \u2705');
+    var n2 = document.getElementById('ocrNote'); if (n2) n2.textContent = '';
+  }
+  function tessZero(){
+    toast('OCR me lines nahi mili — photo saaf/bada ho to behtar. \uFF0B Line jodo se khud bharo.', true);
+    var n3 = document.getElementById('ocrNote'); if (n3) n3.textContent = '';
+  }
+
+  try {
+    loadScript('/static/vendor/tess/tesseract.min.js', function(){
+      if (!window.Tesseract) {
+        /* local engine nahi mila — CDN fallback */
+        loadScript('https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js', function(){
+          if (!window.Tesseract) { done(); return; } tessGo(j);
         });
-      }).catch(done);
+        return;
+      }
+      tessGo(j);
     });
   } catch(e){ done(); }
 }
