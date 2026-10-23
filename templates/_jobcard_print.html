@@ -6,8 +6,13 @@
   /* v3.83 — job card blue format (self-contained: dono wrappers me chale) */
   @page { size: A4 landscape; margin: 8mm; }
   .jcl-wrap{background:#fff;color:#111827;font-family:'Segoe UI',Arial,sans-serif;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-  .jcl-top{display:grid;grid-template-columns:250px 250px 1fr 330px;gap:6px;margin-bottom:6px}
-  .jcl-box{border:1.5px solid #1e3a8a;border-radius:6px;overflow:hidden;background:#fff}
+  .jcl-top{display:flex;gap:6px;margin-bottom:6px}  /* v3.89: boxes X-adjustable (splitters) */
+  .jcl-box{border:1.5px solid #1e3a8a;border-radius:6px;overflow:hidden;background:#fff;position:relative;flex:0 0 auto}
+  .jcl-box.jbw3{flex:1 1 auto;min-width:150px}  /* aakhri box bacha hua space leta hai */
+  /* v3.89: box-splitter handle — dono box ki chaudai left/right adjust */
+  .jbx{position:absolute;top:0;right:0;width:12px;height:100%;cursor:ew-resize;z-index:15}
+  .jbx::after{content:"";position:absolute;top:50%;right:2px;transform:translateY(-50%);width:3.5px;height:44px;border-radius:3px;background:#c7d7f5;box-shadow:0 0 0 1px #93b4ec}
+  .jbx:hover::after{background:#1e3a8a}
   .jcl-boxhead{background:#1e3a8a;color:#fff;font-weight:800;font-size:11px;letter-spacing:.4px;padding:4px 8px;display:flex;align-items:center;gap:5px}
   .jcl-row{display:flex;border-top:1px solid #bfdbfe}
   .jcl-row:first-child{border-top:none}
@@ -34,6 +39,61 @@
   .jcl-mono{font-family:ui-monospace,Consolas,monospace}
   .jcl-mix{font-size:9px;color:#b3401c;font-weight:800}
   @media print{ .jcl-wrap{box-shadow:none} }
+</style>
+<script>
+/* v3.89: charo box X-adjustable — splitter drag (localStorage me yaad) */
+(function(){
+  function initTop(top){
+    if (top.getAttribute('data-jbx') === '1') return;
+    top.setAttribute('data-jbx', '1');
+    var boxes = top.querySelectorAll(':scope > .jcl-box');
+    if (boxes.length !== 4) return;
+    var saved = null;
+    try { saved = JSON.parse(localStorage.getItem('jclTopW') || 'null'); } catch(e){}
+    boxes[3].classList.add('jbw3');  /* aakhri box flex: bacha space leta hai */
+    boxes[0].style.width = ((saved && saved[0]) || 250) + 'px';
+    boxes[1].style.width = ((saved && saved[1]) || 250) + 'px';
+    /* boxes[2] bhi explicit; boxes[3] (.jbw3, flex) bacha hua space leta hai */
+    if (saved && saved[2]) {
+      boxes[2].style.width = saved[2] + 'px';
+    } else {
+      var rest = top.clientWidth - 24 - boxes[0].offsetWidth - boxes[1].offsetWidth - boxes[3].offsetWidth;
+      boxes[2].style.width = Math.max(220, rest) + 'px';
+    }
+    function save(){
+      try { localStorage.setItem('jclTopW', JSON.stringify([
+        boxes[0].offsetWidth, boxes[1].offsetWidth, boxes[2].offsetWidth, boxes[3].offsetWidth])); } catch(e){}
+    }
+    function mkDrag(i, pairs){
+      var h = document.createElement('span');
+      h.className = 'jbx';
+      h.title = 'Drag \u2014 box ki chaudai choti/badi karo';
+      boxes[i].appendChild(h);
+      h.addEventListener('mousedown', function(e){
+        e.preventDefault(); e.stopPropagation();
+        var sx = e.clientX, w0 = boxes[i].offsetWidth, wN0 = pairs ? boxes[i+1].offsetWidth : 0;
+        document.body.style.cursor = 'ew-resize';
+        function mv(ev){
+          var d = ev.clientX - sx;
+          var nw = Math.max(130, w0 + d);
+          boxes[i].style.width = nw + 'px';
+          if (pairs) boxes[i+1].style.width = Math.max(130, wN0 - (nw - w0)) + 'px';
+          save();
+        }
+        function up(){ document.body.style.cursor = '';
+          document.removeEventListener('mousemove', mv); document.removeEventListener('mouseup', up); }
+        document.addEventListener('mousemove', mv); document.addEventListener('mouseup', up);
+      });
+    }
+    mkDrag(0, true);   /* box1 <-> box2 */
+    mkDrag(1, true);   /* box2 <-> box3 (JOB CARD DETAILS) */
+    mkDrag(2, false);  /* box3 <-> aakhri box (jbw3 flex) */
+  }
+  function start89(){ document.querySelectorAll('.jcl-top').forEach(initTop); }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start89);
+  else start89();
+})();
+</script>
 </style>
 <div class="jcl-wrap" id="printSheet">
   <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:2.5px solid #1e3a8a;padding-bottom:6px;margin-bottom:6px">
