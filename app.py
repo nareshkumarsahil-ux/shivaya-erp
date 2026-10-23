@@ -444,9 +444,9 @@ def dashboard():
     sqls = [
         ("SELECT COUNT(*) c FROM employees WHERE status='active'", ()),
         ("SELECT COUNT(*) c FROM attendance WHERE date=? AND status='present'", (today,)),
-        ("SELECT COUNT(*) c FROM orders WHERE status!='done'", ()),
+        ("SELECT COUNT(*) c FROM orders WHERE status!='done' AND NOT (status='pending' AND COALESCE(po_no,'')!='')", ()),  # v3.96
         ("SELECT COUNT(*) c FROM orders", ()),
-        ("SELECT COUNT(*) c FROM orders WHERE status='pending' AND priority='urgent'", ()),
+        ("SELECT COUNT(*) c FROM orders WHERE status='pending' AND priority='urgent' AND COALESCE(po_no,'')=''", ()),  # v3.96
         ("SELECT COALESCE(SUM(amount),0) s FROM billing WHERE status='overdue'", ()),
         ("SELECT COALESCE(SUM(amount),0) s FROM billing WHERE status!='paid'", ()),
         ("SELECT COUNT(*) c FROM inventory WHERE stock <= min_stock", ()),
@@ -454,14 +454,14 @@ def dashboard():
         ("SELECT COUNT(*) c FROM machines", ()),
     ]
     if q:
-        sqls.append(("SELECT * FROM orders WHERE status IN ('pending','hold','running','done') AND (order_no LIKE ? OR party LIKE ? OR product LIKE ?) "
-                     "ORDER BY CASE status WHEN 'pending' THEN 0 WHEN 'hold' THEN 1 WHEN 'running' THEN 2 ELSE 3 END, id DESC LIMIT 4",
+        sqls.append(("SELECT * FROM orders WHERE status IN ('pending','hold','running','done') AND COALESCE(po_no,'')='' AND (order_no LIKE ? OR party LIKE ? OR product LIKE ?) "
+                     "ORDER BY CASE status WHEN 'pending' THEN 0 WHEN 'hold' THEN 1 WHEN 'running' THEN 2 ELSE 3 END, id DESC LIMIT 4",  # v3.96
                      (f"%{q}%", f"%{q}%", f"%{q}%")))
     else:
-        sqls.append(("SELECT * FROM orders WHERE status IN ('pending','hold','running','done') "
-                     "ORDER BY CASE status WHEN 'pending' THEN 0 WHEN 'hold' THEN 1 WHEN 'running' THEN 2 ELSE 3 END, id DESC LIMIT 4", ()))
-    sqls.append(("SELECT * FROM orders WHERE status IN ('pending','hold','running','done') "
-                 "ORDER BY CASE status WHEN 'pending' THEN 0 WHEN 'hold' THEN 1 WHEN 'running' THEN 2 ELSE 3 END, id DESC LIMIT 4", ()))
+        sqls.append(("SELECT * FROM orders WHERE status IN ('pending','hold','running','done') AND COALESCE(po_no,'')='' "
+                     "ORDER BY CASE status WHEN 'pending' THEN 0 WHEN 'hold' THEN 1 WHEN 'running' THEN 2 ELSE 3 END, id DESC LIMIT 4", ()))  # v3.96
+    sqls.append(("SELECT * FROM orders WHERE status IN ('pending','hold','running','done') AND COALESCE(po_no,'')='' "
+                 "ORDER BY CASE status WHEN 'pending' THEN 0 WHEN 'hold' THEN 1 WHEN 'running' THEN 2 ELSE 3 END, id DESC LIMIT 4", ()))  # v3.96
     sqls.append(("SELECT * FROM purchase_orders WHERE status!='received' ORDER BY id DESC LIMIT 3", ()))
 
     rows = db.multi(sqls)
@@ -654,6 +654,7 @@ def orders():
         where = "WHERE party LIKE ? OR product LIKE ? OR order_no LIKE ?"
         params = (f"%{q}%", f"%{q}%", f"%{q}%")
     rows = db.query(f"SELECT * FROM orders {where} ORDER BY id DESC", params)
+    rows = [r for r in rows if not (r["status"] == "pending" and (r["po_no"] or "").strip())]  # v3.96: PO card list me sirf APPROVE ke baad
     if filt == "urgent":
         rows = [r for r in rows if r["priority"] == "urgent" and r["status"] == "pending"]
     elif filt == "overdue":

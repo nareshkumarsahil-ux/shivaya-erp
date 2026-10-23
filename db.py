@@ -169,7 +169,8 @@ CREATE TABLE IF NOT EXISTS orders (
     operator TEXT DEFAULT '',
     started_qty INTEGER DEFAULT 0,
     finished_qty INTEGER DEFAULT 0,
-    created_on TEXT DEFAULT ''
+    created_on TEXT DEFAULT '',
+    po_no TEXT DEFAULT '', po_sno INTEGER DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS process_log (
@@ -1047,6 +1048,11 @@ def migrate(conn):
         conn.execute("ALTER TABLE orders ADD COLUMN qty_panel INTEGER DEFAULT 0")
     if ocols and "pcs_panel" not in ocols:
         conn.execute("ALTER TABLE orders ADD COLUMN pcs_panel INTEGER DEFAULT 0")
+    if ocols and "po_no" not in ocols:
+        conn.execute("ALTER TABLE orders ADD COLUMN po_no TEXT DEFAULT ''")
+    if ocols and "po_sno" not in ocols:
+        conn.execute("ALTER TABLE orders ADD COLUMN po_sno INTEGER DEFAULT 0")
+
     # order_assignments: per-PROCESS assignment (order_id + process unique) —
     # pending process par operator/machine assign hota hai, order-level nahi
     acols = [r[1] for r in conn.execute("PRAGMA table_info(order_assignments)")]
