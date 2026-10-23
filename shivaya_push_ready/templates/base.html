@@ -1,0 +1,470 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}Shivaya Circuit{% endblock %} · Smart ERP</title>
+<link rel="stylesheet" href="/static/style.css">
+<style>
+/* v3.68 — searchable model dropdown (type karo: 176 / scpl-17 → matches niche) */
+.ss-wrap{position:relative}
+.ss-row{display:flex;gap:6px;align-items:center}
+.ss-in{flex:1;padding:9px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;background:#fff;outline:none;min-width:120px}
+.ss-in:focus{border-color:#6366f1}
+.ss-clr{border:1px solid var(--border);background:#fff;border-radius:8px;padding:8px 10px;cursor:pointer;font-weight:800;color:#64748b}
+.ss-clr:hover{background:#f1f5f9}
+.ss-dd{border:1px solid var(--border);background:#fff;border-radius:8px;padding:8px 12px;cursor:pointer;font-weight:800;color:#64748b}
+.ss-dd:hover{background:#f1f5f9}
+.ss-list{display:none;position:fixed;z-index:99997;background:#fff;border:1.5px solid #6366f1;border-radius:8px;margin-top:4px;max-height:260px;overflow:auto;box-shadow:0 10px 26px rgba(15,23,42,.14)}
+.ss-item{padding:8px 12px;font:600 13px Segoe UI,Arial;color:#192338;cursor:pointer;border-bottom:1px solid #f1f5f9}
+.ss-item:hover,.ss-item.ss-active{background:#eef2ff;color:#3730a3}
+.ss-empty{padding:12px;font:600 12.5px Segoe UI,Arial;color:#94a3b8;text-align:center}
+  /* v3.29 app-wide theme color — Settings me badla ja sakta hai */
+  :root { --ui-brand: {{ ui_brand }}; }
+  .sidebar nav a.active { background: var(--ui-brand); color: #fff; box-shadow: 0 4px 12px rgba(0,0,0,.28); }
+  .sidebar nav a.active .live-dot { background: #fff; }
+  .brand .logo { background: linear-gradient(135deg, var(--ui-brand), #192338); color: #fff; }
+  .user-chip .role { background: var(--ui-brand); color: #fff; }
+  .btn-amber { background: var(--ui-brand); color: #fff; }
+  .btn-amber:hover { background: var(--ui-brand); filter: brightness(.88); color: #fff; }
+  .search-box input:focus { outline: 2px solid var(--ui-brand); border-color: var(--ui-brand); }
+</style>
+</head>
+<body>
+{% if session.get('user_id') %}
+<aside class="sidebar">
+  <div class="brand">
+    <div class="logo">SC</div>
+    <div><div class="brand-name">Shivaya Circuit</div><div class="brand-sub">SMART ERP</div></div>
+  </div>
+  <nav>
+    {% set P = current_user_perms %}
+    {% set A = current_user_role == 'admin' %}
+    <a href="/" class="{{'active' if active=='dashboard'}}">🏠 Dashboard</a>
+    {% if A or 'tracking' in P %}
+    <div class="sec-label">Live Process Tracking</div>
+    <a href="/tracking" class="{{'active' if active=='tracking'}}"><span class="live-dot"></span>&nbsp;Live Process Tracking</a>
+    {% endif %}
+    {% if A or 'orders' in P %}
+    <div class="sec-label">Operations</div>
+    <a href="/orders" class="{{'active' if active=='orders'}}">📋 Job Orders</a>
+    {% endif %}
+    {% if A %}
+    <a href="/po" class="{{'active' if active=='po'}}">📄 PO se Job Card</a>
+    {% endif %}
+    {% if A or 'parties' in P %}<a href="/parties" class="{{'active' if active=='parties'}}">🤝 Parties</a>{% endif %}
+    {% if A or 'products' in P %}<a href="/products" class="{{'active' if active=='products'}}">🗂️ Finished Products</a>{% endif %}
+    {% if A or 'pdfs' in P %}<a href="/pdfs" class="{{'active' if active=='pdfs'}}">📄 PDF Library</a>{% endif %}
+    {% if A or 'purchase' in P %}<a href="/purchase-orders" class="{{'active' if active=='purchase'}}">📦 Purchase Orders</a>{% endif %}
+    {% if A or 'purchases' in P %}<a href="/purchases" class="{{'active' if active=='purchases'}}">🛒 Purchases (Stock In)</a>{% endif %}
+    {% if A or 'cutlist' in P %}<a href="/cutlist" class="{{'active' if active=='cutlist'}}">✂️ Cut List Optimizer</a>{% endif %}
+    {% if A or 'pcbcalc' in P %}<a href="/pcbcalc" class="{{'active' if active=='pcbcalc'}}">💰 PCB Cost Calculator</a>{% endif %}
+    {% if A or 'inventory' in P %}<a href="/inventory" class="{{'active' if active=='inventory'}}">🗄️ Inventory</a>{% endif %}
+    {% if A or 'billing' in P %}<a href="/billing" class="{{'active' if active=='billing'}}">🧾 Billing</a>{% endif %}
+    {% if A or 'proforma' in P %}<a href="/proforma" class="{{'active' if active=='proforma'}}">📄 Proforma (PI)</a>{% endif %}
+    {% if A or 'payments' in P %}<a href="/payments" class="{{'active' if active=='payments'}}">💸 Payments & Receipts</a>{% endif %}
+    {% if A or 'employees' in P or 'machines' in P %}
+    <div class="sec-label">Workforce</div>
+    {% endif %}
+    {% if A or 'employees' in P %}<a href="/employees" class="{{'active' if active=='employees'}}">👥 Employees</a>{% endif %}
+    {% if A or 'machines' in P %}<a href="/machines" class="{{'active' if active=='machines'}}">🏭 Machines</a>{% endif %}
+    {% if A or 'quality' in P %}<a href="/quality" class="{{'active' if active=='quality'}}">✅ Quality</a>{% endif %}
+    {% if A or 'operator' in P %}<a href="/operator" class="{{'active' if active=='operator'}}">🛠️ Operator View</a>{% endif %}
+    {% if A or 'mywork' in P %}<a href="/my-work" class="{{'active' if active=='mywork'}}">🎯 Mera Work</a>{% endif %}
+    {% if A or 'planning' in P or 'material' in P or 'reports' in P %}
+    <div class="sec-label">Planning</div>
+    {% endif %}
+    {% if A or 'planning' in P %}<a href="/production-planning" class="{{'active' if active=='planning'}}">📋 Production Planning</a>{% endif %}
+    {% if A or 'material' in P %}<a href="/material-planning" class="{{'active' if active=='material'}}">🧮 Material Planning</a>{% endif %}
+    {% if A or 'reports' in P %}<a href="/reports" class="{{'active' if active=='reports'}}">📊 Reports</a>{% endif %}
+    {% if A %}
+    <a href="/users" class="{{'active' if active=='users'}}">🔐 Users & Access</a>
+    <a href="/settings" class="{{'active' if active=='settings'}}">⚙️ Settings</a>
+    {% endif %}
+  </nav>
+  <div class="side-footer">
+    <div class="saved-note"><span class="dot"></span> All changes saved</div>
+    <a href="/my-password" style="display:flex;align-items:center;gap:6px;font:700 12px Segoe UI,Arial;color:#cbd5e1;text-decoration:none;padding:6px 8px;border-radius:8px" onmouseover="this.style.background='rgba(255,255,255,.08)'" onmouseout="this.style.background='none'">🔑 Mera Password</a>
+    <div class="user-chip">👤 {{ current_user_name }}<span class="role">{{ current_user_role|upper }}</span></div>
+    <div class="ver-chip" title="App version — agar ye purana dikhe to naya ZIP deploy nahi hua">🛰 App v3.90 · JOB CARD ke charo box X-adjustable (boxes ke beech blue handle drag karke width choti/badi, setting yaad rehti hai) + VERIFY windows X-adjust (sheet edge + PO/Design left-right edges) · PO Save = PRODUCTION (REVIEW) + click = VERIFY + APPROVE = process · Advanced creation BAND · PCBFlow parser · drag-bar · Role OTHER</div>
+    <div style="display:flex;gap:8px;justify-content:space-between;align-items:center">
+      <a class="logout" href="/switch-user" title="Doosre user ke naam par switch karo (login dobara nahi)" style="font-size:11.5px">🔄 Switch</a>
+      <a class="logout" href="/logout">Logout ↩</a>
+    </div>
+  </div>
+</aside>
+<div class="sidebar-backdrop"></div>
+<main>
+  <header class="topbar">
+    <button type="button" class="hamburger" id="hamburger" aria-label="Menu">☰</button>
+    <h1>{% block page_title %}{% endblock %}</h1>
+    <div class="watch" id="liveWatch" title="Live IST clock (Asia/Kolkata)">
+      <span class="watch-ic">⏰</span>
+      <span class="watch-mid">
+        <span class="watch-time" id="watchTime">--:--:--</span>
+        <span class="watch-date" id="watchDate">{{ today }}</span>
+      </span>
+    </div>
+    <form class="search-box" method="get" action="/tracking" id="searchForm">
+      <span class="mag">🔍</span>
+      <input type="text" name="q" id="globalSearch" placeholder="Search..." value="{{ request.args.get('q','') }}">
+      <span class="kbd">Ctrl K</span>
+    </form>
+    <div class="top-actions">
+      <div class="drop" id="createDrop">
+        <button class="btn btn-amber" type="button" onclick="document.getElementById('createDrop').classList.toggle('open')">＋ Create</button>
+        <div class="drop-menu">
+          {% if current_user_role == 'admin' %}
+          <div class="lbl">Quick create</div>
+          <a href="/po">📄 PO se Job Card</a>
+          <a href="/purchase-orders?add=1">📦 New Purchase Order</a>
+          <a href="/billing?add=1">🧾 New Invoice</a>
+          <a href="/inventory?add=1">🗄️ Add Inventory Item</a>
+          <a href="/employees?add=1">👥 New Employee</a>
+          {% else %}
+          <div class="lbl">🔒 Sirf admin nayi entry create kar sakta hai</div>
+          {% endif %}
+        </div>
+      </div>
+      <a class="btn btn-outline" href="/export/tracking.csv">⬇️ Download</a>
+      <button class="btn btn-outline" onclick="window.print()">🖨️ Print</button>
+    </div>
+  </header>
+  {% with msgs = get_flashed_messages(with_categories=true) %}
+    {% if msgs %}<div class="content" style="padding-bottom:0">{% for cat, m in msgs %}<div class="flash {{cat}}">{{ m }}</div>{% endfor %}</div>{% endif %}
+  {% endwith %}
+  <div class="content">{% block content %}{% endblock %}</div>
+</main>
+<script>
+/* v3.68 — MODEL dropdowns searchable: type karo (176 / scpl-17 / dob) → matching niche, click/Enter se select.
+   Original select chhupa rehta hai (form submit + onchange waise hi chalte hai — hum 'change' dispatch karte hai) */
+(function(){
+  function enhance(sel){
+    if (!sel || sel.dataset.ss) return;
+    sel.dataset.ss = '1';
+    var wrap = document.createElement('div');
+    wrap.className = 'ss-wrap';
+    sel.parentNode.insertBefore(wrap, sel);
+    var row = document.createElement('div'); row.className = 'ss-row';
+    var inp = document.createElement('input');
+    inp.type = 'text'; inp.className = 'ss-in'; inp.autocomplete = 'off';
+    inp.placeholder = 'Type karo \u2014 176 / scpl-17 / dob\u2026 (search + select)';
+    var clr = document.createElement('button'); clr.type = 'button'; clr.className = 'ss-clr';
+    clr.textContent = '\u2715'; clr.title = 'Clear \u2014 select hatao';
+    var dd = document.createElement('button'); dd.type = 'button'; dd.className = 'ss-dd';
+    dd.textContent = '\u25BE'; dd.title = 'Poori list dikhao';
+    row.appendChild(inp); row.appendChild(dd); row.appendChild(clr);
+    var lst = document.createElement('div'); lst.className = 'ss-list';
+    wrap.appendChild(row); wrap.appendChild(lst); wrap.appendChild(sel);
+    sel.style.display = 'none';
+    var active = -1;
+    /* v3.77 \u2014 list FIXED position par: panel ka overflow:hidden ab CLIP nahi karta.
+       Scroll/resize par list input ke saath chipki rahegi; niche jagah na ho to UPAR khulti hai. */
+    function place(flip){
+      var r = inp.getBoundingClientRect();
+      lst.style.left = r.left + 'px';
+      lst.style.width = Math.max(r.width, 280) + 'px';
+      var top = r.bottom + 4;
+      if (flip) {
+        var h = Math.min(lst.scrollHeight || 260, 260);
+        if (top + h > window.innerHeight - 8 && r.top - h - 8 > 8) top = r.top - h - 4;
+      }
+      lst.style.top = top + 'px';
+    }
+    window.addEventListener('scroll', function(){ if (lst.style.display === 'block') place(false); }, true);
+    window.addEventListener('resize', function(){ if (lst.style.display === 'block') place(false); });
+    function opts(){
+      return Array.prototype.slice.call(sel.options).map(function(o){ return { v: o.value, t: o.textContent.trim() }; });
+    }
+    function sync(){
+      var o = sel.options[sel.selectedIndex];
+      inp.value = (o && o.value) ? o.textContent.trim() : '';
+    }
+    function render(){
+      var q = inp.value.trim().toLowerCase();
+      var toks = q.split(/\s+/);
+      var items = opts().filter(function(o){
+        if (!o.v) return q === '';
+        var t = o.t.toLowerCase();
+        return toks.every(function(tk){ return t.indexOf(tk) !== -1; });
+      });
+      var html = '';
+      for (var i = 0; i < items.length; i++){
+        html += '<div class="ss-item" data-v="' + items[i].v.replace(/"/g, '&quot;') + '">' + items[i].t.replace(/</g, '&lt;') + '</div>';
+      }
+      if (!items.length) html = '<div class="ss-empty">Koi model nahi mila \u2014 doosre akshar try karo</div>';
+      lst.innerHTML = html;
+      active = -1;
+      lst.style.display = 'block';
+      place(true);
+    }
+    function pick(v, t){
+      sel.value = v;
+      inp.value = t;
+      lst.style.display = 'none';
+      try { sel.dispatchEvent(new Event('change', { bubbles: true })); } catch (e) {}
+    }
+    inp.addEventListener('focus', render);
+    inp.addEventListener('input', render);
+    inp.addEventListener('keydown', function(e){
+      var items = lst.querySelectorAll('.ss-item');
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp'){
+        e.preventDefault();
+        if (!items.length) return;
+        active = e.key === 'ArrowDown' ? Math.min(items.length - 1, active + 1) : Math.max(0, active - 1);
+        for (var i = 0; i < items.length; i++) items[i].classList.toggle('ss-active', i === active);
+        if (items[active]) items[active].scrollIntoView({ block: 'nearest' });
+      } else if (e.key === 'Enter'){
+        e.preventDefault();
+        if (active >= 0 && items[active]) pick(items[active].getAttribute('data-v'), items[active].textContent);
+        else if (items.length) pick(items[0].getAttribute('data-v'), items[0].textContent);
+      } else if (e.key === 'Escape'){ lst.style.display = 'none'; }
+    });
+    lst.addEventListener('mousedown', function(e){
+      var it = e.target.closest ? e.target.closest('.ss-item') : null;
+      if (!it) return;
+      e.preventDefault();
+      pick(it.getAttribute('data-v'), it.textContent);
+    });
+    inp.addEventListener('blur', function(){ setTimeout(function(){ lst.style.display = 'none'; }, 200); });
+    dd.addEventListener('mousedown', function(e){ e.preventDefault(); });
+    dd.addEventListener('click', function(){ inp.focus(); render(); });
+    clr.addEventListener('click', function(){
+      sel.value = ''; inp.value = ''; lst.style.display = 'none';
+      try { sel.dispatchEvent(new Event('change', { bubbles: true })); } catch (e) {}
+      inp.focus();
+    });
+    sel.addEventListener('change', sync);
+    sync();
+  }
+  function init(){
+    var sels = ['#pccModel', '#pdfModelSel', '#pdfEditSel', '#prodSel', '#poModel'].map  /* v3.83 \u2014 job card ka MODEL bhi type-search */(function(s){ return document.querySelector(s); })
+      .filter(Boolean);
+    Array.prototype.push.apply(sels, Array.prototype.slice.call(document.querySelectorAll('select[name="model_id"], select[name="save_select"]')));
+    for (var i = 0; i < sels.length; i++) enhance(sels[i]);
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+  else init();
+})();
+</script>
+<script>
+/* Mobile sidebar drawer */
+(function(){
+  var hb = document.getElementById('hamburger');
+  if (hb) {
+    hb.addEventListener('click', function(e){
+      e.stopPropagation();
+      document.body.classList.toggle('sb-open');
+    });
+    document.addEventListener('click', function(e){
+      if (document.body.classList.contains('sb-open') && !e.target.closest('.sidebar')) {
+        document.body.classList.remove('sb-open');
+      }
+    });
+    document.querySelectorAll('.sidebar a').forEach(function(a){
+      a.addEventListener('click', function(){ document.body.classList.remove('sb-open'); });
+    });
+  }
+})();
+/* Ctrl+K focus search */
+document.addEventListener('keydown', function(e){
+  if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) {
+    e.preventDefault();
+    var s = document.getElementById('globalSearch');
+    if (s) s.focus();
+  }
+});
+/* Close create dropdown on outside click */
+document.addEventListener('click', function(e){
+  var d = document.getElementById('createDrop');
+  if (d && !d.contains(e.target)) d.classList.remove('open');
+});
+/* Keep auth token alive across links & forms (works without cookies) */
+(function(){
+  var t = new URLSearchParams(window.location.search).get('token');
+  if (!t) return;
+  document.querySelectorAll('a[href]').forEach(function(a){
+    var href = a.getAttribute('href');
+    if (!href || href.charAt(0) === '#') return;
+    if (/^https?:/i.test(href) && href.indexOf(window.location.origin) !== 0) return;
+    try {
+      var u = new URL(a.href);
+      u.searchParams.set('token', t);
+      a.setAttribute('href', u.pathname + u.search);
+    } catch(e) {}
+  });
+  document.querySelectorAll('form').forEach(function(f){
+    var act = f.getAttribute('action') || '';
+    if (/^https?:/i.test(act) && act.indexOf(window.location.origin) !== 0) return;
+    if (!f.querySelector('input[name="token"]')) {
+      var i = document.createElement('input');
+      i.type = 'hidden'; i.name = 'token'; i.value = t;
+      f.appendChild(i);
+    }
+  });
+})();
+
+/* POST forms via fetch — native submits are blocked inside the sandboxed preview,
+   aur isse cookies ke bina bhi sab kuch chalta hai */
+document.addEventListener('submit', function(e){
+  var f = e.target;
+  if (!(f instanceof HTMLFormElement)) return;
+  /* v3.52 \u2014 data-stay forms: response HTML ko HI page bana do (reload result na kha jaye) */
+  if (f.hasAttribute('data-stay')) {
+    e.preventDefault();
+    var sbS = e.submitter;
+    var ocS = sbS ? (sbS.getAttribute('onclick') || '') : '';
+    var mS = ocS.match(/confirm\(\s*(['"])(.*?)\1\s*\)/);
+    if (mS && !window.confirm(mS[2])) return;
+    var fdS = new FormData(f);
+    if (sbS && sbS.name && !fdS.has(sbS.name)) fdS.append(sbS.name, sbS.value);
+    var tS = new URLSearchParams(window.location.search).get('token');
+    if (tS && !fdS.get('token')) fdS.append('token', tS);
+    f.querySelectorAll('button, input[type="submit"]').forEach(function(bS){ bS.disabled = true; });
+    fetch(f.getAttribute('action') || window.location.pathname + window.location.search, {method: 'POST', body: fdS})
+      .then(function(rS){ return rS.text(); })
+      .then(function(txtS){
+        document.open(); document.write(txtS); document.close();
+      });
+    return;
+  }
+  var method = (f.getAttribute('method') || 'get').toLowerCase();
+  if (method !== 'post') return;
+  e.preventDefault();
+  var sb = e.submitter;
+  if (sb) {
+    var oc = sb.getAttribute('onclick') || '';
+    var m = oc.match(/confirm\(\s*(['"])(.*?)\1\s*\)/);
+    if (m && !window.confirm(m[2])) return;
+  }
+  var url = f.getAttribute('action') || window.location.pathname + window.location.search;
+  if (/^https?:/i.test(url) && url.indexOf(window.location.origin) !== 0) {
+    f.submit(); return; /* bahar ki site — normal submit */
+  }
+  var fd = new FormData(f);
+  /* jo button dabaya gaya, uske name/value bhi bhejo (native submit jaisa) —
+     jaise Cut List ke 'action=load/save_model' buttons */
+  if (sb && sb.name && !fd.has(sb.name)) fd.append(sb.name, sb.value);
+  var t = new URLSearchParams(window.location.search).get('token');
+  if (t && !fd.get('token')) fd.append('token', t);
+  f.querySelectorAll('button, input[type="submit"]').forEach(function(b){ b.disabled = true; });
+  fetch(url, {method: 'POST', body: fd}).then(function(resp){
+    if (resp.redirected && resp.url) {
+      var u = resp.url;
+      try {
+        var uu = new URL(u);
+        if (t && !uu.searchParams.has('token')) { uu.searchParams.set('token', t); u = uu.toString(); }
+      } catch(err) {}
+      window.location.href = u;
+    } else {
+      window.location.reload();
+    }
+  }).catch(function(){ window.location.reload(); });
+}, true);
+</script>
+<script>
+/* TOKEN MEMORY — URL me token ho to yaad rakho (localStorage); kisi bhi JS navigation
+   (window.location.href) me token na mile to yahan se utha lena. Preview iframe me
+   cookies blocked hote hai, iske bina login dobara maangta hai (LOAD jaisi cheezein tootti thi). */
+(function(){
+  var t = new URLSearchParams(window.location.search).get('token');
+  if (t) { try { localStorage.setItem('appToken', t); } catch(e){} }
+})();
+window.appToken = function(){
+  var t = new URLSearchParams(window.location.search).get('token');
+  if (!t) { try { t = localStorage.getItem('appToken'); } catch(e){} }
+  return t || '';
+};
+</script>
+<script>
+/* internal links par token chipka do — har navigation par extra login redirect
+   hop nahi lagega (preview/proxy iframe mein session cookie nahi hoti, speed fix) */
+document.addEventListener('click', function(e){
+  if (e.defaultPrevented) return;
+  var a = e.target && e.target.closest ? e.target.closest('a') : null;
+  if (!a) return;
+  var href = a.getAttribute('href') || '';
+  if (!href || href.charAt(0) !== '/') return;
+  var t = new URLSearchParams(window.location.search).get('token');
+  if (!t) return;
+  try {
+    var u = new URL(href, window.location.href);
+    if (u.origin !== window.location.origin) return;
+    if (!u.searchParams.has('token')) u.searchParams.set('token', t);
+    a.setAttribute('href', u.pathname + u.search);
+  } catch(err) {}
+}, true);
+</script>
+{% else %}
+{% block fullpage %}{% endblock %}
+{% endif %}
+<style>
+/* ---- ⏰ LIVE DIGITAL WATCH (har screen, topbar) ---- */
+.watch{display:inline-flex;align-items:center;gap:9px;background:linear-gradient(135deg,#1e293b,#0f172a);
+  border:1px solid #334155;border-radius:12px;padding:8px 18px;color:#f8fafc;white-space:nowrap;
+  box-shadow:0 1px 4px rgba(15,23,42,.25)}
+.watch-ic{font-size:19px;animation:watchPulse 2s ease-in-out infinite}
+@keyframes watchPulse{0%,100%{opacity:1}50%{opacity:.55}}
+.watch-mid{display:inline-flex;flex-direction:column;line-height:1.2;align-items:flex-start}
+.watch-time{font-family:'Segoe UI',Consolas,monospace;font-size:22px;font-weight:800;letter-spacing:1.5px;
+  color:#4ade80;font-variant-numeric:tabular-nums}
+.watch-time .ampm{font-size:12px;font-weight:800;color:#fbbf24;margin-left:4px;letter-spacing:.5px}
+.watch-date{font-size:12.5px;color:#94a3b8;font-weight:600}
+@media(max-width:900px){.watch .watch-date{display:none}.watch{padding:5px 11px}.watch-time{font-size:16px}.watch-ic{font-size:15px}}
+</style>
+<script>
+/* ⏰ LIVE WATCH — IST (Asia/Kolkata) me seconds ke saath ticking */
+(function(){
+  var dEl = document.getElementById('watchDate'), tEl = document.getElementById('watchTime');
+  if (!tEl) return;
+  var DAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  var MONS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  function tick(){
+    var now = new Date();
+    /* IST = UTC+5:30 — server/local kahin bhi ho, ghadi India ki dikhegi */
+    var ist = new Date(now.getTime() + (now.getTimezoneOffset() * 60000) + (5.5 * 3600000));
+    var h = ist.getHours(), m = ist.getMinutes(), s = ist.getSeconds();
+    var ampm = h >= 12 ? 'PM' : 'AM';
+    var h12 = h % 12; if (h12 === 0) h12 = 12;
+    var p2 = function(n){ return (n < 10 ? '0' : '') + n; };
+    tEl.innerHTML = p2(h12) + ':' + p2(m) + ':' + p2(s) + '<span class="ampm">' + ampm + '</span>';
+    if (dEl) dEl.textContent = DAYS[ist.getDay()] + ', ' + ist.getDate() + ' ' + MONS[ist.getMonth()] + ' ' + ist.getFullYear();
+  }
+  tick();
+  setInterval(tick, 1000);
+})();
+</script>
+<style>@media print { #docHScroll { display:none!important } }</style>
+<div id="docHScroll" title="Horizontal scrollbar — ab hamesha nazar aayegi (sabse niche jaane ki zaroorat nahi)" style="position:fixed;left:0;right:0;bottom:0;height:16px;overflow-x:auto;overflow-y:hidden;z-index:90;background:#e8eef6;border-top:1.5px solid #94a3b8;display:none">
+  <div id="docHScrollInner" style="height:1px"></div>
+</div>
+<script>
+/* ↔️ STICKY HORIZONTAL SCROLLBAR — page left-right chaura ho to ye scrollbar
+   screen ke niche HAMESHA dikhegi (pehle wo document ke sabse niche laga karti
+   thi — poora page neeche scroll karna padta tha). Document ke horizontal
+   scroll ke saath 2-tarafa sync + bar par wheel ghumao to bhi chalega. */
+(function(){
+  var bar = document.getElementById('docHScroll'), inner = document.getElementById('docHScrollInner');
+  if (!bar) return;
+  function sync(){
+    var de = document.documentElement;
+    var show = de.scrollWidth > de.clientWidth + 1;
+    bar.style.display = show ? 'block' : 'none';
+    document.body.style.paddingBottom = show ? '20px' : '';
+    if (!show) return;
+    var w = de.scrollWidth + 'px';
+    if (inner.style.width !== w) inner.style.width = w;
+    if (Math.abs(bar.scrollLeft - de.scrollLeft) > 1) bar.scrollLeft = de.scrollLeft;
+  }
+  bar.addEventListener('scroll', function(){ document.documentElement.scrollLeft = bar.scrollLeft; });
+  bar.addEventListener('wheel', function(e){
+    if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) { e.preventDefault(); document.documentElement.scrollLeft += e.deltaY; }
+  }, {passive:false});
+  window.addEventListener('scroll', sync, {passive:true});
+  window.addEventListener('resize', sync);
+  setInterval(sync, 700);  /* accordion kholo/band → chaurai badal sakti hai */
+  sync();
+})();
+</script>
+</body>
+</html>
