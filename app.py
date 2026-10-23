@@ -2750,9 +2750,11 @@ FIELD_ALIASES = {
     "sheets": ["no of sheets", "no. of sheet", "sheets", "sheet qty", "number of sheets",
                "no of sheet", "no. of sheets", "sheets qty", "total sheets"],
     "x_qty": ["x qty", "x cutting qty", "x panels", "sheet length panels", "qty x",
-              "panels along length", "x layout", "sheet length (panels)", "x cutting qty (panels)"],
+              "panels along length", "x layout", "sheet length (panels)", "x cutting qty (panels)",
+              "x#", "x #", "cut x#", "cutting x#"],
     "y_qty": ["y qty", "y cutting qty", "y panels", "sheet width panels", "qty y",
-              "panels along width", "y layout", "sheet width (panels)", "y cutting qty (panels)"],
+              "panels along width", "y layout", "sheet width (panels)", "y cutting qty (panels)",
+              "y#", "y #", "cut y#", "cutting y#"],
     "orientation": ["orientation", "layout", "layout type", "layout orientation", "best layout"],
     # v3.99: SIZE SHEET ke naye columns (PARTY CODE / PER SQ.INCH / MATERIAL / CNC/TOOL)
     "party_code": ["party code", "party code.", "party code no", "p code"],
@@ -2761,7 +2763,9 @@ FIELD_ALIASES = {
                     "rs sq inch", "per sq.inch rate"],
     "sheet_thickness": ["material", "material grade", "fr4 grade", "pcb material",
                         "thickness", "pcb thickness", "sheet thickness", "thickness mm"],
-    "pcb_price": ["price", "rate", "pcb price", "price rs", "rate rs", "price rs."],
+    "pcb_price": ["price", "rate", "pcb price", "price rs", "rate rs", "price rs.",
+                  "per sq inch", "per sq.inch", "per sq. inch", "rs/sq inch",
+                  "rs per sq inch", "rate/sq inch", "rate per sq inch"],
 }
 
 # combined size columns: ek hi cell mein "54×54" / "328×237.9"
@@ -2810,20 +2814,68 @@ def _num(v):
         return 0.0
 
 
+def _hdr_score(mapping):
+    """v4.00: header-candidate kitna accha hai (zyada mapped fields + name/model bonus)."""
+    n = 0
+    vals = set()
+    for t in mapping.values():
+        if t == "ignore_num":
+            continue
+        if isinstance(t, tuple):
+            n += 2
+            vals.add(t[1]); vals.add(t[2])
+        else:
+            n += 1
+            vals.add(t)
+    if "name" in vals or "model_code" in vals:
+        n += 6
+    return n
+
+
+def _pick_header_row(rows):
+    """v4.00: aapki Excel AS-IS — group/merged 2-row header (SINGLE PANEL / CUTTING SIZE
+    upar, L-W-PCS-4a-4b niche) ho ya simple single-row, best header khud pakdo."""
+    cands = []
+    for ri in range(0, min(3, len(rows))):
+        cands.append((ri, [("" if c is None else str(c).strip()) for c in rows[ri]]))
+    for a, b in ((0, 1), (1, 2), (0, 2)):
+        if b < len(rows):
+            merged = []
+            for i in range(max(len(rows[a]), len(rows[b]))):
+                va = str(rows[a][i]).strip() if i < len(rows[a]) and rows[a][i] is not None else ""
+                vb = str(rows[b][i]).strip() if i < len(rows[b]) and rows[b][i] is not None else ""
+                merged.append(vb if vb else va)
+            cands.append((b, merged))
+    best_i, best_h, best_s = 0, cands[0][1], -1
+    for ri, h in cands:
+        sc = _hdr_score(_map_headers(h))
+        if sc > best_s:
+            best_i, best_h, best_s = ri, h, sc
+    return best_i, best_h
+
+
 def _map_headers(headers):
     """Har column header -> field mapping (dict idx -> field). Pair columns bhi.
     Numeric headers (jaise user ki sheet me '48', '40' = panel L×W) bhi handle hote hain."""
     mapping = {}
     pair_map = {_norm_hdr(k): v for k, v in PAIR_COLUMNS.items()}
-    # pass 1: exact single-field match
+    # pass 1: exact single-field match (v4.00: duplicate header ho to agla matching field
+    # — jaise sheet me 2 baar PER SQ.INCH ho to pehla per_sq_inch, doosra RATE pcb_price)
     for idx, h in enumerate(headers):
         key = _norm_hdr(h)
         if not key:
             continue
-        for field, aliases in FIELD_ALIASES.items():
-            if key in [a for a in aliases]:
-                mapping[idx] = field
-                break
+        taken = set()
+        for t in mapping.values():
+            if isinstance(t, tuple):
+                taken.update((t[1], t[2]))
+            else:
+                taken.add(t)
+        matches = [f for f, aliases in FIELD_ALIASES.items() if key in aliases]
+        if matches:
+            # pehle naye (unused) field ko do; sab used hon to same field par remap
+            # (last column jeetta hai: PCS ke BAAD UPS aata hai -> UPS = production UP sahi)
+            mapping[idx] = next((f for f in matches if f not in taken), matches[0])
     # pass 1.5: pure numeric headers -> panel length / width (order se)
     num_seen = 0
     for idx, h in enumerate(headers):
@@ -2852,6 +2904,8 @@ def _map_headers(headers):
         if idx in mapping:
             continue
         key = _norm_hdr(h)
+        if len(key) < 4:
+            continue  # v4.00: khaali/chhota header kabhi contains-match nahi (pehle sab "name" ban rahe the!)
         best_field = None
         for field, aliases in FIELD_ALIASES.items():
             for a in aliases:
@@ -3036,10 +3090,12 @@ def products_import():
     if len(rows) < 2:
         flash("File mein sirf header hai ya khaali hai — data rows chahiye.", "error")
         return redirect_with_token(url_for("products") + "?import=1")
-    headers = rows[0]
+    hidx, headers = _pick_header_row(rows)
     mapping = _map_headers(headers)
     if "name" not in mapping.values() and "model_code" not in mapping.values():
-        flash("\u26a0\ufe0f 'Product Name' ya 'Model No.' jaisa koi column nahi mila \u2014 header check karo (ya template download karo).",
+        _peek = " | ".join([str(x) for x in headers[:12] if str(x).strip()]) or "(khaali)"
+        flash("\u26a0\ufe0f Column names samajh nahi aaye. File ki pehli row: " + _peek +
+              " \u2014 'Model No.' ya 'Product Name' jaisa column hona chahiye (template dekho).",
               "error")
         return redirect_with_token(url_for("products") + "?import=1")
     import json as _json
@@ -3047,7 +3103,7 @@ def products_import():
     db.execute("DELETE FROM import_staging WHERE batch=?", (batch,))
     db.execute("INSERT INTO import_staging (batch, row_no, data) VALUES (?,?,?)",
                (batch, 0, _json.dumps([str(h) for h in headers])))
-    for i, row in enumerate(rows[1:], 1):
+    for i, row in enumerate(rows[hidx + 1:], 1):
         db.execute("INSERT INTO import_staging (batch, row_no, data) VALUES (?,?,?)",
                    (batch, i, _json.dumps([("" if c is None else c) for c in row])))
     flash(f"File padh li gayi: {len(rows) - 1} rows. Neeche check karke Confirm dabao.", "success")
