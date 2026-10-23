@@ -15,9 +15,9 @@
 <div class="panel" id="imp97" style="border-left:4px solid #16a34a">
   <div class="panel-head"><h3>📥 Import Finished Products — Google Sheet / Excel / CSV</h3><a class="btn btn-outline btn-sm" href="/products">✕ Close</a></div>
   <div class="panel-body">
-    <form method="post" action="/products/import" enctype="multipart/form-data" style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;background:#f0fdf4;border:2px dashed #16a34a;border-radius:10px;padding:14px">
+    <form data-native="1" method="post" action="/products/import" enctype="multipart/form-data" style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;background:#f0fdf4;border:2px dashed #16a34a;border-radius:10px;padding:14px">
       <input type="file" name="file" accept=".csv,.xlsx,.xls" required style="padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13.5px;background:#fff;max-width:330px">
-      <button class="btn" type="submit" style="background:#16a34a;font-size:14px">📤 Upload &amp; Preview</button>
+      <button class="btn" type="submit" id="impBtn97" style="background:#16a34a;font-size:14px">📤 Upload &amp; Preview</button>
       <span class="muted small">Excel (.xlsx) / CSV / Google-Sheet download — <b>column naam aapke sheet jaise hi chalenge</b> (MODEL NO., PARTY, 4a, 4b, UPS...)</span>
     </form>
     <div class="muted small" style="margin-top:10px">
@@ -27,6 +27,18 @@
     </div>
   </div>
 </div>
+<script>
+(function(){
+  var f = document.querySelector('#imp97 form');
+  if (!f) return;
+  f.addEventListener('submit', function(){
+    var inp = f.querySelector('input[type=file]');
+    var b = document.getElementById('impBtn97');
+    if (!inp || !inp.files.length) { alert('Pehle Choose File par click karke apni Excel/CSV select karo.'); return; }
+    if (b) { b.disabled = true; b.textContent = '\u23f3 Padha ja raha hai... 2-5 second'; }
+  });
+})();
+</script>
 {% endif %}
 
 {% if import_preview %}
@@ -75,7 +87,7 @@
       </table>
     </div>
 
-    <form method="post" action="/products/import/confirm" style="display:flex;gap:14px;align-items:center;flex-wrap:wrap">
+    <form data-native="1" method="post" action="/products/import/confirm" style="display:flex;gap:14px;align-items:center;flex-wrap:wrap">
       <input type="hidden" name="batch" value="{{ import_preview.batch }}">
       <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
         <input type="checkbox" name="update" value="1" checked style="width:17px;height:17px;accent-color:#16a34a">
@@ -92,7 +104,9 @@
 <div class="panel" style="border-left:4px solid #4338ca">
   <div class="panel-head">
     <h3>📄 SHEET — Size Master (Excel jaisi · cell par click karo, value badlo, Enter = save)</h3>
-    <span class="muted small">Cut List se save / Add Manually / Import — sab yahin aa jate hain. PO read isko hi match karta hai.</span>
+    <span class="muted small">Cut List se save / Add Manually / Import — sab yahin aa jate hain. PO read isko hi match karta hai.
+      <a class="btn btn-outline btn-sm" style="background:#eff6ff;color:#1d4ed8" href="/products/sheet/download{{ '?token=' ~ request.args.get('token') if request.args.get('token') else '' }}" title="Yehi SHEET aapki Excel ke format me (2-row header) download">&#11015;&#65039; Download SHEET (Excel)</a>
+    </span>
   </div>
   <div class="panel-body" style="max-height:60vh;overflow:auto">
     <table class="stable" id="sheet97" style="border-collapse:collapse;width:100%;font-size:11.5px;background:#fff">
@@ -117,6 +131,7 @@
           <th style="border:1px solid #cbd5e1;padding:5px 6px">MATERIAL</th>
           <th style="border:1px solid #cbd5e1;padding:5px 6px">RATE ₹</th>
           <th style="border:1px solid #cbd5e1;padding:5px 6px">FIN. STOCK</th>
+          <th style="border:1px solid #cbd5e1;padding:5px 6px">DEL</th>
         </tr>
       </thead>
       <tbody>
@@ -132,10 +147,11 @@
           <td class="sc" data-f="{{ f }}" style="border:1px solid #e2e8f0;padding:4px 6px;cursor:cell;min-width:44px">{{ '' if val is none else val }}</td>
           {% endfor %}
           <td style="border:1px solid #e2e8f0;padding:4px 6px;text-align:center;font-weight:800;color:{{ '#15803d' if (m.fg_stock or 0) > 0 else '#cbd5e1' }}">{{ m.fg_stock or 0 }}</td>
+          <td style="border:1px solid #e2e8f0;padding:4px 6px;text-align:center"><button type="button" class="btn btn-outline btn-xs mdel97" onclick="delModel({{ m.id }}, this)" title="Is model ko SHEET se hatao" style="background:#fef2f2;color:#b91c1c;padding:2px 7px">&#128465;</button></td>
         </tr>
         {% endfor %}
         {% if not models %}
-        <tr><td colspan="19" style="border:1px solid #e2e8f0;padding:12px;text-align:center;color:#94a3b8">Abhi koi model nahi — Cut List Optimizer se save karo ya Add Manually.</td></tr>
+        <tr><td colspan="20" style="border:1px solid #e2e8f0;padding:12px;text-align:center;color:#94a3b8">Abhi koi model nahi — Cut List Optimizer se save karo ya Add Manually.</td></tr>
         {% endif %}
       </tbody>
     </table>
@@ -179,6 +195,28 @@
     });
   });
 })();
+
+/* v4.03: SHEET row delete — 2-click (galti se na ho; PDF/BOM/production me ho to USE ME block) */
+var mdelArm = 0;
+function delModel(pid, el){
+  if (mdelArm !== pid) {
+    mdelArm = pid;
+    el.textContent = '\u26a0 Pakka?';
+    el.style.background = '#ef4444'; el.style.color = '#fff'; el.style.borderColor = '#ef4444';
+    setTimeout(function(){ if (mdelArm === pid) { mdelArm = 0; location.reload(); } }, 4000);
+    return;
+  }
+  mdelArm = 0;
+  el.disabled = true; el.textContent = '...';
+  var t = new URLSearchParams(location.search).get('token');
+  fetch('/api/product/' + pid + '/delete' + (t ? '?token=' + encodeURIComponent(t) : ''), { method: 'POST' })
+    .then(function(r){ return r.json(); })
+    .then(function(j){
+      if (j.ok) { location.reload(); }
+      else { alert(j.msg || 'Delete nahi hua'); location.reload(); }
+    })
+    .catch(function(){ el.disabled = false; el.textContent = '\u{1F5D1}'; });
+}
 </script>
 
 

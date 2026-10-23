@@ -2643,6 +2643,9 @@ def products():
     _pdf_ensure()
     pdf_counts = {r["model_id"]: r["n"] for r in
                   db.query("SELECT model_id, COUNT(*) AS n FROM model_pdfs GROUP BY model_id")}
+    _ib = request.args.get("import_batch")
+    if _ib and not _import_preview(_ib):
+        flash("\u26a0\ufe0f Import preview nahi mila (session expire/dua server par chala gaya) \u2014 file dobara upload karo.", "error")
     return render_template("products.html", active="products", models=rows, pdf_counts=pdf_counts,
                            bom_map=bom_map, history=history,
                            show_add=request.args.get("add"),
@@ -3069,7 +3072,23 @@ def products_import_template():
                     headers={"Content-Disposition": "attachment; filename=finished_products_template.csv"})
 
 
+def _import_guard(f):
+    """v4.02: import ka koi bhi crash chupchap na jaye — error ka naam+message flash me."""
+    @wraps(f)
+    def w(*args, **kwargs):
+        try:
+            return f(*args, **kwargs)
+        except Exception as e:
+            flash("\u26a0\ufe0f Import me problem aayi: " + type(e).__name__ + " \u2014 " + str(e)[:200] +
+                  " \u2014 file dobara try karo, phir bhi ho to ye screenshot bhejo.", "error")
+            return redirect_with_token(url_for("products") + "?import=1")
+    return w
+
+
 @app.route("/products/import", methods=["POST"])
+@login_required
+@admin_required
+@_import_guard
 @login_required
 def products_import():
     if session.get("user_role") != "admin":
@@ -3099,6 +3118,11 @@ def products_import():
               "error")
         return redirect_with_token(url_for("products") + "?import=1")
     import json as _json
+    db.execute("""CREATE TABLE IF NOT EXISTS import_staging (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        batch TEXT NOT NULL,
+        row_no INTEGER DEFAULT 0,
+        data TEXT DEFAULT '')""")
     batch = _now_ist().strftime("%Y%m%d%H%M%S") + "-" + os.urandom(3).hex()
     db.execute("DELETE FROM import_staging WHERE batch=?", (batch,))
     db.execute("INSERT INTO import_staging (batch, row_no, data) VALUES (?,?,?)",
@@ -3111,6 +3135,9 @@ def products_import():
 
 
 @app.route("/products/import/confirm", methods=["POST"])
+@login_required
+@admin_required
+@_import_guard
 @login_required
 def products_import_confirm():
     if session.get("user_role") != "admin":
@@ -4408,6 +4435,68 @@ _SHEET_FIELDS = {"model_code": str, "name": str, "party_code": str, "party_name"
                  "pcs_panel": int, "cutting_len": float, "cutting_w": float,
                  "x_qty": int, "y_qty": int, "panels_sheet": int, "sheets": int,
                  "sheet_thickness": str, "per_sq_inch": float, "pcb_price": float, "cnc_tool": str}
+
+
+@app.route("/products/sheet/download")
+@login_required
+@admin_required
+def products_sheet_download():
+    """v4.03: SHEET ko wapas aapki Excel ke EXACT format me download (2-row group header:
+    SINGLE PCB SIZE / SINGLE PANEL (L,W,PCS) / CUTTING SIZE (4a,X#,4b,Y#) / UPS / CNC-TOOL /
+    PER SQ.INCH / MATERIAL / PER SQ.INCH=RATE). Re-upload isi tarah round-trip hota hai."""
+    from openpyxl import Workbook
+    from io import BytesIO as _BIO
+    rows = db.query("SELECT * FROM product_models ORDER BY id")
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "SIZE SHEET"
+    grp = ["", "", "", "", "SINGLE PCB SIZE", "SINGLE PANEL", "", "", "CUTTING SIZE", "", "", "", "", "", "", "", ""]
+    sub = ["S.N", "PARTY", "MODEL NO.", "PARTY CODE", "", "L", "W", "PCS", "4a", "X#", "4b", "Y#",
+           "UPS", "CNC/TOOL", "PER SQ.INCH", "MATERIAL", "PER SQ.INCH"]
+    ws.append(grp)
+    ws.append(sub)
+    from openpyxl.styles import Font, Alignment
+    for c in ("E1", "F1", "I1"):
+        ws[c].font = Font(bold=True)
+        ws[c].alignment = Alignment(horizontal="center")
+    ws.merge_cells("F1:H1")
+    ws.merge_cells("I1:L1")
+    i = 0
+    for m in rows:
+        i += 1
+        _pl, _pw = (m["pcb_len"] or 0), (m["pcb_w"] or 0)
+        pcb = ("%g X %g" % (_pl, _pw)) if (_pl and _pw) else (("%g" % _pl) if _pl else (("%g" % _pw) if _pw else ""))
+        ws.append([i, m["party_name"] or m["party"] or "", m["model_code"] or m["name"] or "", m["party_code"] or "",
+                   pcb, m["panel_len"] or "", m["panel_w"] or "", "",
+                   m["cutting_len"] or "", m["x_qty"] or "", m["cutting_w"] or "", m["y_qty"] or "",
+                   m["pcs_panel"] or "", m["cnc_tool"] or m["note"] or "",
+                   m["per_sq_inch"] or "", m["sheet_thickness"] or "", m["pcb_price"] or ""])
+    out = _BIO()
+    wb.save(out)
+    return Response(out.getvalue(), mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    headers={"Content-Disposition": "attachment; filename=SIZE_SHEET.xlsx"})
+
+
+@app.route("/api/product/<int:pid>/delete", methods=["POST"])
+@login_required
+@admin_required
+def product_delete_row(pid):
+    """v4.03: SHEET me se hi model DELETE — PDF/BOM/production me use ho raha to block (USE ME)."""
+    m = db.query("SELECT id, name FROM product_models WHERE id=?", (pid,), one=True)
+    if not m:
+        return jsonify(ok=False, err="missing", msg="Model pehle hi delete ho chuka."), 404
+    used = []
+    if db.query("SELECT COUNT(*) c FROM model_pdfs WHERE model_id=?", (pid,), one=True)["c"]:
+        used.append("PDF")
+    if db.query("SELECT COUNT(*) c FROM bom WHERE model_id=?", (pid,), one=True)["c"]:
+        used.append("BOM")
+    if db.query("SELECT COUNT(*) c FROM fg_production WHERE model_id=?", (pid,), one=True)["c"]:
+        used.append("PRODUCTION")
+    if used:
+        return jsonify(ok=False, err="in_use", msg="Ye model USE ME hai (" + ", ".join(used) +
+                       ") — pehle wo hatao, phir delete hoga.")
+    db.execute("DELETE FROM product_models WHERE id=?", (pid,))
+    return jsonify(ok=True, msg="Model SHEET se delete ho gaya.")
 
 
 @app.route("/api/product/<int:pid>/sheet_edit", methods=["POST"])

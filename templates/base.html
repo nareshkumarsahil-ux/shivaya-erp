@@ -86,7 +86,7 @@
     <div class="saved-note"><span class="dot"></span> All changes saved</div>
     <a href="/my-password" style="display:flex;align-items:center;gap:6px;font:700 12px Segoe UI,Arial;color:#cbd5e1;text-decoration:none;padding:6px 8px;border-radius:8px" onmouseover="this.style.background='rgba(255,255,255,.08)'" onmouseout="this.style.background='none'">🔑 Mera Password</a>
     <div class="user-chip">👤 {{ current_user_name }}<span class="role">{{ current_user_role|upper }}</span></div>
-    <div class="ver-chip" title="App version — agar ye purana dikhe to naya ZIP deploy nahi hua">🛰 App v4.01</div>
+    <div class="ver-chip" title="App version — agar ye purana dikhe to naya ZIP deploy nahi hua">🛰 App v4.03</div>
     <div style="display:flex;gap:8px;justify-content:space-between;align-items:center">
       <a class="logout" href="/switch-user" title="Doosre user ke naam par switch karo (login dobara nahi)" style="font-size:11.5px">🔄 Switch</a>
       <a class="logout" href="/logout">Logout ↩</a>
@@ -309,6 +309,9 @@ document.addEventListener('click', function(e){
 document.addEventListener('submit', function(e){
   var f = e.target;
   if (!(f instanceof HTMLFormElement)) return;
+  /* v4.02 \u2014 data-native forms: intercept mat karo (import ka flash/preview browser ke native
+     redirect se hi dikhta hai \u2014 fetch double-GET flash kha jata tha = "kuch nahi hota") */
+  if (f.hasAttribute('data-native')) return;
   /* v3.52 \u2014 data-stay forms: response HTML ko HI page bana do (reload result na kha jaye) */
   if (f.hasAttribute('data-stay')) {
     e.preventDefault();
