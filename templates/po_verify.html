@@ -24,6 +24,15 @@
   .jced:focus{outline:2px solid #f59e0b;background:#fff}
   select.jced{padding:2px 4px}
   .jcl-val{gap:4px}
+  /* v3.88: X-adjustable windows — har window ki width drag se */
+  #jcWrap{position:relative;width:100%;min-width:520px}
+  .vxsz{position:absolute;top:0;right:-7px;width:12px;height:100%;cursor:ew-resize;z-index:20;touch-action:none}
+  .vxsz::after{content:"";position:absolute;top:50%;right:2px;transform:translateY(-50%);width:4px;height:44px;border-radius:3px;background:#c7d7f5;box-shadow:0 0 0 1px #93b4ec}
+  .vxsz:hover::after{background:#1e3a8a}
+  .vxL,.vxR{position:absolute;top:0;width:10px;height:100%;cursor:ew-resize;z-index:30;touch-action:none}
+  .vxL{left:-5px}.vxR{right:-5px}
+  .vxL::after,.vxR::after{content:"";position:absolute;top:50%;left:2px;transform:translateY(-50%);width:3px;height:36px;border-radius:3px;background:#c7d7f5}
+  .vxL:hover::after,.vxR:hover::after{background:#fff}
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 
@@ -39,8 +48,11 @@
   <a class="btn btn-outline" href="/jobcard/{{ order.id }}?token={{ request.args.get('token', '') }}">🗂️ Poora job card page</a>
 </div>
 
-<div class="vsheet" id="jcSheet">
-  {% include "_jobcard_print.html" %}
+<div id="jcWrap">
+  <div class="vsheet" id="jcSheet">
+    {% include "_jobcard_print.html" %}
+  </div>
+  <div class="vxsz" onmousedown="dragX(event,'jcWrap')" title="Drag karke chaurai (X) set karo"></div>
 </div>
 
 <!-- ===== PO window (inline preview, movable) ===== -->
@@ -48,6 +60,8 @@
   <div class="vwin-h" onmousedown="dragWin(event,'poWin')">📄 PO — {{ pfile.filename if pfile else (order.po_no or 'PO') }}
     <span style="color:#bfdbfe;font-weight:700;font-size:10px">(drag · corner se resize)</span>
     <button class="vx" onclick="closeWin('poWin')">✕</button></div>
+  <div class="vxL" onmousedown="rszX(event,'poWin','L')" title="Chaurai (X) adjust"></div>
+  <div class="vxR" onmousedown="rszX(event,'poWin','R')" title="Chaurai (X) adjust"></div>
   <div class="vwin-b" id="poBody">
     {% if pfile %}
       <div id="poRender" style="padding:8px"></div>
@@ -63,6 +77,8 @@
   <div class="vwin-h" onmousedown="dragWin(event,'dgWin')">📐 PCB DESIGN — {{ jc.model or 'model?' }}
     <span style="color:#bfdbfe;font-weight:700;font-size:10px">(drag · corner se resize)</span>
     <button class="vx" onclick="closeWin('dgWin')">✕</button></div>
+  <div class="vxL" onmousedown="rszX(event,'dgWin','L')" title="Chaurai (X) adjust"></div>
+  <div class="vxR" onmousedown="rszX(event,'dgWin','R')" title="Chaurai (X) adjust"></div>
   <div class="vwin-b" id="dgBody">
     {% if design.mid == 0 %}
       <div class="muted" style="padding:14px">Is job card me MODEL select nahi hua — MODEL select karke SAVE karo, phir design link ban jayega.</div>
@@ -110,6 +126,41 @@ function dragWin(e, id){
     w.style.right = 'auto';
   }
   function up(){ document.removeEventListener('mousemove', mv); document.removeEventListener('mouseup', up); }
+  document.addEventListener('mousemove', mv); document.addEventListener('mouseup', up);
+}
+/* v3.88: sirf X (chaurai) adjust — job-card sheet aur dono windows par */
+function dragX(e, id){
+  var w = document.getElementById(id);
+  var startW = w.offsetWidth, sx = e.clientX;
+  e.preventDefault(); e.stopPropagation();
+  document.body.style.cursor = 'ew-resize';
+  function mv(ev){
+    var maxW = w.parentElement.clientWidth || 2000;
+    var nw = Math.max(520, Math.min(maxW, startW + (ev.clientX - sx)));
+    w.style.width = nw + 'px';
+  }
+  function up(){ document.body.style.cursor = '';
+    document.removeEventListener('mousemove', mv); document.removeEventListener('mouseup', up); }
+  document.addEventListener('mousemove', mv); document.addEventListener('mouseup', up);
+}
+function rszX(e, id, side){
+  var w = document.getElementById(id), r = w.getBoundingClientRect();
+  var startW = r.width, sx = e.clientX;
+  e.preventDefault(); e.stopPropagation();
+  document.body.style.cursor = 'ew-resize';
+  function mv(ev){
+    var dx = ev.clientX - sx;
+    if (side === 'R') {
+      w.style.width = Math.max(300, startW + dx) + 'px';
+    } else {
+      var nw = Math.max(300, startW - dx);
+      w.style.width = nw + 'px';
+      w.style.left = Math.max(0, r.right - nw) + 'px';
+      w.style.right = 'auto';
+    }
+  }
+  function up(){ document.body.style.cursor = '';
+    document.removeEventListener('mousemove', mv); document.removeEventListener('mouseup', up); }
   document.addEventListener('mousemove', mv); document.addEventListener('mouseup', up);
 }
 function rszWin(e, id){
