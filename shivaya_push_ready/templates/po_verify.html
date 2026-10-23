@@ -278,7 +278,9 @@ function makeEditable(){
     pp.innerHTML = '';
     var ri = document.createElement('input');
     ri.type = 'number'; ri.className = 'jced'; ri.value = num; ri.style.textAlign = 'center'; ri.style.maxWidth = '90px';
-    ri.oninput = function(){ ri.setAttribute('value', ri.value); };
+    ri.oninput = function(){ ri.setAttribute('value', ri.value);
+      var rr = document.querySelector('[id="pr_rate"]');
+      if (rr) rr.textContent = (ri.value ? ri.value + ' RS/SQ.INCH' : '\u2014'); };
     pp.appendChild(ri);
     var lb = document.createElement('span'); lb.textContent = ' RS/PC';
     pp.appendChild(lb);
