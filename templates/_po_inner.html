@@ -83,6 +83,7 @@
     <div class="po-pane-head">👁️ PO Preview <span style="margin-left:auto;font-size:10px;font-weight:700;color:#64748b" id="stepBar">S.No. — / —</span></div>
     <div class="po-pane-body">
       <div id="poWarn" class="banner-warn" style="display:none"></div>
+      <div id="poInfo" class="banner-warn" style="display:none;background:#f0fdf4;border-color:#16a34a;color:#166534"></div>
       <div id="preview" class="po-prev" style="display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:12px">File select hone par preview yahan dikhega</div>
       <div style="display:flex;gap:8px;margin:7px 0 12px;flex-wrap:wrap">
         <a class="btn btn-outline btn-xs" id="newTab" href="#" target="_blank" style="display:none">🔌 Naye tab me kholo</a>
@@ -306,14 +307,6 @@ function ocrFile(j){
         return { id: m.id, model: m.model_code || m.name, party: m.party_name || '' };
       });
       var ls = (window.PCBFlowPO ? PCBFlowPO.parsePoText(text, masters) : []);
-  if (ls.tooMany) {
-    var w2 = document.getElementById('poWarn');
-    if (w2) { w2.innerHTML = '\u26a0\ufe0f OCR ne <b>' + ls.tooMany + ' lines</b> banayi (asli items isse kam lagte hain — scan ke columns toot jate hain). Sirf sahi wali VERIFY karo, baaki \u2715 se hatao — ya PO FOLDER me RE-PROCESS dabao (naya parser purani junk lines khud hata dega).'; w2.style.display = 'block'; }
-  } else if (ls.length) {
-    var mxsn = 0; ls.forEach(function(x){ if (x.sno && x.sno > mxsn) mxsn = x.sno; });
-    var w3 = document.getElementById('poWarn');
-    if (w3) { w3.innerHTML = '\u2705 PO read: <b>S.No. 1\u2013' + mxsn + '</b> = <b>' + mxsn + ' job cards</b> banenge (S.No. hi item-count hai). PO NO + DATE har line me auto bhar hai.'; w3.style.display = 'block'; }
-  }
       if (!ls.length && window.PCBFlowPO) {
         fetch('/api/po/parse?token=' + encodeURIComponent(T()), {
           method: 'POST', headers: {'Content-Type': 'application/json'},
@@ -328,6 +321,7 @@ function ocrFile(j){
     }).catch(done);
   }
   function tessDone(j, ls){
+    showPoBanner(ls);   /* v4.06: OCR path par bhi S.No.-count banner */
     ls.forEach(function(x){ x.file_id = j.file_id; LINES.push(x); });
     renderInbox();
     autoSaveAll();   /* v3.94: seedha temp job cards */
@@ -354,18 +348,31 @@ function ocrFile(j){
 }
 
 /* v3.86b: PCBFlow parser ko text do — masters (Size Master) EXACT match ke saath */
+/* v4.06: S.No.-item-count banner (hard rule: jitne S.No., utni hi windows) */
+function showPoBanner(ls){
+  if (!ls || !ls.length) return;
+  var mxsn = 0; ls.forEach(function(x){ if (x.sno && x.sno > mxsn) mxsn = x.sno; });
+  var w3 = document.getElementById('poInfo');
+  if (!w3) return;
+  var dmsg = ls.dropped ? ' \u00b7 <b>' + ls.dropped + '</b> junk OCR lines parser ne khud hata di' : '';
+  w3.innerHTML = '\u2705 PO read: <b>S.No. 1\u2013' + mxsn + '</b> = <b>' + mxsn + ' job cards</b> banenge (S.No. hi item-count hai)' + dmsg + '. PO NO + DATE har line me auto bhar hai.';
+  w3.style.display = 'block';
+}
 function applyPoText(text, j){
   var masters = MODELS.map(function(m){
     return { id: m.id, model: m.model_code || m.name, party: m.party_name || '' };
   });
   var ls = (window.PCBFlowPO ? PCBFlowPO.parsePoText(text, masters) : []);
-  if (ls.tooMany) {
-    var w2 = document.getElementById('poWarn');
-    if (w2) { w2.innerHTML = '\u26a0\ufe0f OCR ne <b>' + ls.tooMany + ' lines</b> banayi (asli items isse kam lagte hain — scan ke columns toot jate hain). Sirf sahi wali VERIFY karo, baaki \u2715 se hatao — ya PO FOLDER me RE-PROCESS dabao (naya parser purani junk lines khud hata dega).'; w2.style.display = 'block'; }
-  }
   if (!ls.length && j.lines && j.lines.length &&
       !/(Purchase Order|GSTIN|Item & Description|Description of Goods|PROFORMA)/i.test(text)) {
     ls = j.lines;   /* purana server parser sirf non-formal text par fallback */
+  }
+  /* v4.06 HARD RULE: jitne S.No., utni hi windows. Banner me item-count + junk-drop dikhao */
+  if (ls.length) {
+    var mxsn = 0; ls.forEach(function(x){ if (x.sno && x.sno > mxsn) mxsn = x.sno; });
+    var w3 = document.getElementById('poInfo');
+    var dmsg = ls.dropped ? ' \u00b7 <b>' + ls.dropped + '</b> junk OCR lines parser ne khud hata di' : '';
+    if (w3) { w3.innerHTML = '\u2705 PO read: <b>S.No. 1\u2013' + mxsn + '</b> = <b>' + mxsn + ' job cards</b> banenge (S.No. hi item-count hai)' + dmsg + '. PO NO + DATE har line me auto bhar hai.'; w3.style.display = 'block'; }
   }
   ls.forEach(function(x){ x.file_id = j.file_id; LINES.push(x); });
 }

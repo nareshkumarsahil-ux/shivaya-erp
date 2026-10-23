@@ -190,25 +190,27 @@
       var mh = l.match(/s\.?\s*no\.?[^0-9]{0,6}(\d{1,3})/i);
       if (mh && (/incomplete/i.test(l) || /scan/i.test(l))) snos.push(+mh[1]);
     });
-    /* sparse serials pad; bina-serial WA lines ko missing serials do (N lines = N cards) */
+    /* v4.06: HARD RULE (user) — jitne S.No. mile (mx), UTNI hi verify-windows.
+       Har S.No. ki theek EK line; missing S.No. = khaali line (khud bharo);
+       surplus/fragment lines = junk, DROP (kitni hati ye count me batati hai).
+       9 items ka PO = 9 hi windows — isse zyada kabhi nahi. */
     if (snos.length) {
-      var mx = Math.max.apply(null, snos), have = {}, missing = [];
-      rows.forEach(function (r) { if (r.sno) have[r.sno] = 1; });
-      for (var n = 1; n <= mx; n++) if (!have[n]) missing.push(n);
+      var mx = Math.max.apply(null, snos), bysn = {}, canon = [];
       rows.forEach(function (r) {
-        if (r.sno == null && missing.length) r.sno = missing.shift();
+        if (r.sno == null) return;                          /* bina-serial = fragment/junk */
+        if (!bysn[r.sno] || (!bysn[r.sno].model && r.model)) bysn[r.sno] = r;   /* bhari wali jeete */
       });
-      missing.forEach(function (n) {
-        rows.push({
+      for (var n = 1; n <= mx; n++) {
+        if (bysn[n]) canon.push(bysn[n]);
+        else canon.push({
           sno: n, model: '', party_model: '', qty: '', rate: '', material: '',
           priority: priority, po_no: po_no, party: '',
           order_date: order_date, due_date: due_date, warn: false,
           note: 'scan me nahi mila \u2014 khud bharo'
         });
-      });
-      rows.sort(function (a, b) {
-        return ((b.sno == null) - (a.sno == null)) || ((a.sno || 0) - (b.sno || 0));
-      });
+      }
+      rows.dropped = Math.max(0, rows.length - canon.length);
+      rows = canon;
     } else {
       rows.forEach(function (r, i) { if (r.sno == null) r.sno = i + 1; });
     }
@@ -233,8 +235,6 @@
         }
       }
     });
-    /* v4.04: OCR ne bahut lines banayi ho to flag — UI warning dikhata hai */
-    if (rows.length > 30) rows.tooMany = rows.length;
     return rows;
   }
 
