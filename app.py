@@ -4266,9 +4266,30 @@ def po_list():
     out = []
     for r in rows:
         n = db.query("SELECT COUNT(*) c FROM orders WHERE po_no=?", (r["po_no"],), one=True)["c"]
+        nc = db.query("SELECT COUNT(*) c FROM jobcard WHERE po_no=?", (r["po_no"],), one=True)["c"]
         out.append({"id": r["id"], "po_no": r["po_no"], "filename": r["filename"],
-                    "uploaded_on": (r["uploaded_on"] or "")[:10], "orders": n})
+                    "uploaded_on": (r["uploaded_on"] or "")[:10], "orders": n, "cards": nc})
     return jsonify(ok=True, files=out)
+
+
+@app.route("/api/po/delete/<int:fid>", methods=["POST"])
+@login_required
+@admin_required
+def po_file_delete(fid):
+    """v3.98: PO FOLDER se UNUSED PO delete — orders/cards wale PO mana (use me hai)."""
+    _po_ensure()
+    r = db.query("SELECT id, po_no, filename FROM po_files WHERE id=?", (fid,), one=True)
+    if not r:
+        return jsonify(ok=False, err="missing", msg="Ye PO pehle hi delete ho chuka."), 404
+    po_no = r["po_no"] or ""
+    n_ord = db.query("SELECT COUNT(*) c FROM orders WHERE po_no=?", (po_no,), one=True)["c"] if po_no else 0
+    n_jc = db.query("SELECT COUNT(*) c FROM jobcard WHERE po_no=?", (po_no,), one=True)["c"] if po_no else 0
+    if n_ord or n_jc:
+        return jsonify(ok=False, err="in_use", orders=n_ord, cards=n_jc,
+                       msg="Ye PO USE ME hai — " + str(n_ord) + " orders, " + str(n_jc) +
+                           " cards iske hain. Pehle wo hatao, phir delete hoga.")
+    db.execute("DELETE FROM po_files WHERE id=?", (fid,))
+    return jsonify(ok=True, msg="PO folder se delete ho gaya.")
 
 
 @app.route("/api/po/reprocess/<int:fid>")

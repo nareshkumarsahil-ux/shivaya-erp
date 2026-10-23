@@ -657,15 +657,43 @@ function loadFolder(){
       var box = document.getElementById('poFolder');
       if (!j.ok || !j.files.length) { box.innerHTML = '<div class="muted small">Abhi koi PO saved nahi.</div>'; return; }
       box.innerHTML = j.files.map(function(f){
+        var busy = (f.orders || 0) + (f.cards || 0);
+        var delHtml = busy
+          ? '<span class="fmeta" style="color:#b45309;font-weight:700" title="Is PO ke ' + (f.orders||0) +
+            ' orders / ' + (f.cards||0) + ' cards hain — delete nahi hoga">\ud83d\udd12 USE ME</span>'
+          : '<button type="button" class="btn btn-outline btn-xs fdel97" style="background:#fef2f2;color:#b91c1c" ' +
+            'onclick="delPo(' + f.id + ', this)" title="Folder se hatao (use me nahi hai)">\ud83d\uddf1 Delete</button>';
         return '<div class="frow97">' +
           '<span class="fno">' + esc(f.po_no || '(WhatsApp)') + '</span>' +
           '<span class="ffn" title="' + esc(f.filename) + '">' + esc(f.filename) + '</span>' +
-          '<span class="fmeta">' + esc(f.uploaded_on || '') + ' · ' + (f.orders || 0) + ' orders</span>' +
+          '<span class="fmeta">' + esc(f.uploaded_on || '') + ' · ' + (f.orders || 0) + ' orders' +
+            (f.cards ? ' · ' + f.cards + ' cards' : '') + '</span>' +
           '<button type="button" class="btn btn-outline btn-xs" style="background:#eef2ff;color:#3730a3" ' +
             'onclick="reprocess(' + f.id + ')" title="Is PO ko dobara read karke job cards banao">\u21bb RE-PROCESS</button>' +
+          delHtml +
         '</div>';
       }).join('');
     }).catch(function(){});
+}
+/* v3.98: unused PO delete — 2-click (galti se na dab jaye) */
+var delArm = 0;
+function delPo(fid, el){
+  if (delArm !== fid) {
+    delArm = fid;
+    el.textContent = '\u26a0 Pakka delete?';
+    el.style.background = '#ef4444'; el.style.color = '#fff'; el.style.borderColor = '#ef4444';
+    setTimeout(function(){ if (delArm === fid) { delArm = 0; loadFolder(); } }, 4000);
+    return;
+  }
+  delArm = 0;
+  el.disabled = true; el.textContent = '...';
+  fetch('/api/po/delete/' + fid + '?token=' + encodeURIComponent(T()), { method: 'POST' })
+    .then(function(r){ return r.json(); })
+    .then(function(j){
+      if (j.ok) { el.textContent = '\u2713 Deleted'; setTimeout(loadFolder, 500); }
+      else { toast(j.msg || 'Delete nahi hua', true); loadFolder(); }
+    })
+    .catch(function(){ el.disabled = false; el.textContent = '\ud83d\uddf1 Delete'; toast('Network fail', true); });
 }
 function reprocess(fid){
   /* v3.97: bina confirm — seedha process (same PO to warning khud dikhegi) */
