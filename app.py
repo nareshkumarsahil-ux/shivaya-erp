@@ -4440,7 +4440,7 @@ def po_update_card(oid):
 
     # ---- simple jobcard fields
     _jmap = {"odate": "odate", "order_via": "order_via", "party_model": "party_model", "po_no": "po_no",
-             "party_code": "party_code",
+             "party_code": "party_code", "sheet_thickness": "sheet_thickness",
              "exp_delivery": "exp_delivery", "sheet_material": "sheet_material", "checked_by": "checked_by",
              "created_by": "created_by", "instructions": "instructions", "short_reason": "short_reason",
              "handover_sign": "handover_sign"}

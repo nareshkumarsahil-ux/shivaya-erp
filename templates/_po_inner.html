@@ -16,6 +16,15 @@
   .chip .sno{font-weight:800;color:#4338ca;min-width:34px}
   .chip .st{margin-left:auto;font-size:10px;font-weight:800;padding:2px 7px;border-radius:99px;background:#f1f5f9;color:#64748b}
   .chip.done .st{background:#dcfce7;color:#15803d}
+  /* v3.95: chip ke niche INLINE EDITOR (MODEL/PARTY MODEL/THICKNESS/QTY/PRICE) */
+  .chiprow{margin-bottom:7px}
+  .chiprow .chip{margin-bottom:0}
+  .chedit{border:1.5px solid #4338ca;background:#eef2ff;border-radius:10px;padding:10px;margin-top:4px}
+  .chedit .crow{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px}
+  .chedit label{font-size:9.5px;font-weight:800;color:#4338ca;letter-spacing:.3px;display:block;margin-bottom:2px}
+  .chedit input{width:100%;padding:6px 8px;border:1.5px solid var(--border);border-radius:7px;font-size:12.5px;font-weight:700;background:#fff;box-sizing:border-box}
+  .chedit input:focus{border-color:#6366f1;outline:none}
+  .chedit .btn{padding:6px 10px;font-size:11.5px}
   .chip.warn{border-color:#f59e0b}
   .fld{margin-bottom:9px}
   .fld label{font-size:10.5px;font-weight:800;color:#64748b;letter-spacing:.3px;display:block;margin-bottom:3px}
@@ -359,14 +368,32 @@ function renderInbox(){
   if (!LINES.length) { box.innerHTML = '<div class="muted small">File upload karo — PO ki har S.No. line yahan chip banegi.</div>'; return; }
   box.innerHTML = LINES.map(function(l, i){
     var cls = 'chip' + (i === SEL ? ' sel' : '') + (l.saved ? ' done' : '') + ((!l.model || !l.qty || l.warn) ? ' warn' : '');
-    var act = l.saved ? ('openVerify(' + (l.oid || 0) + ')') : ('selLine(' + i + ')');
-    return '<button type="button" class="' + cls + '" onclick="' + act + '">' +
+    return '<div class="chiprow">' +
+      '<button type="button" class="' + cls + '" onclick="selLine(' + i + ')">' +
       '<span class="sno">#' + (l.sno || (i + 1)) + '</span>' +
       '<span>' + esc(l.model || '(model bharo)') + '</span>' +
       '<span class="muted">' + (l.qty ? esc(l.qty) + ' pcs' : 'qty?') + '</span>' +
-      '<span class="muted">' + (l.rate ? '₹' + esc(l.rate) : '') + '</span>' +
-      '<span class="st">' + (l.saved ? '\u2705 VERIFY' : (l.saving ? 'saving\u2026' : (l.saveErr ? esc(l.saveErr) : 'Edit'))) + '</span></button>';
-  }).join('');
+      '<span class="muted">' + (l.rate ? '\u20B9' + esc(l.rate) : '') + '</span>' +
+      '<span class="st">' + (l.saved ? '\u2705 VERIFY' : (l.saving ? 'saving\u2026' : (l.saveErr ? esc(l.saveErr) : 'Edit'))) + '</span></button>' +
+      '<div class="chedit" id="ced' + i + '" style="display:' + (i === SEL ? 'block' : 'none') + '">' +
+        '<div class="crow">' +
+          '<div><label>MODEL NO (Size Master se match hoga)</label><input id="ce_m' + i + '" list="mdlLst" value="' + esc(l.model || '') + '" placeholder="e.g. SCPL-462"></div>' +
+          '<div><label>PARTY MODEL NO</label><input id="ce_pm' + i + '" value="' + esc(l.party_model || '') + '" placeholder="party ka code"></div>' +
+          '<div><label>SHEET THICKNESS</label><input id="ce_th' + i + '" value="' + esc(l.sheet_thickness || '') + '" placeholder="e.g. 1.0MM"></div>' +
+        '</div>' +
+        '<div class="crow">' +
+          '<div><label>QTY (PCS)</label><input id="ce_q' + i + '" type="number" value="' + esc(l.qty || '') + '"></div>' +
+          '<div><label>PRICE \u20B9</label><input id="ce_r' + i + '" type="number" step="any" value="' + esc(l.rate || '') + '"></div>' +
+          '<div style="display:flex;gap:6px;align-items:flex-end;flex-wrap:wrap">' +
+            '<button type="button" class="btn btn-xs" style="background:#1e3a8a" onclick="saveEdit(' + i + ')">💾 SAVE</button>' +
+            (l.oid ? '<button type="button" class="btn btn-outline btn-xs" onclick="openVerify(' + l.oid + ')">👁 VERIFY</button>' : '') +
+            '<button type="button" class="btn btn-outline btn-xs" onclick="closeEdit(' + i + ')">\u2716 CLOSE</button>' +
+          '</div>' +
+        '</div>' +
+        '<div class="muted" style="font-size:10.5px" id="ce_msg' + i + '"></div>' +
+      '</div></div>';
+  }).join('') + '<datalist id="mdlLst">' +
+    MODELS.map(function(m){ return '<option value="' + esc(m.model_code || m.name) + '">'; }).join('') + '</datalist>';
   var done = LINES.filter(function(l){ return l.saved; }).length;
   document.getElementById('stepBar').textContent = 'S.No. ' + (SEL >= 0 ? (SEL + 1) : '—') + ' / ' + LINES.length + ' · saved ' + done + ' · baki ' + (LINES.length - done);
 }
@@ -412,7 +439,44 @@ function autoSaveAll(){
     toast(done + '/' + LINES.length + ' temp job cards ban gayi \u2705 — chip click = VERIFY, APPROVE = process');
   });
 }
-function selLine(i){ SEL = i; renderInbox(); }
+function selLine(i){ SEL = (SEL === i) ? -1 : i; renderInbox(); }   /* v3.95: click = editor khula/band */
+function closeEdit(i){ if (SEL === i) SEL = -1; renderInbox(); }
+/* ---------- v3.95: chip-editor SAVE — isi window me update (window nahi khulti) ---------- */
+function gv_(id){ var e = document.getElementById(id); return e ? e.value.trim() : ''; }
+function saveEdit(i){
+  var l = LINES[i]; if (!l) return;
+  var m = gv_('ce_m' + i), pm = gv_('ce_pm' + i), th = gv_('ce_th' + i),
+      q = gv_('ce_q' + i), r = gv_('ce_r' + i);
+  var msg = document.getElementById('ce_msg' + i);
+  var fd = new FormData();
+  fd.append('model', m);
+  fd.append('party_model', pm);
+  fd.append('sheet_thickness', th);
+  if (q) fd.append('total_qty', q);
+  if (r) fd.append('rs_pcb', r);
+  /* Size Master EXACT match -> model_id (sizes auto) */
+  var hits = MODELS.filter(function(mo){ return POnorm(mo.model_code || mo.name) === POnorm(m); });
+  if (m && hits.length === 1) fd.append('model_id', hits[0].id);
+  if (msg) msg.textContent = 'save ho raha hai\u2026';
+  function after(){
+    l.model = m; l.party_model = pm; l.sheet_thickness = th; l.qty = q; l.rate = r;
+    l.warn = (!m || !q);
+    SEL = -1; renderInbox();   /* SAVE = editor band */
+    toast('S.No. ' + (l.sno || (i + 1)) + ' update ho gaya \u2705');
+  }
+  if (l.oid) {
+    fetch('/api/po/update/' + l.oid + '?token=' + encodeURIComponent(T()), { method: 'POST', body: fd })
+      .then(function(x){ return x.json(); })
+      .then(function(j){
+        if (!j.ok) { if (msg) msg.textContent = j.error || 'save fail'; toast(j.error || 'Save fail', true); return; }
+        after();
+      }).catch(function(){ if (msg) msg.textContent = 'network fail'; });
+  } else {
+    /* abhi tak temp nahi bana — pehle values set karke seedha save */
+    l.model = m; l.party_model = pm; l.sheet_thickness = th; l.qty = q; l.rate = r;
+    autoSaveLine(i).then(function(){ SEL = -1; renderInbox(); toast('S.No. ' + (l.sno || (i + 1)) + ' temp card ban gaya \u2705'); });
+  }
+}
 
 /* ---------- confirm form ---------- */
 function fillForm(){
