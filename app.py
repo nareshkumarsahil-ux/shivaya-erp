@@ -3969,11 +3969,18 @@ def _po_ensure():
         db.execute("ALTER TABLE orders ADD COLUMN po_no TEXT DEFAULT ''")
     if "po_sno" not in _oc:
         db.execute("ALTER TABLE orders ADD COLUMN po_sno INTEGER DEFAULT 0")
+    _jc = [r["name"] for r in db.query("PRAGMA table_info(jobcard)")]
+    if "party_code" not in _jc:
+        db.execute("ALTER TABLE jobcard ADD COLUMN party_code TEXT DEFAULT ''")
     _mc = [r["name"] for r in db.query("PRAGMA table_info(product_models)")]
     if "design64" not in _mc:
         db.execute("ALTER TABLE product_models ADD COLUMN design64 TEXT DEFAULT ''")
     if "design_mime" not in _mc:
         db.execute("ALTER TABLE product_models ADD COLUMN design_mime TEXT DEFAULT ''")
+    try:
+        db.commit()
+    except Exception:
+        pass
 
 
 _PO_MODEL_RE = re.compile(r"\b([A-Z]{2,4})\s*[-\u2013]?\s*([0-9][A-Z0-9\-_/\\.]*)", re.I)  # v3.84 generic prefix (IIS/SCPL/OM/OSI/LP/SB/DHL...)
@@ -4248,7 +4255,7 @@ def po_save_line():
     db.execute(
         "INSERT OR IGNORE INTO jobcard (order_id, party_model, model, odate, exp_delivery, price, total_qty, "
         "actual_pcb_x, actual_pcb_y, panel_x, panel_y, panels_per_sheet, sheets, pcs_panel, sheet_len, sheet_w, "
-        "sheet_material, sheet_thickness, po_no) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        "sheet_material, sheet_thickness, po_no, party_code) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
         (oid, party_model or model_code, model_code, (f.get("odate") or _today_ist().isoformat()),
          (f.get("due") or ""), float(rate) if rate.replace(".", "", 1).isdigit() and rate else 0, qty,
          float(pm["pcb_len"] or 0) if pm else 0, float(pm["pcb_w"] or 0) if pm else 0,
@@ -4256,7 +4263,8 @@ def po_save_line():
          (int(pm["panels_sheet"] or 0) if pm else 0),
          (int(pm["sheets"] or 0) if pm else 0),
          ups, float(pm["sheet_len"] or 0) if pm else 0, float(pm["sheet_w"] or 0) if pm else 0,
-         (f.get("material") or ""), (pm["sheet_thickness"] if pm else ""), po_no))
+         (f.get("material") or ""), (pm["sheet_thickness"] if pm else ""), po_no,
+         (f.get("party_code") or "")))
     db.execute("INSERT INTO jobcard_log (order_id, process, action, operator, details, ts) VALUES (?,?,?,?,?,?)",
                (oid, "PO", "created", session.get("user_name") or "admin",
                 f"PO S.No. {po_sno} · {po_no}", _now_dt()))
@@ -4302,7 +4310,8 @@ def po_draft():
                "sheet_material": (f.get("material") or ""), "sheet_thickness": (pm["sheet_thickness"] if pm else ""),
                "total_qty": qty, "rs_pcb": rate, "price": (float(rate) * qty if rate.replace(".", "", 1).isdigit() and rate else 0),
                "short_qty": 0, "short_reason": "", "handover_sign": "",
-               "instructions": (f.get("notes") or ""), "v_grooving": ""}
+               "instructions": (f.get("notes") or ""), "v_grooving": "",
+               "party_code": (f.get("party_code") or ""), "copper_finish": ""}
     order_stub = {"order_no": "(PO DRAFT)", "party": party}
     html = render_template("_jobcard_print.html", order=order_stub, jc=jc_stub, mix79=None, procs=[])
     return jsonify(ok=True, html=html)
@@ -4396,6 +4405,7 @@ def po_update_card(oid):
 
     # ---- simple jobcard fields
     _jmap = {"odate": "odate", "order_via": "order_via", "party_model": "party_model", "po_no": "po_no",
+             "party_code": "party_code",
              "exp_delivery": "exp_delivery", "sheet_material": "sheet_material", "checked_by": "checked_by",
              "created_by": "created_by", "instructions": "instructions", "short_reason": "short_reason",
              "handover_sign": "handover_sign"}
@@ -4410,14 +4420,31 @@ def po_update_card(oid):
             except ValueError:
                 pass
 
-    # ---- panel "x×y" parse (X/Y mm)
-    pan = gv("panel").replace("×", "x").replace("*", "x").lower().replace("mm", "")
-    if "x" in pan:
-        _xy = pan.split("x")
+    # ---- panel "x×y" parse (X/Y mm) — "239.98mm X 1000mm-150 pcs" jaisa format bhi chalega
+    pan = gv("panel")
+    if pan:
+        _pn = re.findall(r"[\d.]+", pan.replace("×", "x"))
+        if len(_pn) >= 2:
+            try:
+                _xv = float(_pn[0]); _yv = float(_pn[1])
+                db.execute("UPDATE jobcard SET x_size=?, y_size=?, panel_x=?, panel_y=? WHERE id=?",
+                           (_xv, _yv, _xv, _yv, jc["id"]))
+            except ValueError:
+                pass
+
+    # ---- SHEET strip parse: "METAL-1000x1200-1.5mm-25µ" -> material/w/l/thickness
+    sf = gv("sheet_fmt")
+    if sf and "-" in sf:
+        _sp = [x.strip() for x in sf.split("-")]
         try:
-            _xv = float(_xy[0].strip()); _yv = float(_xy[1].strip())
-            db.execute("UPDATE jobcard SET x_size=?, y_size=?, panel_x=?, panel_y=? WHERE id=?",
-                       (_xv, _yv, _xv, _yv, jc["id"]))
+            if _sp[0]:
+                db.execute("UPDATE jobcard SET sheet_material=? WHERE id=?", (_sp[0], jc["id"]))
+            _dm = re.findall(r"[\d.]+", _sp[1]) if len(_sp) > 1 else []
+            if len(_dm) >= 2:
+                db.execute("UPDATE jobcard SET sheet_w=?, sheet_len=? WHERE id=?",
+                           (float(_dm[0]), float(_dm[1]), jc["id"]))
+            if len(_sp) > 2 and _sp[2]:
+                db.execute("UPDATE jobcard SET sheet_thickness=? WHERE id=?", (_sp[2].upper(), jc["id"]))
         except (ValueError, IndexError):
             pass
 

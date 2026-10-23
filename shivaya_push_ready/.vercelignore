@@ -1,8 +1,0 @@
-circuit.db
-*.db
-__pycache__/
-*.pyc
-.venv/
-.vercel/
-uploads/
-node_modules/

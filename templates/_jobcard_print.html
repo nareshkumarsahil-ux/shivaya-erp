@@ -18,13 +18,9 @@
   .jcl-row:first-child{border-top:none}
   .jcl-lbl{flex:0 0 86px;background:#eaf1fb;color:#1e3a8a;font-size:9.5px;font-weight:800;padding:5px 6px;display:flex;align-items:center;gap:3px;line-height:1.15}
   .jcl-val{flex:1;padding:5px 7px;font-size:11.5px;font-weight:700;display:flex;align-items:center}
-  .jcl-det{display:grid;grid-template-columns:78px 1fr 1fr;min-height:96px}
-  .jcl-rs{background:#1e3a8a;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:11px;text-align:center;padding:4px;line-height:1.2}
+  .jcl-det{display:grid;grid-template-columns:1fr 1fr;min-height:96px}
   .jcl-detgrid{display:grid;grid-template-rows:repeat(3,1fr);flex:1}
   .jcl-detgrid .jcl-row{border-left:1px solid #bfdbfe}
-  .jcl-3col{display:grid;grid-template-columns:1fr 1fr 92px}
-  .jcl-3col .jcl-cell{border-left:1px solid #bfdbfe;padding:5px 6px;font-size:11.5px;font-weight:800;display:flex;align-items:center;justify-content:center;text-align:center}
-  .jcl-3col .jcl-cell:first-child{border-left:none}
   .jcl-banner{background:#1e3a8a;color:#fff;font-weight:800;font-size:12.5px;letter-spacing:.5px;padding:5px 10px;border-radius:5px;display:flex;align-items:center;gap:10px;margin:6px 0}
   .jcl-banner .jcl-hint{font-size:10px;font-weight:700;color:#bfdbfe;font-style:italic;margin-left:auto}
   table.jcl-route{width:100%;border-collapse:collapse;font-size:10px}
@@ -113,20 +109,22 @@
       <div class="jcl-row"><span class="jcl-lbl">📅 Date</span><span class="jcl-val" id="pr_odate">{{ jc.odate|dash }}</span></div>
       <div class="jcl-row"><span class="jcl-lbl">💼 Job No.</span><span class="jcl-val jcl-mono" id="pr_order_no">{{ order.order_no }}</span></div>
       <div class="jcl-row"><span class="jcl-lbl">📦 Model</span><span class="jcl-val" id="pr_model">{{ jc.model|dash }}</span></div>
-      <div class="jcl-row"><span class="jcl-lbl">🚚 Delivery</span><span class="jcl-val" id="pr_exp_delivery">{{ jc.exp_delivery|dash }}</span></div>
+      <div class="jcl-row"><span class="jcl-lbl">🏷️ Party Code</span><span class="jcl-val" id="pr_party_code">{{ jc.party_code|dash }}</span></div>
+      <div class="jcl-row"><span class="jcl-lbl">💰 PRICE</span><span class="jcl-val" id="pr_price">{% if jc.rs_pcb %}{{ jc.rs_pcb|gfmt }} RS/PC{% else %}—{% endif %}</span></div>
+      <div class="jcl-row"><span class="jcl-lbl">📐 RATE</span><span class="jcl-val" id="pr_rate">{% if jc.rs_pcb %}{{ jc.rs_pcb|gfmt }} RS/SQ.INCH{% else %}—{% endif %}</span></div>
     </div>
     <!-- BOX 2: What's App / Party / Production -->
     <div class="jcl-box">
       <div class="jcl-row"><span class="jcl-lbl">📞 What's App{% if jc.odate %} ({{ jc.odate[8:10] }}-{{ jc.odate[5:7] }}-{{ jc.odate[:4] }}){% endif %}</span><span class="jcl-val" id="pr_order_via">{{ jc.order_via|dash }}</span></div>
       <div class="jcl-row"><span class="jcl-lbl">🏢 Party / Customer</span><span class="jcl-val" id="pr_party">{{ order.party|dash }}</span></div>
-      <div class="jcl-row"><span class="jcl-lbl">🏭 PRODUCTION</span><span class="jcl-val" id="pr_party_model">{{ jc.party_model|dash }}</span></div>
       <div class="jcl-row"><span class="jcl-lbl">📮 PO No.</span><span class="jcl-val" id="pr_po_no">{{ jc.po_no|dash }}</span></div>
+      <div class="jcl-row"><span class="jcl-lbl">PRIORITY</span><span class="jcl-val" id="pr_priority">{{ order.priority|dash }}</span></div>
+      <div class="jcl-row"><span class="jcl-lbl">🚙 Delivery</span><span class="jcl-val" id="pr_exp_delivery">{{ jc.exp_delivery|dash }}</span></div>
     </div>
     <!-- BOX 3: JOB CARD DETAILS -->
     <div class="jcl-box">
-      <div class="jcl-boxhead">📋 JOB CARD DETAILS</div>
+            <div class="jcl-row" style="border-bottom:1px solid #bfdbfe"><span class="jcl-lbl" style="flex-basis:64px">SHEET</span><span class="jcl-val" id="pr_sheet_fmt">{% if jc.sheet_material %}{{ jc.sheet_material }}-{{ jc.sheet_w|gfmt }}x{{ jc.sheet_len|gfmt }}-{{ jc.sheet_thickness|lower }}{% if jc.copper_finish and jc.copper_finish[0:1].isdigit() %}-{{ jc.copper_finish }}{% if not jc.copper_finish.endswith('µ') %}µ{% endif %}{% endif %}{% else %}—{% endif %}</span></div>
       <div class="jcl-det">
-        <div class="jcl-rs" id="pr_rs_pcb">{% if jc.rs_pcb %}{{ jc.rs_pcb|gfmt }}<br>RS/PCB{% else %}RATE<br>RS/PCB{% endif %}</div>
         <div class="jcl-detgrid">
           <div class="jcl-row"><span class="jcl-lbl">PCS/PANEL</span><span class="jcl-val" id="pr_pcs_panel">{% if jc.pcs_panel %}{{ jc.pcs_panel }}{% else %}—{% endif %}</span></div>
           <div class="jcl-row"><span class="jcl-lbl">Panel Size X (mm)</span><span class="jcl-val" id="pr_xcut">{% if jc.x_size %}{% set cgx = (jc.x_size + 2 * (jc.cnc_margin_x or 0)) %}{{ cgx|gfmt }} ({{ jc.sheet_len|gfmt }}) {% if mix79 %}<span class="jcl-mix">MIXED: {{ mix79.xn }} row × {{ mix79.xp }} = {{ mix79.xt }}</span>{% else %}×{{ jc.x_qty }}{% endif %}{% if jc.pcb_gap %} · GAP {{ jc.pcb_gap|gfmt }}mm{% endif %}{% else %}—{% endif %}</span></div>
@@ -141,12 +139,11 @@
     </div>
     <!-- BOX 4: Sheet / Panel / V-Grooving / Created-Checked -->
     <div class="jcl-box">
-      <div class="jcl-row jcl-3col"><span class="jcl-cell" style="justify-content:space-between"><span style="font-size:9px;color:#1e3a8a;font-weight:800">Sheet (mm)</span><b>{{ jc.sheet_len|gfmt }}</b></span><span class="jcl-cell"><b>{{ jc.sheet_w|gfmt }}</b></span><span class="jcl-cell" style="background:#eaf1fb" id="pr_sheet_material">{{ jc.sheet_material|dash }}{% if jc.sheet_thickness %} <b style="color:#1d4ed8">{{ jc.sheet_thickness }}</b>{% endif %}</span></div>
-      <div class="jcl-row jcl-3col"><span class="jcl-cell" style="justify-content:space-between"><span style="font-size:9px;color:#1e3a8a;font-weight:800">ACTUAL PANEL SIZE</span><b id="pr_panel">{% set pgx = jc.x_size if jc.x_size else jc.panel_x %}{% set pgy = jc.y_size if jc.y_size else jc.panel_y %}{% if pgx %}{{ pgx|gfmt }}x{{ pgy|gfmt }}mm{% else %}—{% endif %}</b></span><span class="jcl-cell"><b>{% if jc.actual_pcb_x %}{{ jc.actual_pcb_x|gfmt }} × {{ jc.actual_pcb_y|gfmt }}{% else %}—{% endif %}</b></span><span class="jcl-cell" style="background:#eaf1fb">{% if jc.pcs_panel and jc.panels_per_sheet %}{{ jc.pcs_panel * jc.panels_per_sheet }} PCS{% else %}—{% endif %}</span></div>
+            <div class="jcl-boxhead">📋 JOB CARD DETAILS</div>
+      <div class="jcl-row"><span class="jcl-lbl">ACTUAL PANEL SIZE</span><span class="jcl-val" id="pr_panel">{% set pgx = jc.x_size if jc.x_size else jc.panel_x %}{% set pgy = jc.y_size if jc.y_size else jc.panel_y %}{% if pgx %}{{ pgx|gfmt }}mm X {{ pgy|gfmt }}mm-{% if jc.pcs_panel and jc.panels_per_sheet %}{{ jc.pcs_panel * jc.panels_per_sheet }} pcs{% else %}—{% endif %}{% else %}—{% endif %}</span></div>
       <div class="jcl-row"><span class="jcl-lbl">📦 V-GROOVING</span><span class="jcl-val" style="justify-content:space-between"><span style="font-size:9px;color:#1e3a8a;font-weight:800">X Size / Length (mm)</span><b id="pr_vg">{{ jc.v_grooving|dash }}</b></span></div>
       <div class="jcl-row"><span class="jcl-lbl" style="flex-basis:50%">CREATED BY</span><span class="jcl-val" id="pr_created_by" style="border-left:1px solid #bfdbfe">{{ jc.created_by|dash }}</span></div>
       <div class="jcl-row"><span class="jcl-lbl" style="flex-basis:50%">CHECKED BY</span><span class="jcl-val" id="pr_checked_by" style="border-left:1px solid #bfdbfe">{{ jc.checked_by|dash }}</span></div>
-        <div class="jcl-row"><span class="jcl-lbl" style="flex-basis:50%">PRIORITY</span><span class="jcl-val" id="pr_priority" style="border-left:1px solid #bfdbfe">{{ order.priority|dash }}</span></div>
     </div>
   </div>
 

@@ -238,14 +238,14 @@ var MODELS = {{ models_json|safe }};
 var ED_FIELDS = [
   ['pr_odate', 'odate', 'text'], ['pr_order_no', 'order_no', 'text'],
   ['pr_order_via', 'order_via', 'text'], ['pr_party', 'party', 'text'],
-  ['pr_party_model', 'party_model', 'text'], ['pr_po_no', 'po_no', 'text'],
+  ['pr_party_model', 'party_model', 'text'], ['pr_po_no', 'po_no', 'text'], ['pr_party_code', 'party_code', 'text'],
   ['pr_exp_delivery', 'exp_delivery', 'text'], ['pr_panel', 'panel', 'text'],
   ['pr_sheet_material', 'sheet_material', 'text'], ['pr_qty_panel', 'qty_panel', 'number'],
   ['pr_total_qty', 'total_qty', 'number'], ['pr_priority', 'priority', 'select'],
   ['pr_checked_by', 'checked_by', 'text'], ['pr_created_by', 'created_by', 'text'],
   ['pr_instructions', 'instructions', 'text'], ['pr_short_qty', 'short_qty', 'number'],
   ['pr_short_reason', 'short_reason', 'text'], ['pr_handover', 'handover_sign', 'text'],
-  ['pr_sheets', 'sheets', 'number']
+  ['pr_sheets', 'sheets', 'number'], ['pr_sheet_fmt', 'sheet_fmt', 'text']
 ];
 var modelChangedId = 0;
 function makeEditable(){
@@ -270,18 +270,20 @@ function makeEditable(){
     inp.type = fd[2]; inp.className = 'jced'; inp.value = cur;
     el.textContent = ''; el.appendChild(inp);
   });
-  /* RS/PCB box: sirf number editable, RS/PCB label barkarar */
-  var rs = document.querySelector('[id="pr_rs_pcb"]');
-  if (rs) {
-    var num = rs.innerHTML.split('<br>')[0].trim();
-    if (num === 'RATE') num = '';
-    rs.innerHTML = '';
+  /* PRICE (box1): number editable + RS/PC label */
+  var pp = document.querySelector('[id="pr_price"]');
+  if (pp) {
+    var num = pp.textContent.replace('RS/PC', '').trim();
+    if (num === '\u2014' || num === '\u2014 RS/PC') num = '';
+    pp.innerHTML = '';
     var ri = document.createElement('input');
-    ri.type = 'number'; ri.className = 'jced'; ri.value = num; ri.style.textAlign = 'center';
-    ri.oninput = function(){ ri.setAttribute('value', ri.value); };
-    rs.appendChild(ri);
-    var lb = document.createElement('span'); lb.innerHTML = '<br>RS/PCB';
-    rs.appendChild(lb);
+    ri.type = 'number'; ri.className = 'jced'; ri.value = num; ri.style.textAlign = 'center'; ri.style.maxWidth = '90px';
+    ri.oninput = function(){ ri.setAttribute('value', ri.value);
+      var rr = document.querySelector('[id="pr_rate"]');
+      if (rr) rr.textContent = (ri.value ? ri.value + ' RS/SQ.INCH' : '\u2014'); };
+    pp.appendChild(ri);
+    var lb = document.createElement('span'); lb.textContent = ' RS/PC';
+    pp.appendChild(lb);
     ri.setAttribute('value', num);
   }
   /* MODEL -> type-search INPUT + native datalist (type karo -> list -> select = Size Master auto-fill).
@@ -318,8 +320,8 @@ function saveCard(){
     var inp = el.querySelector('input,select');
     if (inp) fd.append(fdx[1], inp.value);
   });
-  var rs = document.querySelector('[id="pr_rs_pcb"] input');
-  if (rs) fd.append('rs_pcb', rs.value);
+  var pp = document.querySelector('[id="pr_price"] input');
+  if (pp) fd.append('rs_pcb', pp.value);
   /* MODEL: type-search input -> matching Size Master dhundo -> model_id bhejo (auto-fill) */
   var mel = document.getElementById('edModel');
   if (mel && mel.value.trim()) {
