@@ -2691,6 +2691,11 @@ IMPORT_FIELDS = [
     ("x_qty", "X Qty (Sheet Length Panels)", False),
     ("y_qty", "Y Qty (Sheet Width Panels)", False),
     ("orientation", "Orientation", False),
+    ("party_code", "Party Code", False),
+    ("cnc_tool", "CNC/Tool", False),
+    ("sheet_thickness", "Material", False),
+    ("per_sq_inch", "Per Sq Inch", False),
+    ("pcb_price", "Price", False),
 ]
 
 FIELD_ALIASES = {
@@ -2700,8 +2705,8 @@ FIELD_ALIASES = {
     "model_code": ["model code", "code", "model no", "model no.", "model number",
                    "part no", "part no.", "product code", "model"],
     "party": ["party", "customer", "client", "party name", "customer name"],
-    "note": ["cnc/tool", "cnc tool", "tool", "cnc", "machining", "machine note",
-             "cutting note", "remark", "remarks", "notes", "note"],
+    "cnc_tool": ["cnc/tool", "cnc tool", "cnc", "tool", "machining", "tool no"],
+    "note": ["machine note", "cutting note", "remark", "remarks", "notes", "note"],
     "pcb_len": ["pcb length", "pcb l", "pcb x", "actual pcb x", "actual pcb size x",
                 "pcb size x", "pcb length (mm)", "pcb size l", "pcb x size"],
     "pcb_w": ["pcb width", "pcb w", "pcb y", "actual pcb y", "actual pcb size y",
@@ -2723,15 +2728,15 @@ FIELD_ALIASES = {
     "sheet_w": ["sheet width", "sheet w", "sheet y", "sheet width (mm)",
                 "sheet size y", "sheet size w", "sheet width mm"],
     "panel_len": ["panel length", "panel l", "panel x", "panel length (mm)",
-                  "panel size x", "panel size l", "panel x size"],
+                  "panel size x", "panel size l", "panel x size", "l"],
     "panel_w": ["panel width", "panel w", "panel y", "panel width (mm)",
-                "panel size y", "panel size w", "panel y size"],
+                "panel size y", "panel size w", "panel y size", "w"],
     "cutting_len": ["cutting length", "cutting l", "cutting x", "cutting size x",
                     "cut size x", "x cutting size", "cutting length (mm)", "gang length",
-                    "gang l", "cutting size l", "gang size x", "gang size l"],
+                    "gang l", "cutting size l", "gang size x", "gang size l", "4a", "cut l"],
     "cutting_w": ["cutting width", "cutting w", "cutting y", "cutting size y",
                   "cut size y", "y cutting size", "cutting width (mm)", "gang width",
-                  "gang w", "cutting size w", "gang size y", "gang size w"],
+                  "gang w", "cutting size w", "gang size y", "gang size w", "4b", "cut w"],
     "kerf_x": ["kerf x", "panel gap x", "cutting gap x", "kerf x (mm)", "panel gap / kerf x (mm)"],
     "kerf_y": ["kerf y", "panel gap y", "cutting gap y", "kerf y (mm)", "panel gap / kerf y (mm)"],
     "cnc_margin_x": ["cnc margin x", "margin x", "cnc x", "cnc margin x (mm)"],
@@ -2749,6 +2754,14 @@ FIELD_ALIASES = {
     "y_qty": ["y qty", "y cutting qty", "y panels", "sheet width panels", "qty y",
               "panels along width", "y layout", "sheet width (panels)", "y cutting qty (panels)"],
     "orientation": ["orientation", "layout", "layout type", "layout orientation", "best layout"],
+    # v3.99: SIZE SHEET ke naye columns (PARTY CODE / PER SQ.INCH / MATERIAL / CNC/TOOL)
+    "party_code": ["party code", "party code.", "party code no", "p code"],
+    "per_sq_inch": ["per sq inch", "per sq.inch", "per sq. inch", "per square inch",
+                    "rs/sq inch", "rs per sq inch", "rate/sq inch", "rate per sq inch",
+                    "rs sq inch", "per sq.inch rate"],
+    "sheet_thickness": ["material", "material grade", "fr4 grade", "pcb material",
+                        "thickness", "pcb thickness", "sheet thickness", "thickness mm"],
+    "pcb_price": ["price", "rate", "pcb price", "price rs", "rate rs", "price rs."],
 }
 
 # combined size columns: ek hi cell mein "54×54" / "328×237.9"
@@ -2904,7 +2917,8 @@ def _parse_upload(file_storage):
     raise ValueError("Sirf .csv ya .xlsx/.xls file upload karo.")
 
 
-TEXT_FIELDS = {"name", "model_code", "orientation", "party", "note"}
+TEXT_FIELDS = {"name", "model_code", "orientation", "party", "note",
+                   "party_code", "cnc_tool", "sheet_thickness"}
 
 
 def _row_to_fields(headers, mapping, row):
@@ -2954,7 +2968,7 @@ def _import_preview(batch):
     existing = {m["name"] for m in db.query("SELECT name FROM product_models")}
     new_count = sum(1 for m in mapped if m.get("name") and m["name"] not in existing)
     upd_count = sum(1 for m in mapped if m.get("name") and m["name"] in existing)
-    skip_count = sum(1 for m in mapped if not m.get("name"))
+    skip_count = sum(1 for m in mapped if not m.get("name") and not m.get("model_code"))
     ignored = [h for idx, h in enumerate(headers) if idx not in mapping and _norm_hdr(h)]
     return {
         "batch": batch,
@@ -2990,11 +3004,13 @@ def products_import_template():
     w.writerow(["LED Driver 12W Board", "SCPL-105", "ADSUN", "52 MM TOOL",
                 40, 50, 10, 5, 0.5, 0.5,
                 3, 3, 1, 1, 1, 5, 1200, 1000, 328, 237.9, 328, 1195.5,
-                0, 1.5, 3, 1, 50, 3, 52, 1, 3, "rotated"])
+                0, 1.5, 3, 1, 50, 3, 52, 1, 3, "rotated",
+                "CHRG", "TOOL", "FR4-1MM", 2.76, 11.5])
     w.writerow(["LED Board 8W", "SCPL-101", "SOFGLOW", "CNC",
                 54, 54, 7, 7, 0, 0,
                 0, 0, 0, 0, 1, 1, 1200, 1000, 384, 380, 0, 0,
-                2, 2, 0, 0, 49, 6, 51, 2, 2, "normal"])
+                2, 2, 0, 0, 49, 6, 51, 2, 2, "normal",
+                "CHRG", "CNC", "FR4-1MM", 0.95, 24.4])
     return Response(buf.getvalue(), mimetype="text/csv",
                     headers={"Content-Disposition": "attachment; filename=finished_products_template.csv"})
 
@@ -3022,8 +3038,8 @@ def products_import():
         return redirect_with_token(url_for("products") + "?import=1")
     headers = rows[0]
     mapping = _map_headers(headers)
-    if "name" not in mapping.values():
-        flash("⚠️ 'Product Name' jaisa koi column nahi mila — header check karo (ya template download karo).",
+    if "name" not in mapping.values() and "model_code" not in mapping.values():
+        flash("\u26a0\ufe0f 'Product Name' ya 'Model No.' jaisa koi column nahi mila \u2014 header check karo (ya template download karo).",
               "error")
         return redirect_with_token(url_for("products") + "?import=1")
     import json as _json
@@ -3076,6 +3092,11 @@ def products_import_confirm():
             (str(fields.get("model_code") or "")).strip(),
             (str(fields.get("party") or "")).strip(),
             (str(fields.get("note") or "")).strip(),
+            (str(fields.get("party_code") or "")).strip(),
+            (str(fields.get("cnc_tool") or "")).strip(),
+            (str(fields.get("sheet_thickness") or "")).strip(),
+            float(fields.get("per_sq_inch") or 0),
+            float(fields.get("pcb_price") or 0),
             float(fields.get("pcb_len") or 0), float(fields.get("pcb_w") or 0),
             int(fields.get("pcbs_x") or 0), int(fields.get("pcbs_y") or 0),
             float(fields.get("gap_x") or 0), float(fields.get("gap_y") or 0),
@@ -3099,17 +3120,19 @@ def products_import_confirm():
                     "pcbs_y=?, gap_x=?, gap_y=?, border_l=?, border_r=?, border_t=?, border_b=?, gang_x=?, "
                     "gang_y=?, sheet_len=?, sheet_w=?, panel_len=?, panel_w=?, cutting_len=?, cutting_w=?, "
                     "kerf_x=?, kerf_y=?, cnc_margin_x=?, cnc_margin_y=?, orientation=?, pcs_panel=?, "
-                    "panels_sheet=?, sheets=?, x_qty=?, y_qty=? WHERE id=?", vals + (existing["id"],))
+                    "panels_sheet=?, sheets=?, x_qty=?, y_qty=?, party_code=?, cnc_tool=?, "
+                    "sheet_thickness=?, per_sq_inch=?, pcb_price=? WHERE id=?", vals + (existing["id"],))
                 updated += 1
             else:
                 skipped += 1
         else:
             db.execute(
-                "INSERT INTO product_models (name, model_code, party, note, pcb_len, pcb_w, pcbs_x, pcbs_y, "
+                "INSERT INTO product_models (name, model_code, party, note, party_code, cnc_tool, "
+                "sheet_thickness, per_sq_inch, pcb_price, pcb_len, pcb_w, pcbs_x, pcbs_y, "
                 "gap_x, gap_y, border_l, border_r, border_t, border_b, gang_x, gang_y, sheet_len, sheet_w, "
                 "panel_len, panel_w, cutting_len, cutting_w, kerf_x, kerf_y, cnc_margin_x, cnc_margin_y, "
                 "orientation, pcs_panel, panels_sheet, sheets, x_qty, y_qty, created_on) "
-                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (name,) + vals + (_today_ist().isoformat(),))
             added += 1
     db.execute("DELETE FROM import_staging WHERE batch=?", (batch,))
