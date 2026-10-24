@@ -1,0 +1,16 @@
+# Local database (cloud par Turso use hota hai — ye local test data GitHub par nahi jana chahiye)
+circuit.db
+*.db
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Misc
+uploads/
+node_modules/
+.vercel/
+*.zip
+.DS_Store

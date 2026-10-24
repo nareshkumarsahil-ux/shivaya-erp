@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+{% block title %}Job Orders{% endblock %}
+{% block page_title %}Job Orders{% endblock %}
+{% block content %}
+
+{% if show_add and current_user_role == 'admin' %}
+<div class="panel no-print" style="border-left:4px solid var(--blue)">
+  <div class="panel-head"><h3>➕ New Job Order</h3><a class="btn btn-outline btn-sm" href="/orders">✕ Close</a></div>
+  <div class="panel-body">
+    <a class="btn" href="/po" style="font-size:15px;font-weight:800;padding:12px 20px;background:#16a34a;color:#fff;text-decoration:none;display:inline-flex;gap:8px;align-items:center">📄 PO se Job Card →</a>
+    <p class="muted small" style="margin-top:8px">Naya advanced format: <b>Party → Board Type → Priority</b> → Product select karte hi saare details (single PCB size, panel size, panels/sheet side-wise, PCB/panel + PCB/sheet) → <b>QTY dalte hi auto calculation</b> (panels, sheets, total value — cut list ki tarah) → Sheet material + thickness dropdown → Employee instructions → Create.</p>
+  </div>
+</div>
+{% endif %}
+
+<div class="toolbar no-print">
+  <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+    <a class="tab {{'active' if filt=='active'}}" href="/orders?filter=active">Active orders</a>
+    <a class="tab {{'active' if filt=='urgent'}}" href="/orders?filter=urgent">⚠️ Urgent</a>
+    <a class="tab {{'active' if filt=='overdue'}}" href="/orders?filter=overdue">⏰ Overdue</a>
+  </div>
+  <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+    <form method="get" action="/orders" style="display:flex;gap:8px">
+      <input type="hidden" name="filter" value="{{ filt }}">
+      <input class="search-input" type="text" name="q" value="{{ q }}" placeholder="Search order, party, model..." style="padding:8px 13px;border:1px solid var(--border);border-radius:8px;font-size:13px;width:220px">
+      <button class="btn btn-outline btn-sm" type="submit">Search</button>
+    </form>
+    {% if current_user_role == 'admin' %}
+    <a class="btn" href="/po" style="background:#16a34a;color:#fff;font-weight:800">📄 PO se Job Card</a>
+    {% endif %}
+  </div>
+</div>
+
+<!-- ============ KANBAN BOARD ============ -->
+<div style="display:grid;grid-template-columns:repeat(6,1fr);gap:12px;overflow-x:auto;min-width:1180px">
+  {% for cidx in range(KANBAN_COLS|length) %}
+  <div class="kanban-col">
+    <div class="kanban-head">
+      <span class="knum">{{ KANBAN_COLS[cidx][0] }}</span>
+      <span class="kname">{{ KANBAN_COLS[cidx][1] }}</span>
+      <span class="kcount">{{ cols[cidx]|length }}</span>
+    </div>
+    <div class="kanban-body">
+      {% for o in cols[cidx] %}
+      <!-- v2.74: ORDER CARD click = JOB ORDER PREVIEW (edit ka button preview ke andar) -->
+      <a class="kcard" {% if current_user_role == 'admin' %}href="/po/verify/{{ o.id }}" title="Click — VERIFY khulega: card dekho/edit karo, APPROVE se process me jayega"{% else %}href="/operator"{% endif %}>
+        <div class="kcard-top">
+          <b class="mono">Order {{ o.order_no }}</b>
+          {% if o.priority=='urgent' %}<span class="badge b-urgent">URGENT</span>{% endif %}
+          {% if o.po_no and not o.current_process and o.status == 'pending' %}<span class="badge" style="margin-left:auto;font-size:9px;background:#fef3c7;color:#92400e;border:1px solid #f59e0b">REVIEW</span>{% elif current_user_role == 'admin' %}<span class="badge b-blue" style="margin-left:auto;font-size:9px">✅ VERIFY</span>{% endif %}
+        </div>
+        <div class="kparty">{{ o.party }}</div>
+        <div class="kproduct">{{ o.product }}</div>
+        {% if o.qty_panel or o.pcs_panel %}
+        <div class="muted small" style="margin-top:4px">🧮 QTY OF PCS: <b>{{ o.qty }}</b> · 🔲 PANEL: {{ o.qty_panel or '—' }} × {{ o.pcs_panel or '—' }} PCS</div>
+        {% endif %}
+        <div style="display:flex;align-items:center;gap:8px;margin-top:10px">
+          <span class="prog" style="flex:1"><span class="fill" style="width:{{ o.progress }}%"></span></span>
+          <span class="prog-label">{{ o.progress }}%</span>
+        </div>
+        <div style="margin-top:8px">
+          <span class="badge {{'b-done' if o.cur_status=='done' else 'b-blue' if o.cur_status=='running' else 'b-urgent' if o.cur_status=='hold' else 'b-amber'}}" style="font-size:10px">{{ '✅ COMPLETED' if o.cur_status=='done' else '⏱ RUNNING' if o.cur_status=='running' else '⏸ HOLD' if o.cur_status=='hold' else '⏳ PENDING' }}</span>
+          <span class="muted small">{{ o.cur_proc }}</span>
+        </div>
+        <div class="kdelivery">🚚 Delivery: {{ o.delivery_date or '—' }}</div>
+        {% if o.disp %}<div class="muted small" style="margin-top:6px"><span class="badge b-done">🚚 DISPATCHED: {{ o.disp.mode }} · {{ o.disp.ddate }} {{ o.disp.dtime }}</span></div>{% endif %}
+      </a>
+      {% else %}
+      <div class="kempty">No jobs here</div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+{% if done %}
+<div class="section-title" style="margin-top:26px">✓ COMPLETED ORDERS</div>
+<div class="panel">
+  <div class="panel-body" style="padding:8px 16px">
+    <table>
+      {% for o in done %}
+      <tr style="{{'opacity:.65' if o.status=='done'}}">
+        <td style="width:120px"><b class="mono">{{ o.order_no }}</b> <span class="badge b-done" style="margin-left:6px">DONE</span>
+          {% if o.disp %}<div><span class="badge b-blue" style="margin-top:4px">🚚 {{ o.disp.mode }} · {{ o.disp.ddate }} {{ o.disp.dtime }}</span></div>{% endif %}
+        </td>
+        <td><b>{{ o.party }}</b><div class="muted small">{{ o.product }}{% if o.qty_panel or o.pcs_panel %} · 🔲 {{ o.qty_panel or '—' }} panels · {{ o.pcs_panel or '—' }} pcs/panel{% endif %}</div></td>
+        <td class="t-right">{% if current_user_role == 'admin' %}<a class="btn btn-outline btn-xs" href="/po/verify/{{ o.id }}">✅ VERIFY / APPROVE</a>{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </table>
+  </div>
+</div>
+{% endif %}
+
+<style>
+.kanban-col{background:#f4f1ea;border:1px solid var(--border);border-radius:12px;min-height:320px}
+.kanban-head{display:flex;align-items:center;gap:8px;padding:11px 12px;border-bottom:1px solid var(--border)}
+.knum{background:var(--navy);color:#fff;font-size:11px;font-weight:800;padding:3px 8px;border-radius:6px}
+.kname{font-size:11.5px;font-weight:700;letter-spacing:.2px}
+.kcount{margin-left:auto;background:#fff;border:1px solid var(--border);border-radius:20px;font-size:11px;font-weight:700;padding:2px 9px;color:var(--muted)}
+.kanban-body{padding:10px;display:flex;flex-direction:column;gap:10px}
+.kcard{background:#fff;border:1px solid var(--border);border-radius:10px;padding:12px;display:block;box-shadow:0 1px 2px rgba(66,70,80,.06);transition:all .15s}
+.kcard:hover{border-color:var(--amber);box-shadow:0 4px 14px rgba(245,158,11,.18);transform:translateY(-1px)}
+.kcard-top{display:flex;justify-content:space-between;align-items:center;gap:6px}
+.kparty{font-size:12px;color:var(--muted);margin-top:5px}
+.kproduct{font-size:12.5px;font-weight:600;margin-top:3px}
+.kdelivery{font-size:11px;color:var(--muted);margin-top:8px}
+.kempty{text-align:center;color:#b0ac9f;font-size:12px;padding:26px 8px;border:1px dashed var(--border);border-radius:9px}
+.tab{transition:all .15s}
+</style>
+<script>
+/* product dropdown (finished product) -> auto qty + id */
+(function(){
+  var sel = document.getElementById('po_product');
+  if (!sel) return;
+  sel.addEventListener('change', function(){
+    var opt = this.options[this.selectedIndex];
+    document.getElementById('po_product_id').value = opt.getAttribute('data-pid') || '';
+    var q = parseInt(opt.getAttribute('data-qty')) || 0;
+    if (q > 0) {
+      var qel = document.querySelector('input[name="qty"]');
+      if (qel) qel.value = q;
+    }
+  });
+})();
+</script>
+{% endblock %}
