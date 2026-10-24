@@ -937,6 +937,39 @@ def migrate(conn):
         conn.execute("ALTER TABLE product_models ADD COLUMN gaps_x TEXT DEFAULT ''")
     if pcols and "gaps_y" not in pcols:
         conn.execute("ALTER TABLE product_models ADD COLUMN gaps_y TEXT DEFAULT ''")
+    # v4.13 — PRODUCT_MODELS POORA ENSURE: v3.99 ke cnc_tool/party_code migrate-chain me the hi nahi,
+    # isliye PURANA Turso DB par import INSERT "no column named cnc_tool" mar jata tha.
+    # Ab SCHEMA ke har write-col ki missing-par-ADD guarantee (fresh + purana DB dono).
+    for _col, _dfl in (
+        ("model_code", "TEXT DEFAULT ''"), ("pcb_code", "TEXT DEFAULT ''"),
+        ("party", "TEXT DEFAULT ''"), ("party_name", "TEXT DEFAULT ''"), ("party_code", "TEXT DEFAULT ''"),
+        ("cnc_tool", "TEXT DEFAULT ''"), ("note", "TEXT DEFAULT ''"), ("hsn", "TEXT DEFAULT '85340000'"),
+        ("pcb_len", "REAL DEFAULT 0"), ("pcb_w", "REAL DEFAULT 0"),
+        ("pcbs_x", "INTEGER DEFAULT 0"), ("pcbs_y", "INTEGER DEFAULT 0"),
+        ("gap_x", "REAL DEFAULT 0"), ("gap_y", "REAL DEFAULT 0"),
+        ("border_l", "REAL DEFAULT 0"), ("border_r", "REAL DEFAULT 0"),
+        ("border_t", "REAL DEFAULT 0"), ("border_b", "REAL DEFAULT 0"),
+        ("gang_x", "INTEGER DEFAULT 1"), ("gang_y", "INTEGER DEFAULT 1"),
+        ("sheet_len", "REAL DEFAULT 0"), ("sheet_w", "REAL DEFAULT 0"),
+        ("panel_len", "REAL DEFAULT 0"), ("panel_w", "REAL DEFAULT 0"),
+        ("cutting_len", "REAL DEFAULT 0"), ("cutting_w", "REAL DEFAULT 0"),
+        ("kerf_x", "REAL DEFAULT 2"), ("kerf_y", "REAL DEFAULT 2"),
+        ("cnc_margin_x", "REAL DEFAULT 0"), ("cnc_margin_y", "REAL DEFAULT 0"),
+        ("orientation", "TEXT DEFAULT 'normal'"), ("shape", "TEXT DEFAULT 'rect'"),
+        ("pcs_panel", "INTEGER DEFAULT 0"), ("panels_sheet", "INTEGER DEFAULT 0"),
+        ("sheets", "INTEGER DEFAULT 1"), ("x_qty", "INTEGER DEFAULT 1"), ("y_qty", "INTEGER DEFAULT 1"),
+        ("fg_stock", "INTEGER DEFAULT 0"),
+        ("pcb_price", "REAL DEFAULT 0"), ("per_sq_inch", "REAL DEFAULT 0"),
+        ("sheet_thickness", "TEXT DEFAULT ''"),
+        ("gaps_x", "TEXT DEFAULT ''"), ("gaps_y", "TEXT DEFAULT ''"),
+        ("attachment_name", "TEXT DEFAULT ''"), ("attachment_mime", "TEXT DEFAULT ''"),
+        ("order_id", "INTEGER DEFAULT 0"), ("created_on", "TEXT DEFAULT ''"),
+    ):
+        if pcols and _col not in pcols:
+            try:
+                conn.execute(f"ALTER TABLE product_models ADD COLUMN {_col} {_dfl}")
+            except Exception:
+                pass   # dobara banao hi mat (parallel warm instance race)
     # v3.07 — PURANE models jinke MODEL NO (model_code) khali hain — name se auto-fill
     try:
         conn.execute("UPDATE product_models SET model_code = name WHERE model_code = '' OR model_code IS NULL")
@@ -1830,6 +1863,43 @@ def execute_many(sql, seq, chunk=300):
             conn.executemany(sql, seq)
             conn.commit()
         return len(seq)
+    finally:
+        conn.close()
+
+
+def ensure_product_models():
+    """v4.13: import se PEHLE product_models ke saare columns ki guarantee (purana Turso DB self-heal).
+    1 PRAGMA + sirf missing par ALTER — normal case me sasta no-op."""
+    conn = get_db()
+    try:
+        pcols = [r[1] for r in conn.execute("PRAGMA table_info(product_models)")]
+        need = [c for c in ("cnc_tool", "party_code", "party_name", "hsn", "note", "pcb_code",
+                            "per_sq_inch", "sheet_thickness", "pcb_price", "gaps_x", "gaps_y",
+                            "kerf_x", "kerf_y", "cnc_margin_x", "cnc_margin_y", "orientation",
+                            "shape", "fg_stock", "party", "pcb_w", "pcbs_x", "pcbs_y",
+                            "gap_y", "border_r", "border_t", "border_b", "gang_x", "gang_y",
+                            "y_qty", "cutting_w", "panel_w", "sheet_w")
+                if c not in pcols]
+        for c in need:
+            try:
+                if c in ("hsn",):
+                    conn.execute("ALTER TABLE product_models ADD COLUMN hsn TEXT DEFAULT '85340000'")
+                elif c in ("kerf_x", "kerf_y"):
+                    conn.execute(f"ALTER TABLE product_models ADD COLUMN {c} REAL DEFAULT 2")
+                elif c in ("gang_x", "gang_y"):
+                    conn.execute(f"ALTER TABLE product_models ADD COLUMN {c} INTEGER DEFAULT 1")
+                elif c in ("orientation", "shape"):
+                    conn.execute(f"ALTER TABLE product_models ADD COLUMN {c} TEXT DEFAULT 'normal'")
+                else:
+                    conn.execute(f"ALTER TABLE product_models ADD COLUMN {c} "
+                                 + ("TEXT DEFAULT ''" if c in ("cnc_tool", "party_code", "party_name",
+                                                              "note", "pcb_code", "sheet_thickness",
+                                                              "gaps_x", "gaps_y")
+                                    else ("INTEGER DEFAULT 0" if c in ("pcbs_x", "pcbs_y", "y_qty", "fg_stock")
+                                          else "REAL DEFAULT 0")))
+            except Exception:
+                pass
+        return need
     finally:
         conn.close()
 

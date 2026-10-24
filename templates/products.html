@@ -139,11 +139,11 @@
         <tr data-id="{{ m.id }}">
           <td style="border:1px solid #e2e8f0;padding:4px 6px;text-align:center;color:#94a3b8">{{ loop.index }}</td>
           {% for f, val in [('party_name', m.party_name or m.party or ''), ('model_code', m.model_code or ''), ('party_code', m.party_code or ''),
-                            ('pcb_len', m.pcb_len or 0), ('pcb_w', m.pcb_w or 0),
-                            ('panel_len', m.panel_len or 0), ('panel_w', m.panel_w or 0), ('pcs_panel', m.pcs_panel or 0),
-                            ('cutting_len', m.cutting_len or 0), ('x_qty', m.x_qty or 0), ('cutting_w', m.cutting_w or 0), ('y_qty', m.y_qty or 0),
-                            ('panels_sheet', m.panels_sheet or 0), ('sheets', m.sheets or 0), ('cnc_tool', m.cnc_tool or ''),
-                            ('per_sq_inch', m.per_sq_inch or 0), ('sheet_thickness', m.sheet_thickness or ''), ('pcb_price', m.pcb_price or 0)] %}
+                            ('pcb_len', m.pcb_len or ''), ('pcb_w', m.pcb_w or ''),
+                            ('panel_len', m.panel_len or ''), ('panel_w', m.panel_w or ''), ('pcs_panel', m.pcs_panel or ''),
+                            ('cutting_len', m.cutting_len or ''), ('x_qty', m.x_qty or ''), ('cutting_w', m.cutting_w or ''), ('y_qty', m.y_qty or ''),
+                            ('panels_sheet', m.panels_sheet or ''), ('sheets', m.sheets or ''), ('cnc_tool', m.cnc_tool or ''),
+                            ('per_sq_inch', m.per_sq_inch or ''), ('sheet_thickness', m.sheet_thickness or ''), ('pcb_price', m.pcb_price or '')] %}
           <td class="sc" data-f="{{ f }}" style="border:1px solid #e2e8f0;padding:4px 6px;cursor:cell;min-width:44px">{{ '' if val is none else val }}</td>
           {% endfor %}
           <td style="border:1px solid #e2e8f0;padding:4px 6px;text-align:center;font-weight:800;color:{{ '#15803d' if (m.fg_stock or 0) > 0 else '#cbd5e1' }}">{{ m.fg_stock or 0 }}</td>

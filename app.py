@@ -3032,6 +3032,12 @@ TEXT_FIELDS = {"name", "model_code", "orientation", "party", "note",
                    "party_code", "cnc_tool", "sheet_thickness"}
 
 
+def _blank_cell(v):
+    """v4.14: Excel ka BLANK (khaali/-/na/N.A.) — user: blank BLANK hi rahega, 0 nahi bharenge."""
+    s = str(v if v is not None else "").strip()
+    return (not s) or s.lower() in ("-", "\u2014", "na", "n/a", "none", "nil", "null")
+
+
 def _row_to_fields(headers, mapping, row):
     out = {}
     for idx, h in enumerate(headers):
@@ -3040,22 +3046,29 @@ def _row_to_fields(headers, mapping, row):
             continue
         val = row[idx] if idx < len(row) else ""
         if isinstance(target, tuple) and target[0] == "PAIR":
-            nums = _num(val)
-            if isinstance(nums, list):
-                out[target[1]] = nums[0] if nums else 0.0
-                out[target[2]] = nums[1] if len(nums) > 1 else 0.0
+            if _blank_cell(val):
+                out[target[1]] = None   # v4.14: blank -> NULL (0 nahi)
+                out[target[2]] = None
             else:
-                out[target[1]] = nums
-                out[target[2]] = 0.0
+                nums = _num(val)
+                if isinstance(nums, list):
+                    out[target[1]] = nums[0] if nums else 0.0
+                    out[target[2]] = nums[1] if len(nums) > 1 else 0.0
+                else:
+                    out[target[1]] = nums
+                    out[target[2]] = 0.0
         elif target in TEXT_FIELDS:
             out[target] = str(val).strip()
         elif target == "ignore_num":
             continue
         else:
-            nums = _num(val)
-            if isinstance(nums, list):
-                nums = nums[0] if nums else 0.0
-            out[target] = nums
+            if _blank_cell(val):
+                out[target] = None      # v4.14: blank -> NULL (0 nahi)
+            else:
+                nums = _num(val)
+                if isinstance(nums, list):
+                    nums = nums[0] if nums else 0.0
+                out[target] = nums
     return out
 
 
@@ -3206,6 +3219,7 @@ def products_import_confirm():
         flash("Import session missing — dobara file upload karo.", "error")
         return redirect_with_token(url_for("products"))
     import json as _json
+    db.ensure_product_models()   # v4.13: purana DB ho to yahin khud-theek (cnc_tool waghera guarantee)
     rows = db.query("SELECT * FROM import_staging WHERE batch=? ORDER BY row_no", (batch,))
     header_row = next((r for r in rows if r["row_no"] == 0), None)
     if not header_row:
@@ -3242,7 +3256,7 @@ def products_import_confirm():
             (str(fields.get("sheet_thickness") or "")).strip(),
             float(fields.get("per_sq_inch") or 0),
             float(fields.get("pcb_price") or 0),
-            float(fields.get("pcb_len") or 0), float(fields.get("pcb_w") or 0),
+            fields.get("pcb_len"), fields.get("pcb_w"),          # v4.14: blank -> NULL (blank hi rahe)
             int(fields.get("pcbs_x") or 0), int(fields.get("pcbs_y") or 0),
             float(fields.get("gap_x") or 0), float(fields.get("gap_y") or 0),
             float(fields.get("border_l") or 0), float(fields.get("border_r") or 0),
@@ -3254,9 +3268,10 @@ def products_import_confirm():
             float(fields.get("kerf_x") or 2), float(fields.get("kerf_y") or 2),
             float(fields.get("cnc_margin_x") or 0), float(fields.get("cnc_margin_y") or 0),
             (str(fields.get("orientation") or "normal")).strip() or "normal",
-            int(fields.get("pcs_panel") or 0), int(fields.get("panels_sheet") or 0),
-            int(fields.get("sheets") or 1),
-            max(0, int(fields.get("x_qty") or 0)), max(0, int(fields.get("y_qty") or 0)),
+            fields.get("pcs_panel"), fields.get("panels_sheet"),   # v4.14: blank -> NULL
+            fields.get("sheets"),
+            (max(0, int(fields.get("x_qty") or 0)) if fields.get("x_qty") is not None else None),
+            (max(0, int(fields.get("y_qty") or 0)) if fields.get("y_qty") is not None else None),
         )
         if existing_id:
             if do_update:
@@ -4636,10 +4651,12 @@ def product_sheet_edit(pid):
         try:
             if t is str:
                 vals.append(str(v or "").strip())
+            elif str(v).strip() == "":
+                vals.append(None)      # v4.14: cell khaali kiya -> BLANK save (0 nahi)
             elif t is int:
-                vals.append(int(float(v or 0)))
+                vals.append(int(float(v)))
             else:
-                vals.append(float(v or 0))
+                vals.append(float(v))
         except (TypeError, ValueError):
             return jsonify(ok=False, error="Galat value: " + k), 400
         sets.append(f"{k}=?")
