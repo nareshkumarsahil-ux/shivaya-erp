@@ -125,6 +125,9 @@
     <button type="button" class="shAl btn btn-outline btn-sm" data-a="left" title="Left align">L</button>
     <button type="button" class="shAl btn btn-outline btn-sm" data-a="center" title="Center align">C</button>
     <button type="button" class="shAl btn btn-outline btn-sm" data-a="right" title="Right align">R</button>
+    <span class="muted small">Row H:</span>
+    <input id="shRowH" type="number" min="20" max="120" value="28" style="width:52px;padding:4px 6px;border:1px solid #cbd5e1;border-radius:8px;font-size:12px" title="Sab rows ki height (number badlo)">
+    <button type="button" id="shReset" class="btn btn-outline btn-sm" title="Column width / row height default par wapas">&#8634; Reset</button>
     <span id="shCount" class="muted small" style="margin-left:auto"></span>
   </div>
   <div class="panel-body" style="max-height:60vh;overflow:auto">
@@ -139,24 +142,35 @@
     #sheet97 td.del{text-align:center}
     #sheet97 button.mdel97{background:#fef2f2;color:#b91c1c;padding:2px 7px}
     #sheet97 th.grp{text-align:center;background:#e0e7ff}
+    /* v4.21: Excel-jaisa fixed layout + drag-grips (column width / row height adjust) */
+    #sheet97{table-layout:fixed}
+    #sheet97 td{overflow:hidden}
+    #sheet97 td.sc{white-space:nowrap}
+    #sheet97 thead th{position:relative}
+    #sheet97 td.sn{position:relative}
+    #sheet97 .colGrip{position:absolute;top:0;right:-3px;width:7px;height:100%;cursor:col-resize;z-index:5}
+    #sheet97 .rowGrip{position:absolute;left:0;bottom:-2px;width:100%;height:5px;cursor:row-resize;z-index:5}
+    #sheet97 .colGrip:hover,#sheet97 .rowGrip:hover{background:#4338ca66}
+    #sheet97 tbody tr[data-id]{height:28px}
     </style>
     <table class="stable" id="sheet97" style="border-collapse:collapse;width:100%;font-size:11.5px;background:#fff">
+      <colgroup id="sheetCols"><col data-f="sn"><col data-f="party_name"><col data-f="model_code"><col data-f="party_code"><col data-f="pcb_len"><col data-f="pcb_w"><col data-f="panel_len"><col data-f="panel_w"><col data-f="pcs_panel"><col data-f="cutting_len"><col data-f="x_qty"><col data-f="cutting_w"><col data-f="y_qty"><col data-f="panels_sheet"><col data-f="cnc_tool"><col data-f="per_sq_inch"><col data-f="sheet_thickness"><col data-f="pcb_price"><col data-f="fg_stock"><col data-f="__del"></colgroup>
       <thead>
         <tr style="background:#eef2ff;position:sticky;top:0;z-index:2">
-          <th rowspan="2">S.N</th>
-          <th rowspan="2">PARTY</th>
-          <th rowspan="2">MODEL NO.</th>
-          <th rowspan="2">PARTY CODE</th>
-          <th class="grp" colspan="2">SINGLE PCB SIZE</th>
-          <th class="grp" colspan="3">SINGLE PANEL</th>
-          <th class="grp" colspan="4">CUTTING SIZE</th>
-          <th rowspan="2">UPS</th>
-          <th rowspan="2">CNC/TOOL</th>
-          <th rowspan="2">PER SQ INCH</th>
-          <th rowspan="2">MATERIAL</th>
-          <th rowspan="2">PRICE</th>
-          <th rowspan="2">FIN. STOCK</th>
-          <th rowspan="2">DEL</th>
+          <th rowspan="2" data-f="sn">S.N</th>
+          <th rowspan="2" data-f="party_name">PARTY</th>
+          <th rowspan="2" data-f="model_code">MODEL NO.</th>
+          <th rowspan="2" data-f="party_code">PARTY CODE</th>
+          <th class="grp" colspan="2" data-f="pcb_len">SINGLE PCB SIZE</th>
+          <th class="grp" colspan="3" data-f="panel_len">SINGLE PANEL</th>
+          <th class="grp" colspan="4" data-f="cutting_len">CUTTING SIZE</th>
+          <th rowspan="2" data-f="panels_sheet">UPS</th>
+          <th rowspan="2" data-f="cnc_tool">CNC/TOOL</th>
+          <th rowspan="2" data-f="per_sq_inch">PER SQ INCH</th>
+          <th rowspan="2" data-f="sheet_thickness">MATERIAL</th>
+          <th rowspan="2" data-f="pcb_price">PRICE</th>
+          <th rowspan="2" data-f="fg_stock">FIN. STOCK</th>
+          <th rowspan="2" data-f="__del">DEL</th>
         </tr>
         <tr style="background:#eef2ff;position:sticky;top:28px;z-index:2">
           <th>X</th>
@@ -292,6 +306,94 @@
       });
       inp.addEventListener('blur', function(){ done(true); });
     });
+  });
+
+  /* ===== v4.21: Excel-jaisa column-width + row-height DRAG (persist DB me) ===== */
+  var P21 = {{ prefs21|tojson }} || {};
+  var COLW21 = P21.colw || {};
+  var ROWH21 = P21.rowh || {};
+  var ROWDEF21 = P21.rowh_def || 28;
+  var DEFCOLS21 = {sn:36, party_name:96, model_code:112, party_code:88, pcb_len:52, pcb_w:52,
+                   panel_len:58, panel_w:58, pcs_panel:48, cutting_len:58, x_qty:44, cutting_w:58,
+                   y_qty:44, panels_sheet:48, cnc_tool:104, per_sq_inch:74, sheet_thickness:96,
+                   pcb_price:56, fg_stock:56, __del:42};
+  var colEls21 = document.querySelectorAll('#sheetCols col');
+  var colByF21 = {};
+  colEls21.forEach(function(c){
+    var f = c.getAttribute('data-f');
+    colByF21[f] = c;
+    c.style.width = (COLW21[f] || DEFCOLS21[f] || 64) + 'px';
+  });
+  document.querySelectorAll('#sheet97 tbody tr[data-id]').forEach(function(tr){
+    var h = ROWH21[tr.getAttribute('data-id')];
+    if (h) tr.style.height = h + 'px';
+  });
+  document.getElementById('shRowH').value = ROWDEF21;
+  var _sv21 = 0, _pend21 = {};
+  function savePrefs21(part){
+    _pend21[part[0]] = part[1];   /* v4.21: saare pending parts EK hi request me (debounce ek-dusre ko na khaye) */
+    clearTimeout(_sv21);
+    _sv21 = setTimeout(function(){
+      fetch('/api/products/sheet/prefs?token=' + tok(), {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(_pend21)});
+      _pend21 = {};
+    }, 300);
+  }
+  document.querySelectorAll('#sheet97 thead tr:first-child th').forEach(function(th){
+    var col = colByF21[th.getAttribute('data-f')];
+    if (!col) return;
+    var g = document.createElement('span');
+    g.className = 'colGrip';
+    th.appendChild(g);
+    g.addEventListener('mousedown', function(e){
+      e.preventDefault(); e.stopPropagation();
+      var sx = e.clientX, sw0 = parseFloat(col.style.width) || 64;
+      function mv(ev){ col.style.width = Math.max(34, Math.min(420, sw0 + ev.clientX - sx)) + 'px'; }
+      function up(){
+        document.removeEventListener('mousemove', mv); document.removeEventListener('mouseup', up);
+        COLW21[col.getAttribute('data-f')] = parseFloat(col.style.width);
+        savePrefs21(['colw', COLW21]);
+      }
+      document.addEventListener('mousemove', mv); document.addEventListener('mouseup', up);
+    });
+  });
+  document.querySelectorAll('#sheet97 tbody tr[data-id]').forEach(function(tr){
+    var sn = tr.querySelector('td.sn');
+    if (!sn) return;
+    var g = document.createElement('span');
+    g.className = 'rowGrip';
+    sn.appendChild(g);
+    g.addEventListener('mousedown', function(e){
+      e.preventDefault(); e.stopPropagation();
+      var sy = e.clientY, sh0 = tr.getBoundingClientRect().height;
+      function mv(ev){ tr.style.height = Math.max(20, Math.min(160, sh0 + ev.clientY - sy)) + 'px'; }
+      function up(){
+        document.removeEventListener('mousemove', mv); document.removeEventListener('mouseup', up);
+        ROWH21[tr.getAttribute('data-id')] = Math.round(parseFloat(tr.style.height));
+        savePrefs21(['rowh', ROWH21]);
+      }
+      document.addEventListener('mousemove', mv); document.addEventListener('mouseup', up);
+    });
+  });
+  document.getElementById('shRowH').addEventListener('change', function(){
+    var h = Math.max(20, Math.min(120, parseInt(this.value || '28', 10) || 28));
+    ROWDEF21 = h; this.value = h;
+    document.querySelectorAll('#sheet97 tbody tr[data-id]').forEach(function(tr){
+      tr.style.height = h + 'px';
+      delete ROWH21[tr.getAttribute('data-id')];
+    });
+    savePrefs21(['rowh', ROWH21]);
+    savePrefs21(['rowh_def', h]);
+    toast18('Row height: sab rows ' + h + 'px');
+  });
+  document.getElementById('shReset').addEventListener('click', function(){
+    COLW21 = {}; ROWH21 = {}; ROWDEF21 = 28;
+    colEls21.forEach(function(c){ c.style.width = (DEFCOLS21[c.getAttribute('data-f')] || 64) + 'px'; });
+    document.querySelectorAll('#sheet97 tbody tr[data-id]').forEach(function(tr){ tr.style.height = ''; });
+    document.getElementById('shRowH').value = 28;
+    savePrefs21(['colw', {}]);
+    savePrefs21(['rowh', {}]);
+    savePrefs21(['rowh_def', 28]);
+    toast18('Width/height default par wapas');
   });
 })();
 

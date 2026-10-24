@@ -2739,17 +2739,19 @@ def products():
     _ib = request.args.get("import_batch")
     if _ib and not _import_preview(_ib):
         flash("\u26a0\ufe0f Import preview nahi mila (session expire/dua server par chala gaya) \u2014 file dobara upload karo.", "error")
-    # v4.18: SHEET column-align prefs (DB se — har device par same)
-    _align18 = {}
+    # v4.18/4.21: SHEET prefs (align + column-width + row-height) — DB se, har device par same
+    _prefs21 = {}
     try:
-        _pr18 = db.query("SELECT v FROM sheet_prefs WHERE k='align'", one=True)
-        if _pr18 and _pr18["v"]:
-            import json as _jp18
-            _align18 = _jp18.loads(_pr18["v"])
+        _pr21 = db.query("SELECT v FROM sheet_prefs WHERE k='align'", one=True)
+        if _pr21 and _pr21["v"]:
+            import json as _jp21
+            _pv21 = _jp21.loads(_pr21["v"])
+            _prefs21 = _pv21 if (isinstance(_pv21, dict) and "align" in _pv21) else {"align": _pv21 if isinstance(_pv21, dict) else {}}
     except Exception:
-        _align18 = {}
+        _prefs21 = {}
+    _align18 = _prefs21.get("align") or {}
     return render_template("products.html", active="products", models=models, models_top=models_top, pdf_counts=pdf_counts,
-                           models_total=models_total, align_prefs=_align18,
+                           models_total=models_total, align_prefs=_align18, prefs21=_prefs21,
                            bom_map=bom_map, history=history,
                            show_add=request.args.get("add"),
                            edit_model=edit_model,
@@ -4801,21 +4803,47 @@ def sheet_prefs():
     db.execute("CREATE TABLE IF NOT EXISTS sheet_prefs (k TEXT PRIMARY KEY, v TEXT DEFAULT '')")
     if request.method == "GET":
         r = db.query("SELECT v FROM sheet_prefs WHERE k='align'", one=True)
-        return jsonify(ok=True, align=(_jp.loads(r["v"]) if r and r["v"] else {}))
+        doc = {}
+        if r and r["v"]:
+            try:
+                doc = _jp.loads(r["v"])
+            except Exception:
+                doc = {}
+        if not isinstance(doc, dict) or "align" not in doc:
+            doc = {"align": doc if isinstance(doc, dict) else {}}
+        return jsonify(ok=True, prefs=doc)
     j = request.get_json(silent=True) or {}
-    cur = {}
+    doc = {}
     r = db.query("SELECT v FROM sheet_prefs WHERE k='align'", one=True)
     if r and r["v"]:
         try:
-            cur = _jp.loads(r["v"])
+            doc = _jp.loads(r["v"])
         except Exception:
-            cur = {}
-    for k, v in j.items():
-        if (k in _SHEET_FIELDS or k == "fg_stock") and v in ("left", "center", "right", ""):
-            cur[k] = v
+            doc = {}
+    if not isinstance(doc, dict) or "align" not in doc:
+        doc = {"align": doc if isinstance(doc, dict) else {}}   # v4.18 purana flat-align doc
+    # v4.21: align + colw + rowh + rowh_def — ek hi prefs doc (top-level keys merge)
+    for k in ("align", "colw", "rowh"):
+        if k in j and isinstance(j[k], dict):
+            if not j[k]:
+                doc[k] = {}   # v4.21: khaali dict = CLEAR (merge-nop nahi — Reset kaam kare)
+                continue
+            _b = doc.get(k) if isinstance(doc.get(k), dict) else {}
+            for _fk, _fv in j[k].items():
+                if k == "align":
+                    if (_fk in _SHEET_FIELDS or _fk == "fg_stock") and _fv in ("left", "center", "right", ""):
+                        _b[_fk] = _fv
+                else:
+                    _b[_fk] = _fv
+            doc[k] = _b
+    if "rowh_def" in j:
+        try:
+            doc["rowh_def"] = max(20, min(120, int(j["rowh_def"])))
+        except (TypeError, ValueError):
+            pass
     db.execute("INSERT INTO sheet_prefs (k, v) VALUES ('align', ?) "
-               "ON CONFLICT(k) DO UPDATE SET v=excluded.v", (_jp.dumps(cur),))
-    return jsonify(ok=True, align=cur)
+               "ON CONFLICT(k) DO UPDATE SET v=excluded.v", (_jp.dumps(doc),))
+    return jsonify(ok=True, prefs=doc)
 
 
 @app.route("/api/po/file/<int:fid>")
