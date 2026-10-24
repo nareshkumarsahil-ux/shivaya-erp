@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+{% block title %}Parties{% endblock %}
+{% block page_title %}Parties{% endblock %}
+{% block content %}
+
+<div class="cards" style="grid-template-columns:repeat(auto-fill,minmax(150px,1fr))">
+  <div class="stat"><div class="top"><span class="lbl">Total Parties</span><span class="ic ic-navy">🤝</span></div><div class="num">{{ total_parties }}</div><div class="sub">All registered parties</div></div>
+  <div class="stat"><div class="top"><span class="lbl">Customers</span><span class="ic ic-mint">📥</span></div><div class="num">{{ customers }}</div><div class="sub">Humse leta hai — lena hai</div></div>
+  <div class="stat"><div class="top"><span class="lbl">Suppliers</span><span class="ic ic-peach">📤</span></div><div class="num">{{ suppliers }}</div><div class="sub">Inhe dena hai</div></div>
+</div>
+
+{% if show_add or edit_row %}
+<div class="panel">
+  <div class="panel-head">
+    <h3>{{ '✏️ Edit Party — ' + edit_row.name if edit_row else '➕ New Party' }}</h3>
+    <a class="btn btn-outline btn-sm" href="/parties">✕ Close</a>
+  </div>
+  <div class="panel-body">
+    <form method="post">
+      <input type="hidden" name="action" value="{{ 'update' if edit_row else 'add' }}">
+      {% if edit_row %}<input type="hidden" name="pid" value="{{ edit_row.id }}">{% endif %}
+      <div class="form-grid">
+        <div class="field"><label>Party Name *</label><input name="name" required value="{{ edit_row.name if edit_row else '' }}" placeholder="e.g. Shiva Enterprises"></div>
+        <div class="field"><label>Type</label>
+          <select name="ptype">
+            <option value="customer" {{'selected' if edit_row and edit_row.ptype=='customer'}}>Customer (lena hai)</option>
+            <option value="supplier" {{'selected' if edit_row and edit_row.ptype=='supplier'}}>Supplier (dena hai)</option>
+          </select>
+        </div>
+        <div class="field"><label>Credit Days</label><input type="number" name="credit_days" value="{{ edit_row.credit_days if edit_row else 0 }}" min="0"></div>
+        <div class="field"><label>Phone</label><input name="phone" value="{{ edit_row.phone if edit_row else '' }}" placeholder="98XXXXXXXX"></div>
+        <div class="field"><label>GST No.</label><input name="gst" value="{{ edit_row.gst if edit_row else '' }}" placeholder="07ABCDE1234F1Z5"></div>
+        <div class="field full"><label>Address</label><input name="address" value="{{ edit_row.address if edit_row else '' }}" placeholder="Address…"></div>
+        <div class="full" style="display:flex;gap:10px;justify-content:flex-end">
+          <button class="btn" type="submit">{{ '💾 Save Changes' if edit_row else '➕ Add Party' }}</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+{% endif %}
+
+<div class="toolbar">
+  <form method="get" action="/parties" style="display:flex;gap:8px">
+    <input class="search-input" type="text" name="q" value="{{ request.args.get('q','') }}" placeholder="Search party…" style="padding:8px 13px;border:1px solid var(--border);border-radius:8px;font-size:13px;width:220px" oninput="filterParties(this.value)">
+  </form>
+  <div style="display:flex;gap:10px">
+    <button class="btn btn-outline btn-sm" onclick="window.print()">🖨️ Print</button>
+    <a class="btn btn-outline btn-sm" href="/export/parties.csv">⬇️ Download</a>
+    {% if not show_add and not edit_row %}<a class="btn" href="/parties?add=1">＋ New Party</a>{% endif %}
+  </div>
+</div>
+
+<div class="panel">
+  <div class="panel-head"><h3>🤝 PARTIES ({{ total_parties }})</h3></div>
+  <div class="panel-body" style="padding:0;overflow-x:auto">
+    <table id="partiesTable">
+      <thead>
+        <tr><th>Name</th><th>Type</th><th>Credit Days</th><th class="t-right">Balance</th><th>Overdue</th><th class="t-right">Actions</th></tr>
+      </thead>
+      <tbody>
+        {% for p in rows %}
+        <tr data-name="{{ p.name|lower }}">
+          <td>
+            <b>{{ p.name }}</b>
+            {% if p.phone %}<div class="muted small mono">{{ p.phone }}</div>{% endif %}
+            {% if p.address %}<div class="muted small">{{ p.address }}</div>{% endif %}
+          </td>
+          <td>
+            {% if p.ptype == 'supplier' %}<span class="badge b-peach">📤 SUPPLIER</span>
+            {% else %}<span class="badge b-blue">📥 CUSTOMER</span>{% endif %}
+          </td>
+          <td class="mono">{{ p.credit }} days</td>
+          <td class="t-right">
+            {% if p.due > 0 %}
+              <b style="color:{{'#b3401c' if p.ptype=='customer' else '#b45309'}}">{{ p.due|inr }} {{'due' if p.ptype=='customer' else 'payable'}}</b>
+            {% elif p.due < 0 %}
+              <b style="color:#16a34a">{{ (-p.due)|inr }} advance</b>
+            {% else %}
+              <span class="badge b-done">✓ Settled</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if p.overdue_label == 'Settled' %}<span class="badge b-gray">{{ p.overdue_label }}</span>
+            {% elif 'late' in p.overdue_label %}<span class="badge b-urgent">⚠️ {{ p.overdue_label }}</span>
+            {% else %}<span class="badge b-done">✓ {{ p.overdue_label }}</span>{% endif %}
+          </td>
+          <td class="t-right" style="white-space:nowrap">
+            <a class="btn btn-outline btn-xs" href="/parties/{{ p.id }}/ledger">📒 Ledger</a>
+            <a class="btn btn-outline btn-xs" href="/parties?edit={{ p.id }}">✏️</a>
+            <form method="post" action="/parties/{{ p.id }}/delete" style="display:inline" onsubmit="return confirm('Remove party {{ p.name }}?')">
+              <button class="btn btn-danger btn-xs" type="submit">🗑</button>
+            </form>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6"><div class="empty">No parties yet — "+ New Party" se add karein</div></td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+<script>
+function filterParties(q){
+  q = (q || '').toLowerCase();
+  document.querySelectorAll('#partiesTable tbody tr').forEach(function(tr){
+    var name = tr.getAttribute('data-name') || '';
+    tr.style.display = (name.indexOf(q) >= 0) ? '' : 'none';
+  });
+}
+</script>
+{% endblock %}
