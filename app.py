@@ -1328,23 +1328,29 @@ def svg_panel_preview(r):
         s.append(f'<rect x="{x0:.1f}" y="{y0:.1f}" width="{P:.1f}" height="{r["border_t"] * scale:.1f}" fill="url(#hatchPL)"/>')
     if r["border_b"] > 0.05:
         s.append(f'<rect x="{x0:.1f}" y="{y0 + Q - r["border_b"] * scale:.1f}" width="{P:.1f}" height="{r["border_b"] * scale:.1f}" fill="url(#hatchPL)"/>')
-    # PCB cells (teal + 'L x W' label)
+    # PCB cells — v4.19 PRO density: bade cells par har-cell arrows; medium par EDGE labels
+    # (sirf top-row green L + left-col red W — overlap ZERO, X/Y dono dims poori dikhengi)
     if cw > 2.4 and ch > 2.4:
+        full19 = cw >= 66 and ch >= 50
+        edge19 = (not full19) and cw >= 22 and ch >= 22
+        gl19 = (f"{r['pcb_len']:g} mm", 7.5) if cw >= 44 else (f"{r['pcb_len']:g}", 6.5)
+        gw19 = (f"{r['pcb_w']:g} mm", 7.5) if ch >= 44 else (f"{r['pcb_w']:g}", 6.5)
         ox = bx
         for i in range(r["pcbs_x"]):
             oy = by
             for j in range(r["pcbs_y"]):
                 s.append(_pcb_shape_svg(x0 + ox, y0 + oy, cw, ch, r.get("shape") or "rect"))
-                if cw >= 34 and ch >= 26:
-                    # v4.15: har cell ke apne DIMENSION ARROWS (image format) — hara L (upar), laal W (left, rotated)
-                    ax1, ax2, ay = x0 + ox + 2.5, x0 + ox + cw - 2.5, y0 + oy + 7
-                    s.append(f'<line x1="{ax1:.1f}" y1="{ay:.1f}" x2="{ax2:.1f}" y2="{ay:.1f}" stroke="#0a8f4c" stroke-width="0.9"/>')
-                    s.append(f'<path d="M {ax1:.1f} {ay:.1f} l 3.4 -1.9 v 3.8 z" fill="#0a8f4c"/><path d="M {ax2:.1f} {ay:.1f} l -3.4 -1.9 v 3.8 z" fill="#0a8f4c"/>')
-                    s.append(f'<text x="{(ax1 + ax2) / 2:.1f}" y="{ay - 2:.1f}" text-anchor="middle" font-size="7.5" font-weight="700" fill="#0a8f4c" font-family="Segoe UI,Arial">{r["pcb_len"]:g} mm</text>')
-                    rx_, ry1, ry2 = x0 + ox + 5.5, y0 + oy + 11, y0 + oy + ch - 1.5
-                    s.append(f'<line x1="{rx_:.1f}" y1="{ry1:.1f}" x2="{rx_:.1f}" y2="{ry2:.1f}" stroke="#d92b2b" stroke-width="0.9"/>')
-                    s.append(f'<path d="M {rx_:.1f} {ry1:.1f} l -1.9 3.4 h 3.8 z" fill="#d92b2b"/><path d="M {rx_:.1f} {ry2:.1f} l -1.9 -3.4 h 3.8 z" fill="#d92b2b"/>')
-                    s.append(f'<text x="{rx_ - 2.5:.1f}" y="{(ry1 + ry2) / 2:.1f}" text-anchor="middle" font-size="7.5" font-weight="700" fill="#d92b2b" font-family="Segoe UI,Arial" transform="rotate(-90 {rx_ - 2.5:.1f} {(ry1 + ry2) / 2:.1f})">{r["pcb_w"]:g} mm</text>')
+                if full19 or edge19:
+                    if (full19 or j == 0) and cw >= 20:
+                        ax1, ax2, ay = x0 + ox + 2.5, x0 + ox + cw - 2.5, y0 + oy + 7
+                        s.append(f'<line x1="{ax1:.1f}" y1="{ay:.1f}" x2="{ax2:.1f}" y2="{ay:.1f}" stroke="#0a8f4c" stroke-width="0.9"/>')
+                        s.append(f'<path d="M {ax1:.1f} {ay:.1f} l 3.4 -1.9 v 3.8 z" fill="#0a8f4c"/><path d="M {ax2:.1f} {ay:.1f} l -3.4 -1.9 v 3.8 z" fill="#0a8f4c"/>')
+                        s.append(f'<text x="{(ax1 + ax2) / 2:.1f}" y="{ay - 2:.1f}" text-anchor="middle" font-size="{gl19[1]}" font-weight="700" fill="#0a8f4c" font-family="Segoe UI,Arial">{gl19[0]}</text>')
+                    if (full19 or i == 0) and ch >= 20:
+                        rx_, ry1, ry2 = x0 + ox + 5.5, y0 + oy + 11, y0 + oy + ch - 1.5
+                        s.append(f'<line x1="{rx_:.1f}" y1="{ry1:.1f}" x2="{rx_:.1f}" y2="{ry2:.1f}" stroke="#d92b2b" stroke-width="0.9"/>')
+                        s.append(f'<path d="M {rx_:.1f} {ry1:.1f} l -1.9 3.4 h 3.8 z" fill="#d92b2b"/><path d="M {rx_:.1f} {ry2:.1f} l -1.9 -3.4 h 3.8 z" fill="#d92b2b"/>')
+                        s.append(f'<text x="{rx_ - 2.5:.1f}" y="{(ry1 + ry2) / 2:.1f}" text-anchor="middle" font-size="{gw19[1]}" font-weight="700" fill="#d92b2b" font-family="Segoe UI,Arial" transform="rotate(-90 {rx_ - 2.5:.1f} {(ry1 + ry2) / 2:.1f})">{gw19[0]}</text>')
                 elif cw >= 26 and ch >= 14:
                     s.append(f'<text x="{x0 + ox + cw / 2:.1f}" y="{y0 + oy + ch / 2 + 3:.1f}" text-anchor="middle" font-size="9.5" font-weight="700" fill="{NAVY}" font-family="Segoe UI,Arial">{r["pcb_len"]:g} \u00d7 {r["pcb_w"]:g}</text>')
                 oy += ch + (gaps_y_s[j] * scale if j < len(gaps_y_s) else gys)
@@ -1382,7 +1388,7 @@ def svg_panel_preview(r):
     sy, sh_ = TOP + AVH + BOTG, STR
     sx, sw_ = 8, W - 16
     s.append(f'<rect x="{sx}" y="{sy}" width="{sw_}" height="{sh_}" fill="#ffffff" stroke="{TEAL}" stroke-width="1.5" rx="9"/>')
-    cols = [0.235, 0.195, 0.175, 0.185, 0.21]
+    cols = [0.245, 0.205, 0.15, 0.175, 0.225]
     labels = ["PANEL SIZE", "PCB SIZE", "QTY / ARRAY", "GAP", "BORDER"]
     vals = [
         [f"{pl:.2f} \u00d7 {pw:.2f} mm", ""],
@@ -1391,16 +1397,20 @@ def svg_panel_preview(r):
         [f"X: {r['gap_x']:.2f} mm", f"Y: {r['gap_y']:.2f} mm"],
         [f"L: {r['border_l']:.2f}  R: {r['border_r']:.2f}", f"T: {r['border_t']:.2f}  B: {r['border_b']:.2f}"],
     ]
+
+    def _fs19(t, big):
+        # v4.19: text box me fit na ho to font apne-aap chhota (overlap nahi)
+        return 8.2 if len(t) > 21 else (9.2 if len(t) > 17 else (10.2 if big else 9.3))
     cx = sx
     for k in range(5):
         cwid = sw_ * cols[k]
         if k:
             s.append(f'<line x1="{cx:.1f}" y1="{sy + 14}" x2="{cx:.1f}" y2="{sy + sh_ - 14}" stroke="{TEAL}" stroke-width="0.9"/>')
         mid = cx + cwid / 2
-        s.append(f'<text x="{mid:.1f}" y="{sy + 22}" text-anchor="middle" font-size="8" font-weight="700" fill="{MUT}" font-family="Segoe UI,Arial" letter-spacing="0.6">{labels[k]}</text>')
-        s.append(f'<text x="{mid:.1f}" y="{sy + 47}" text-anchor="middle" font-size="{10.5 if k < 3 else 9.5}" font-weight="800" fill="{NAVY}" font-family="Segoe UI,Arial">{vals[k][0]}</text>')
+        s.append(f'<text x="{mid:.1f}" y="{sy + 22}" text-anchor="middle" font-size="7.6" font-weight="700" fill="{MUT}" font-family="Segoe UI,Arial" letter-spacing="0.5">{labels[k]}</text>')
+        s.append(f'<text x="{mid:.1f}" y="{sy + 47}" text-anchor="middle" font-size="{_fs19(vals[k][0], k < 3)}" font-weight="800" fill="{NAVY}" font-family="Segoe UI,Arial">{vals[k][0]}</text>')
         if vals[k][1]:
-            s.append(f'<text x="{mid:.1f}" y="{sy + 66}" text-anchor="middle" font-size="9.5" font-weight="800" fill="{NAVY}" font-family="Segoe UI,Arial">{vals[k][1]}</text>')
+            s.append(f'<text x="{mid:.1f}" y="{sy + 66}" text-anchor="middle" font-size="{_fs19(vals[k][1], False)}" font-weight="800" fill="{NAVY}" font-family="Segoe UI,Arial">{vals[k][1]}</text>')
         cx += cwid
     s.append("</svg>")
     return "".join(s)
@@ -2847,10 +2857,10 @@ FIELD_ALIASES = {
                "no of sheet", "no. of sheets", "sheets qty", "total sheets"],
     "x_qty": ["x qty", "x cutting qty", "x panels", "sheet length panels", "qty x",
               "panels along length", "x layout", "sheet length (panels)", "x cutting qty (panels)",
-              "x#", "x #", "cut x#", "cutting x#", "n"],
+              "x#", "x #", "cut x#", "cutting x#", "n", "n1", "n 1", "n-1", "n.1", "n2", "n 2"],
     "y_qty": ["y qty", "y cutting qty", "y panels", "sheet width panels", "qty y",
               "panels along width", "y layout", "sheet width (panels)", "y cutting qty (panels)",
-              "y#", "y #", "cut y#", "cutting y#", "n"],
+              "y#", "y #", "cut y#", "cutting y#", "n", "n2", "n 2", "n-2", "n.2", "n1", "n 1"],
     "orientation": ["orientation", "layout", "layout type", "layout orientation", "best layout"],
     # v3.99: SIZE SHEET ke naye columns (PARTY CODE / PER SQ.INCH / MATERIAL / CNC/TOOL)
     "party_code": ["party code", "party code.", "party code no", "p code"],
@@ -2877,6 +2887,8 @@ PAIR_COLUMNS = {
 
 def _norm_hdr(h):
     s = re.sub(r"\s+", " ", (str(h) or "").strip().lower().rstrip("*").strip())
+    # v4.20: Excel superscript headers (N\u00b2 -> n2, N\u00b9 -> n1) — warna Y-count column gayab!
+    s = s.replace("\u00b2", "2").replace("\u00b9", "1").replace("\u00b3", "3")
     return s
 
 
