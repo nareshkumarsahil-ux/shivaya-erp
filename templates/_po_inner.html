@@ -153,7 +153,7 @@
 
 <div class="toast" id="toast"></div>
 
-<script src="/static/po.js"></script>
+<script src="/static/po.js?v=412"></script>   /* v4.12 cache-bust: purana parser cache me na atke */
 <script>
 /* PO se Job Card — v3.84. Rules: kuch bhi invent nahi; N printed S.No. = N cards;
    sparse serials pad; duplicate PO sirf warning; har Save ke baad agla S.No. */
@@ -521,6 +521,67 @@ function ensureTess208(cb){
   sc.onerror = sc.onload;
   document.head.appendChild(sc);
 }
+/* v4.12: HEADER-RESCUE — poore page ke OCR me PO NO/DATE chhoot gaya to sirf upar ka 35% crop
+   bade scale par dobara padhte hain (PO No + Date wala block wahan hi hota hai) */
+function headerOcr208(fid, isImg){
+  var url = '/api/po/file/' + fid + '?token=' + encodeURIComponent(T());
+  var prep;
+  if (isImg) {
+    prep = new Promise(function(res, rej){
+      var im = new Image();
+      im.onload = function(){
+        var h = Math.max(80, Math.round(im.height * 0.35));
+        var c = document.createElement('canvas'); c.width = im.width; c.height = h;
+        c.getContext('2d').drawImage(im, 0, 0);
+        res(c);
+      };
+      im.onerror = rej;
+      im.src = url;
+    });
+  } else {
+    pdfjsLib.GlobalWorkerOptions.workerSrc = '/static/vendor/pdfjs/pdf.worker.min.js';
+    prep = pdfjsLib.getDocument(url).promise.then(function(pdf){
+      return pdf.getPage(1).then(function(pg1){
+        var vp = pg1.getViewport({ scale: 3 });
+        var c = document.createElement('canvas');
+        c.width = vp.width; c.height = vp.height;
+        return pg1.render({ canvasContext: c.getContext('2d'), viewport: vp }).promise.then(function(){
+          var h = Math.max(80, Math.round(c.height * 0.35));
+          var c2 = document.createElement('canvas'); c2.width = c.width; c2.height = h;
+          c2.getContext('2d').drawImage(c, 0, 0);
+          return c2;
+        });
+      });
+    });
+  }
+  return prep.then(function(cnv){ return tessRun(cnv); });
+}
+function headerRescue208(fid, i, isImg){
+  var l = LINES[i];
+  var btn = document.getElementById('rrbtn' + i);
+  function reset208(){ if (btn) { btn.disabled = false; btn.textContent = '\ud83d\udd04 PO RE-READ'; } }
+  if (!l) { reset208(); return; }
+  var msg = document.getElementById('ce_msg' + i);
+  if (msg) msg.textContent = 'Header zone (PO NO/DATE) alag se scan ho raha hai\u2026';
+  headerOcr208(fid, isImg).then(function(r2){
+    var tx = (r2 && r2.data && r2.data.text) || '';
+    var P = window.PCBFlowPO, f2 = [];
+    if (!String(l.po_no || '').trim() && P && P.guessPoNo) {
+      var g = P.guessPoNo(tx);
+      if (g) { l.po_no = g; f2.push('PO NO'); }
+    }
+    if (!String(l.order_date || '').trim() && P && P.dateIso) {
+      var d = P.dateIso(tx);
+      if (d) { l.order_date = d; f2.push('DATE'); }
+    }
+    renderInbox();
+    var m3 = document.getElementById('ce_msg' + i);
+    if (m3) m3.textContent = f2.length
+      ? ('\u2705 Header scan: ' + f2.join(' + ') + ' mil gaya \u2014 SAVE dabao')
+      : ('Header me bhi PO NO/DATE nahi padha \u2014 khud bharo.');
+    reset208();
+  }).catch(reset208);
+}
 function ocrReread208(fid, i, isImg){
   var msg = document.getElementById('ce_msg' + i);
   var btn = document.getElementById('rrbtn' + i);
@@ -532,7 +593,10 @@ function ocrReread208(fid, i, isImg){
     var text = (r && r.data && r.data.text) || '';
     if (text.trim()) merge208(i, text);
     else { if (msg) msg.textContent = 'OCR se text nahi mila — phir RE-READ dabao (ya khud bharo).'; }
-    reset208();
+    var l2 = LINES[i];
+    if (l2 && (!String(l2.po_no || '').trim() || !String(l2.order_date || '').trim()))
+      headerRescue208(fid, i, isImg);          /* v4.12: PO NO/DATE khaali raha -> header-crop re-OCR */
+    else reset208();
   }).catch(function(){ if (msg) msg.textContent = 'OCR fail — phir RE-READ dabao.'; reset208(); });
 }
 function merge208(i, text){

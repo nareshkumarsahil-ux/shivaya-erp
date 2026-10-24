@@ -15,7 +15,7 @@
   function guessPoNo(text) {
     text = String(text || '');
     var pats = [
-      /\bP\s?O\s?\d{2}\s?-\s?\d{2,6}(?:\s?[-\/]\s?\d+)?/,            /* v4.10: PO 26-27366/6107 & PO26-27366-6355 — OCR space-tolerant */
+      /\bP[O0]\s?\d{2}\s?[-\u2013]\s?\d{2,6}(?:\s?[-\/]\s?\d+)?/i,   /* v4.12: PO/P0 (zero!), space/en-dash-tolerant, PO 26-27366/6107 */
       /\bPO\d{2}-\d{2,}(?:\/\d+)?\b/,                                  /* PO26-27366/6381 */
       /\bPO-\d{3,}\b/,                                                 /* PO-02002 */
       /\bP\.?O\.?\s*#\s*([A-Z0-9][A-Z0-9\-\/]*[A-Z0-9])/i,             /* P.O. # ABC123 */
@@ -23,7 +23,10 @@
     ];
     for (var i = 0; i < pats.length; i++) {
       var m = text.match(pats[i]);
-      if (m) return String(m[1] || m[0]).toUpperCase().replace(/\s+/g, '');   /* v4.10: spaces hatein */
+      if (m) {
+        /* v4.12: spaces hatein + OCR ka P0->PO + en-dash -> dash */
+        return String(m[1] || m[0]).toUpperCase().replace(/\s+/g, '').replace(/^P0/, 'PO').replace(/\u2013/g, '-');
+      }
     }
     return '';
   }
@@ -150,7 +153,7 @@
     var lines = text.split(/\r?\n/);
     var dateNext = false;   /* v4.10: "Date" label akela -> agli pure-date line value hai */
     lines.forEach(function (l) {
-      if (!order_date && /^\s*Date\b/i.test(l)) order_date = dateIso(l);
+      if (!order_date && /^\s*Date[\s:\-]*/i.test(l)) order_date = dateIso(l);   /* v4.12: Date28/09/2026 bhi */
       if (!order_date) {
         var lt = String(l).trim();
         if (/^\s*(?:Date|Dt)\s*[:\-]?\s*$/i.test(lt)) dateNext = true;
@@ -258,5 +261,5 @@
     return rows;
   }
 
-  window.PCBFlowPO = { parsePoText: parsePoText, guessPoNo: guessPoNo, norm: norm };
+  window.PCBFlowPO = { parsePoText: parsePoText, guessPoNo: guessPoNo, dateIso: dateIso, norm: norm };
 })();
