@@ -2729,8 +2729,17 @@ def products():
     _ib = request.args.get("import_batch")
     if _ib and not _import_preview(_ib):
         flash("\u26a0\ufe0f Import preview nahi mila (session expire/dua server par chala gaya) \u2014 file dobara upload karo.", "error")
+    # v4.18: SHEET column-align prefs (DB se — har device par same)
+    _align18 = {}
+    try:
+        _pr18 = db.query("SELECT v FROM sheet_prefs WHERE k='align'", one=True)
+        if _pr18 and _pr18["v"]:
+            import json as _jp18
+            _align18 = _jp18.loads(_pr18["v"])
+    except Exception:
+        _align18 = {}
     return render_template("products.html", active="products", models=models, models_top=models_top, pdf_counts=pdf_counts,
-                           models_total=models_total,
+                           models_total=models_total, align_prefs=_align18,
                            bom_map=bom_map, history=history,
                            show_add=request.args.get("add"),
                            edit_model=edit_model,
@@ -4600,6 +4609,25 @@ _SHEET_FIELDS = {"model_code": str, "name": str, "party_code": str, "party_name"
                  "pcs_panel": int, "cutting_len": float, "cutting_w": float,
                  "x_qty": int, "y_qty": int, "panels_sheet": int, "sheets": int,
                  "sheet_thickness": str, "per_sq_inch": float, "pcb_price": float, "cnc_tool": str}
+_SHEET_LABELS = {"model_code": "MODEL NO.", "name": "TYPE", "party_code": "PARTY CODE", "party_name": "PARTY",
+                 "pcb_len": "X", "pcb_w": "Y", "panel_len": "L", "panel_w": "W", "pcs_panel": "PCS",
+                 "cutting_len": "4a", "cutting_w": "4b", "x_qty": "N (4a)", "y_qty": "N (4b)",
+                 "panels_sheet": "UPS", "sheets": "SHEETS", "sheet_thickness": "MATERIAL",
+                 "per_sq_inch": "PER SQ INCH", "pcb_price": "PRICE", "cnc_tool": "CNC/TOOL"}
+
+@app.template_filter("numfmt")
+def _numfmt18(v):
+    """v4.18: SHEET display Excel-jaisa — 2.89333912 -> 2.89334, 10.0 -> 10.
+    Sirf numbers / pure-numeric strings ('171.3528427' jaise MATERIAL-junk);
+    text (FR4-1MM, model codes) bilkul as-is."""
+    if v is None:
+        return ""
+    if isinstance(v, str):
+        s2 = v.strip()
+        if not re.fullmatch(r"-?\d+(\.\d+)?", s2):
+            return v
+        v = float(s2)
+    return "%g" % v
 
 
 @app.route("/products/sheet/download")
@@ -4666,12 +4694,8 @@ def product_delete_row(pid):
     return jsonify(ok=True, msg="Model SHEET se delete ho gaya.")
 
 
-@app.route("/api/product/<int:pid>/sheet_edit", methods=["POST"])
-@login_required
-@admin_required
-def product_sheet_edit(pid):
-    """v3.97: SHEET cell-edit — sirf whitelist fields, kuch invent nahi."""
-    j = request.get_json(silent=True) or {}
+def _sheet_apply18(pid, j, log=True):
+    """v4.18: SHEET cell-edit apply (+ purani value LOG — UNDO isi se wapas karta hai)."""
     sets, vals = [], []
     for k, v in j.items():
         if k not in _SHEET_FIELDS:
@@ -4694,9 +4718,92 @@ def product_sheet_edit(pid):
     m = db.query("SELECT id FROM product_models WHERE id=?", (pid,), one=True)
     if not m:
         return jsonify(ok=False, error="Model nahi mila."), 404
+    if log:
+        db.execute("CREATE TABLE IF NOT EXISTS sheet_edit_log (id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                   "model_id INTEGER, model_name TEXT DEFAULT '', field TEXT DEFAULT '', "
+                   "old_val TEXT DEFAULT '', new_val TEXT DEFAULT '', edited_on TEXT DEFAULT '')")
+        olds = db.query("SELECT name, party_name, model_code, party_code, pcb_len, pcb_w, panel_len, panel_w, pcs_panel, cutting_len, cutting_w, x_qty, y_qty, panels_sheet, sheets, sheet_thickness, per_sq_inch, pcb_price, cnc_tool FROM product_models WHERE id=?", (pid,), one=True)
+        for k in j:
+            if k in _SHEET_FIELDS and k in olds.keys():
+                _ov = olds[k]
+                db.execute("INSERT INTO sheet_edit_log (model_id, model_name, field, old_val, new_val, edited_on) VALUES (?,?,?,?,?,?)",
+                           (pid, (olds["name"] or ""), k, ("" if _ov is None else str(_ov)),
+                            ("" if v is None else str(j[k])), _now_ist().isoformat()))
+        db.execute("DELETE FROM sheet_edit_log WHERE id NOT IN (SELECT id FROM sheet_edit_log ORDER BY id DESC LIMIT 300)")
     vals.append(pid)
     db.execute(f"UPDATE product_models SET {', '.join(sets)} WHERE id=?", tuple(vals))
     return jsonify(ok=True)
+
+
+@app.route("/api/product/<int:pid>/sheet_edit", methods=["POST"])
+@login_required
+@admin_required
+def product_sheet_edit(pid):
+    """v3.97: SHEET cell-edit — sirf whitelist fields, kuch invent nahi. v4.18: har edit LOG (UNDO)."""
+    j = request.get_json(silent=True) or {}
+    return _sheet_apply18(pid, j, log=True)
+
+
+@app.route("/api/products/sheet/undo", methods=["POST"])
+@login_required
+@admin_required
+def sheet_undo():
+    """v4.18: UNDO — pichhla cell-edit wapas (galti se type/save ho gaya to, Excel-jaisa)."""
+    db.execute("CREATE TABLE IF NOT EXISTS sheet_edit_log (id INTEGER PRIMARY KEY AUTOINCREMENT, "
+               "model_id INTEGER, model_name TEXT DEFAULT '', field TEXT DEFAULT '', "
+               "old_val TEXT DEFAULT '', new_val TEXT DEFAULT '', edited_on TEXT DEFAULT '')")
+    last = db.query("SELECT * FROM sheet_edit_log ORDER BY id DESC LIMIT 1", one=True)
+    if not last:
+        return jsonify(ok=True, msg="Undo ke liye koi edit history nahi — sab theek hai.")
+    field = last["field"]
+    if field not in _SHEET_FIELDS or field == "name":
+        db.execute("DELETE FROM sheet_edit_log WHERE id=?", (last["id"],))
+        return jsonify(ok=True, msg="Skip — internal edit.")
+    raw = last["old_val"] if last["old_val"] is not None else ""
+    r = _sheet_apply18(last["model_id"], {field: raw}, log=False)
+    ok = bool((r.get_json() or {}).get("ok")) if hasattr(r, "get_json") else False
+    db.execute("DELETE FROM sheet_edit_log WHERE id=?", (last["id"],))
+    if not ok:
+        return jsonify(ok=True, msg="Skip — model ab nahi hai.")
+    t = _SHEET_FIELDS[field]
+    if raw == "":
+        disp = ""
+    elif t is str:
+        disp = raw
+    else:
+        try:
+            disp = "%g" % float(raw)
+        except (TypeError, ValueError):
+            disp = raw
+    lbl = _SHEET_LABELS.get(field, field)
+    return jsonify(ok=True, msg=f"UNDO: {last['model_name']} — {lbl} wapas '{disp or 'khaali'}' ho gaya",
+                   model_id=last["model_id"], field=field, disp=disp)
+
+
+@app.route("/api/products/sheet/prefs", methods=["GET", "POST"])
+@login_required
+@admin_required
+def sheet_prefs():
+    """v4.18: SHEET column-alignment prefs (DB me — har device par same)."""
+    import json as _jp
+    db.execute("CREATE TABLE IF NOT EXISTS sheet_prefs (k TEXT PRIMARY KEY, v TEXT DEFAULT '')")
+    if request.method == "GET":
+        r = db.query("SELECT v FROM sheet_prefs WHERE k='align'", one=True)
+        return jsonify(ok=True, align=(_jp.loads(r["v"]) if r and r["v"] else {}))
+    j = request.get_json(silent=True) or {}
+    cur = {}
+    r = db.query("SELECT v FROM sheet_prefs WHERE k='align'", one=True)
+    if r and r["v"]:
+        try:
+            cur = _jp.loads(r["v"])
+        except Exception:
+            cur = {}
+    for k, v in j.items():
+        if (k in _SHEET_FIELDS or k == "fg_stock") and v in ("left", "center", "right", ""):
+            cur[k] = v
+    db.execute("INSERT INTO sheet_prefs (k, v) VALUES ('align', ?) "
+               "ON CONFLICT(k) DO UPDATE SET v=excluded.v", (_jp.dumps(cur),))
+    return jsonify(ok=True, align=cur)
 
 
 @app.route("/api/po/file/<int:fid>")

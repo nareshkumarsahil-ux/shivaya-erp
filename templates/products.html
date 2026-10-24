@@ -106,7 +106,26 @@
     <h3>📄 SHEET — Size Master (Excel jaisi · cell par click karo, value badlo, Enter = save)</h3>
     <span class="muted small">Total <b style="color:#1d4ed8">{{ models_total }} models</b>{% if models_total > models|length %} — pehle {{ models|length }} dikhe (baaki: upar 🔍 search/filter ya ⬇ Download SHEET){% endif %}. PO read isko hi match karta hai.
       <a class="btn btn-outline btn-sm" style="background:#eff6ff;color:#1d4ed8" href="/products/sheet/download{{ '?token=' ~ request.args.get('token') if request.args.get('token') else '' }}" title="Yehi SHEET aapki Excel ke format me (2-row header) download">&#11015;&#65039; Download SHEET (Excel)</a>
+      <button type="button" id="shUndo" class="btn btn-sm" style="background:#fef3c7;color:#92400e;border:1px solid #f59e0b" title="Galti se kuch type/save ho gaya? Pichhla edit wapas">&#8617; UNDO</button>
     </span>
+  </div>
+  <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:0 0 8px" id="shBar">
+    <select id="shParty" style="padding:5px 8px;border:1px solid #cbd5e1;border-radius:8px;background:#fff;font-size:12px;max-width:190px"><option value="">&#128101; Sab Parties</option>{% for po in party_opts %}<option value="{{ po }}">{{ po }}</option>{% endfor %}</select>
+    <input id="shQ" placeholder="&#128269; Search — party / model / code / tool / material..." style="flex:1;min-width:160px;max-width:290px;padding:5px 10px;border:1px solid #cbd5e1;border-radius:8px;font-size:12px">
+    <button type="button" id="shQx" class="btn btn-outline btn-sm" title="Search/filter saaf karo">&#10005;</button>
+    <span class="muted small" style="margin-left:4px">Align:</span>
+    <select id="shAlignCol" style="padding:5px 6px;border:1px solid #cbd5e1;border-radius:8px;background:#fff;font-size:12px">
+      <option value="">column...</option>
+      <option value="party_name">PARTY</option><option value="model_code">MODEL NO.</option><option value="party_code">PARTY CODE</option>
+      <option value="pcb_len">X</option><option value="pcb_w">Y</option><option value="panel_len">L</option><option value="panel_w">W</option><option value="pcs_panel">PCS</option>
+      <option value="cutting_len">4a</option><option value="x_qty">N (4a)</option><option value="cutting_w">4b</option><option value="y_qty">N (4b)</option>
+      <option value="panels_sheet">UPS</option><option value="cnc_tool">CNC/TOOL</option><option value="per_sq_inch">PER SQ INCH</option>
+      <option value="sheet_thickness">MATERIAL</option><option value="pcb_price">PRICE</option><option value="fg_stock">FIN. STOCK</option>
+    </select>
+    <button type="button" class="shAl btn btn-outline btn-sm" data-a="left" title="Left align">L</button>
+    <button type="button" class="shAl btn btn-outline btn-sm" data-a="center" title="Center align">C</button>
+    <button type="button" class="shAl btn btn-outline btn-sm" data-a="right" title="Right align">R</button>
+    <span id="shCount" class="muted small" style="margin-left:auto"></span>
   </div>
   <div class="panel-body" style="max-height:60vh;overflow:auto">
     <style>
@@ -152,12 +171,13 @@
         </tr>
       </thead>
       <tbody>
+        {% set NF18 = ['pcb_len','pcb_w','panel_len','panel_w','pcs_panel','cutting_len','x_qty','cutting_w','y_qty','panels_sheet','per_sq_inch','pcb_price','sheet_thickness'] %}
         {% for m in models %}<tr data-id="{{ m.id }}"><td class="sn">{{ loop.index }}</td>{% for f, val in [('party_name', m.party_name or m.party or ''), ('model_code', m.model_code or ''), ('party_code', m.party_code or ''),
                             ('pcb_len', m.pcb_len or ''), ('pcb_w', m.pcb_w or ''),
                             ('panel_len', m.panel_len or ''), ('panel_w', m.panel_w or ''), ('pcs_panel', m.pcs_panel or ''),
                             ('cutting_len', m.cutting_len or ''), ('x_qty', m.x_qty or ''), ('cutting_w', m.cutting_w or ''), ('y_qty', m.y_qty or ''),
                             ('panels_sheet', m.panels_sheet or ''), ('cnc_tool', m.cnc_tool or ''),
-                            ('per_sq_inch', m.per_sq_inch or ''), ('sheet_thickness', m.sheet_thickness or ''), ('pcb_price', m.pcb_price or '')] %}<td class="sc" data-f="{{ f }}">{{ '' if val is none else ('%g'|format(val) if val is number and val is not string else val) }}</td>{% endfor %}<td class="fs{{ ' z' if (m.fg_stock or 0) > 0 else '' }}">{{ m.fg_stock or 0 }}</td><td class="del"><button type="button" class="mdel97" data-id="{{ m.id }}" title="Is model ko SHEET se hatao">&#128465;</button></td></tr>
+                            ('per_sq_inch', m.per_sq_inch or ''), ('sheet_thickness', m.sheet_thickness or ''), ('pcb_price', m.pcb_price or '')] %}<td class="sc" data-f="{{ f }}">{{ '' if val is none else (val|numfmt if f in NF18 else val) }}</td>{% endfor %}<td class="fs{{ ' z' if (m.fg_stock or 0) > 0 else '' }}" data-f="fg_stock">{{ m.fg_stock or 0 }}</td><td class="del"><button type="button" class="mdel97" data-id="{{ m.id }}" title="Is model ko SHEET se hatao">&#128465;</button></td></tr>
         {% endfor %}
         {% if not models %}
         <tr><td colspan="20" style="border:1px solid #e2e8f0;padding:12px;text-align:center;color:#94a3b8">Abhi koi model nahi — Cut List Optimizer se save karo ya Add Manually.</td></tr>
@@ -173,6 +193,76 @@
              'panels_sheet','sheets','per_sq_inch','pcb_price'];
   var T = (document.cookie.match(/(?:^|; )token=([^;]*)/) || [])[1];
   function tok(){ return T || (window.T ? window.T() : ''); }
+
+  /* ===== v4.18: UNDO + column align + party filter + search (Excel jaisa) ===== */
+  var ALIGN18 = {{ align_prefs|tojson }} || {};
+  var LBL18 = {party_name:'PARTY', model_code:'MODEL NO.', party_code:'PARTY CODE', pcb_len:'X', pcb_w:'Y',
+               panel_len:'L', panel_w:'W', pcs_panel:'PCS', cutting_len:'4a', x_qty:'N (4a)', cutting_w:'4b',
+               y_qty:'N (4b)', panels_sheet:'UPS', cnc_tool:'CNC/TOOL', per_sq_inch:'PER SQ INCH',
+               sheet_thickness:'MATERIAL', pcb_price:'PRICE', fg_stock:'FIN. STOCK'};
+  function toast18(msg, bad){
+    var t = document.getElementById('shToast');
+    if (!t){ t = document.createElement('div'); t.id = 'shToast';
+      t.style.cssText = 'position:fixed;top:14px;right:14px;z-index:9999;padding:10px 14px;border-radius:10px;font-size:12.5px;font-weight:600;box-shadow:0 6px 18px rgba(0,0,0,.18)';
+      document.body.appendChild(t); }
+    t.style.background = bad ? '#fee2e2' : '#dcfce7'; t.style.color = bad ? '#b91c1c' : '#15803d';
+    t.textContent = msg; t.style.display = 'block';
+    clearTimeout(t._h); t._h = setTimeout(function(){ t.style.display = 'none'; }, 4000);
+  }
+  function applyAlign18(f){
+    var a = ALIGN18[f]; if (!a) return;
+    document.querySelectorAll('#sheet97 td[data-f="' + f + '"]').forEach(function(td){ td.style.textAlign = a; });
+  }
+  Object.keys(ALIGN18).forEach(applyAlign18);
+  document.querySelectorAll('.shAl').forEach(function(b){
+    b.addEventListener('click', function(){
+      var f = document.getElementById('shAlignCol').value;
+      if (!f){ toast18('Pehle column chuno (Align dropdown se)', true); return; }
+      var a = b.getAttribute('data-a');
+      ALIGN18[f] = (ALIGN18[f] === a) ? '' : a;
+      applyAlign18(f);
+      fetch('/api/products/sheet/prefs?token=' + tok(), {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(ALIGN18)})
+        .then(function(r){ return r.json(); })
+        .then(function(d){ if (d.ok) toast18('Align: ' + (LBL18[f] || f) + ' -> ' + (a ? a.toUpperCase() : 'DEFAULT')); });
+    });
+  });
+  var _shT = 0;
+  function shFilter18(){
+    var q = (document.getElementById('shQ').value || '').toLowerCase().trim();
+    var pt = document.getElementById('shParty').value;
+    var rows = document.querySelectorAll('#sheet97 tbody tr[data-id]'), vis = 0;
+    rows.forEach(function(tr){
+      var ok = (!pt || (tr.children[1] && tr.children[1].textContent.trim() === pt)) &&
+               (!q || tr.textContent.toLowerCase().indexOf(q) >= 0);
+      tr.style.display = ok ? '' : 'none'; if (ok) vis++;
+    });
+    var c = document.getElementById('shCount');
+    if (c) c.textContent = (q || pt) ? (vis + ' / ' + rows.length + ' dikhe') : '';
+  }
+  ['shQ','shParty'].forEach(function(id){
+    document.getElementById(id).addEventListener(id === 'shQ' ? 'input' : 'change', function(){
+      clearTimeout(_shT); _shT = setTimeout(shFilter18, 120);
+    });
+  });
+  document.getElementById('shQx').addEventListener('click', function(){
+    document.getElementById('shQ').value = ''; document.getElementById('shParty').value = ''; shFilter18();
+  });
+  document.getElementById('shUndo').addEventListener('click', function(){
+    var btn = this; btn.disabled = true;
+    fetch('/api/products/sheet/undo?token=' + tok(), {method:'POST'})
+      .then(function(r){ return r.json(); })
+      .then(function(d){
+        btn.disabled = false;
+        if (!d.ok){ toast18(d.msg || 'Undo nahi hua', true); return; }
+        if (d.model_id && d.field && d.disp !== undefined){
+          var tr = document.querySelector('#sheet97 tbody tr[data-id="' + d.model_id + '"]');
+          if (tr){ var td = tr.querySelector('td[data-f="' + d.field + '"]');
+            if (td){ td.textContent = d.disp; td.style.textAlign = ALIGN18[d.field] || ''; } }
+        }
+        toast18(d.msg || 'Undo ho gaya');
+      })
+      .catch(function(){ btn.disabled = false; toast18('Undo fail — dobara try karo', true); });
+  });
   document.querySelectorAll('#sheet97 td.sc').forEach(function(td){
     td.addEventListener('click', function(){
       if (td.querySelector('input')) return;
