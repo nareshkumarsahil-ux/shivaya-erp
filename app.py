@@ -2750,8 +2750,21 @@ def products():
     except Exception:
         _prefs21 = {}
     _align18 = _prefs21.get("align") or {}
+    # v4.23: custom columns (registry + DB column self-heal)
+    _cust23 = _prefs21.get("custom") if isinstance(_prefs21.get("custom"), list) else []
+    try:
+        _have23 = {r["name"] for r in db.query("PRAGMA table_info(product_models)")}
+        for _c23 in _cust23:
+            _cid23 = str(_c23.get("id", ""))
+            if re.fullmatch(r"[a-f0-9]{4}", _cid23) and ("cc_" + _cid23) not in _have23:
+                try:
+                    db.execute(f"ALTER TABLE product_models ADD COLUMN cc_{_cid23} TEXT DEFAULT ''")
+                except Exception:
+                    pass
+    except Exception:
+        pass
     return render_template("products.html", active="products", models=models, models_top=models_top, pdf_counts=pdf_counts,
-                           models_total=models_total, align_prefs=_align18, prefs21=_prefs21,
+                           models_total=models_total, align_prefs=_align18, prefs21=_prefs21, custom_cols=_cust23,
                            bom_map=bom_map, history=history,
                            show_add=request.args.get("add"),
                            edit_model=edit_model,
@@ -4713,6 +4726,9 @@ def _sheet_apply18(pid, j, log=True):
     sets, vals = [], []
     for k, v in j.items():
         if k not in _SHEET_FIELDS:
+            if re.fullmatch(r"cc_[a-f0-9]{4}", str(k)):
+                vals.append(str(v or "").strip())   # v4.23: custom column (text)
+                sets.append(f"{k}=?")
             continue
         t = _SHEET_FIELDS[k]
         try:
@@ -4755,6 +4771,15 @@ def _sheet_apply18(pid, j, log=True):
 def product_sheet_edit(pid):
     """v3.97: SHEET cell-edit — sirf whitelist fields, kuch invent nahi. v4.18: har edit LOG (UNDO)."""
     j = request.get_json(silent=True) or {}
+    # v4.23: ROW- placeholder row me MODEL NO. bhara to model ka naam bhi wahi ho jaye (PO-match ke liye)
+    mc = str(j.get("model_code") or "").strip()
+    if mc:
+        m0 = db.query("SELECT name FROM product_models WHERE id=?", (pid,), one=True)
+        if m0 and (m0["name"] or "").startswith("ROW-"):
+            dup = db.query("SELECT id FROM product_models WHERE name=? AND id!=?", (mc, pid), one=True)
+            if not dup:
+                j = dict(j)
+                j["name"] = mc
     return _sheet_apply18(pid, j, log=True)
 
 
@@ -4877,6 +4902,59 @@ def sheet_delete_many():
     if blocked:
         msg += f" | {len(blocked)} USE-ME (PDF/BOM/PRODUCTION) block: " + ", ".join(b["name"] for b in blocked[:6])
     return jsonify(ok=True, deleted=len(deleted), blocked=blocked, msg=msg)
+
+
+@app.route("/api/products/sheet/custom_col", methods=["POST"])
+@login_required
+@admin_required
+def sheet_custom_col():
+    """v4.23: SHEET me APNA column add/remove (Excel jaisa) — prefs registry + ALTER, self-heal."""
+    import json as _jc
+    db.execute("CREATE TABLE IF NOT EXISTS sheet_prefs (k TEXT PRIMARY KEY, v TEXT DEFAULT '')")
+    j = request.get_json(silent=True) or {}
+    doc = {}
+    r = db.query("SELECT v FROM sheet_prefs WHERE k='align'", one=True)
+    if r and r["v"]:
+        try:
+            doc = _jc.loads(r["v"])
+        except Exception:
+            doc = {}
+    if not isinstance(doc, dict):
+        doc = {}
+    if j.get("remove_id"):
+        rid = str(j["remove_id"])
+        doc["custom"] = [c for c in (doc.get("custom") or []) if str(c.get("id")) != rid]
+        db.execute("INSERT INTO sheet_prefs (k, v) VALUES ('align', ?) "
+                   "ON CONFLICT(k) DO UPDATE SET v=excluded.v", (_jc.dumps(doc),))
+        return jsonify(ok=True, custom=doc.get("custom") or [])
+    name = (str(j.get("name") or "").strip())[:24]
+    if not name:
+        return jsonify(ok=False, error="Column ka naam likho.")
+    if len(doc.get("custom") or []) >= 6:
+        return jsonify(ok=False, error="Max 6 custom columns (pehle koi hatao).")
+    cid = os.urandom(2).hex()
+    try:
+        db.execute(f"ALTER TABLE product_models ADD COLUMN cc_{cid} TEXT DEFAULT ''")
+    except Exception as e:
+        return jsonify(ok=False, error="Column ban nahi paya: " + str(e))
+    doc["custom"] = (doc.get("custom") or []) + [{"id": cid, "name": name}]
+    db.execute("INSERT INTO sheet_prefs (k, v) VALUES ('align', ?) "
+               "ON CONFLICT(k) DO UPDATE SET v=excluded.v", (_jc.dumps(doc),))
+    return jsonify(ok=True, id=cid, name=name)
+
+
+@app.route("/api/products/sheet/add_row", methods=["POST"])
+@login_required
+@admin_required
+def sheet_add_row():
+    """v4.23: SHEET me khaali ROW add (Excel jaisa) — ROW- placeholder; MODEL NO. bharte hi naam ban jata hai."""
+    db.ensure_product_models()
+    nm = "ROW-" + _now_ist().strftime("%Y%m%d%H%M%S")
+    while db.query("SELECT id FROM product_models WHERE name=?", (nm,), one=True):
+        nm += "x"
+    db.execute("INSERT INTO product_models (name, created_on) VALUES (?,?)", (nm, _today_ist().isoformat()))
+    r = db.query("SELECT id FROM product_models WHERE name=?", (nm,), one=True)
+    return jsonify(ok=True, id=r["id"], name=nm)
 
 
 @app.route("/api/po/file/<int:fid>")
