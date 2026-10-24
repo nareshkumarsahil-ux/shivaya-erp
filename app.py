@@ -4823,7 +4823,7 @@ def sheet_prefs():
     if not isinstance(doc, dict) or "align" not in doc:
         doc = {"align": doc if isinstance(doc, dict) else {}}   # v4.18 purana flat-align doc
     # v4.21: align + colw + rowh + rowh_def — ek hi prefs doc (top-level keys merge)
-    for k in ("align", "colw", "rowh"):
+    for k in ("align", "colw", "rowh", "colhide"):
         if k in j and isinstance(j[k], dict):
             if not j[k]:
                 doc[k] = {}   # v4.21: khaali dict = CLEAR (merge-nop nahi — Reset kaam kare)
@@ -4844,6 +4844,39 @@ def sheet_prefs():
     db.execute("INSERT INTO sheet_prefs (k, v) VALUES ('align', ?) "
                "ON CONFLICT(k) DO UPDATE SET v=excluded.v", (_jp.dumps(doc),))
     return jsonify(ok=True, prefs=doc)
+
+
+@app.route("/api/products/sheet/delete_many", methods=["POST"])
+@login_required
+@admin_required
+def sheet_delete_many():
+    """v4.22: MULTIPLE rows delete — checkbox select karke; USE-ME guard single-delete jaisa (batch queries)."""
+    j = request.get_json(silent=True) or {}
+    ids = []
+    for x in (j.get("ids") or [])[:500]:
+        try:
+            ids.append(int(x))
+        except (TypeError, ValueError):
+            pass
+    if not ids:
+        return jsonify(ok=False, error="Pehle rows tick karo (checkbox se).")
+    ph = ",".join("?" * len(ids))
+    used_ids = set()
+    for tbl in ("model_pdfs", "bom", "fg_production"):
+        for r in db.query(f"SELECT model_id FROM {tbl} WHERE model_id IN ({ph})", tuple(ids)):
+            used_ids.add(r["model_id"])
+    names = {r["id"]: r["name"] for r in db.query(f"SELECT id, name FROM product_models WHERE id IN ({ph})", tuple(ids))}
+    deleted, blocked = [], []
+    for pid in ids:
+        if pid in used_ids:
+            blocked.append({"id": pid, "name": names.get(pid, str(pid))})
+        elif pid in names:
+            db.execute("DELETE FROM product_models WHERE id=?", (pid,))
+            deleted.append(pid)
+    msg = f"{len(deleted)} model delete ho gaye."
+    if blocked:
+        msg += f" | {len(blocked)} USE-ME (PDF/BOM/PRODUCTION) block: " + ", ".join(b["name"] for b in blocked[:6])
+    return jsonify(ok=True, deleted=len(deleted), blocked=blocked, msg=msg)
 
 
 @app.route("/api/po/file/<int:fid>")

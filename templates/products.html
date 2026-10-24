@@ -109,7 +109,7 @@
       <button type="button" id="shUndo" class="btn btn-sm" style="background:#fef3c7;color:#92400e;border:1px solid #f59e0b" title="Galti se kuch type/save ho gaya? Pichhla edit wapas">&#8617; UNDO</button>
     </span>
   </div>
-  <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:0 0 8px" id="shBar">
+  <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:0 0 8px;position:relative" id="shBar">
     <select id="shParty" style="padding:5px 8px;border:1px solid #cbd5e1;border-radius:8px;background:#fff;font-size:12px;max-width:190px"><option value="">&#128101; Sab Parties</option>{% for po in party_opts %}<option value="{{ po }}">{{ po }}</option>{% endfor %}</select>
     <input id="shQ" placeholder="&#128269; Search — party / model / code / tool / material..." style="flex:1;min-width:160px;max-width:290px;padding:5px 10px;border:1px solid #cbd5e1;border-radius:8px;font-size:12px">
     <button type="button" id="shQx" class="btn btn-outline btn-sm" title="Search/filter saaf karo">&#10005;</button>
@@ -125,6 +125,9 @@
     <button type="button" class="shAl btn btn-outline btn-sm" data-a="left" title="Left align">L</button>
     <button type="button" class="shAl btn btn-outline btn-sm" data-a="center" title="Center align">C</button>
     <button type="button" class="shAl btn btn-outline btn-sm" data-a="right" title="Right align">R</button>
+    <button type="button" id="shCols" class="btn btn-outline btn-sm" title="Column add/remove (show/hide)">&#9636; Columns</button>
+    <button type="button" id="shDelMany" class="btn btn-sm" disabled title="Tick ki hui rows delete karo" style="background:#fee2e2;color:#b91c1c;border:1px solid #fca5a5">&#128465; Delete (0)</button>
+    <div id="shColPanel" style="display:none;position:absolute;top:38px;left:0;z-index:60;background:#fff;border:1px solid #cbd5e1;border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.15);padding:10px 12px;min-width:190px;max-height:330px;overflow:auto"></div>
     <span class="muted small">Row H:</span>
     <input id="shRowH" type="number" min="20" max="120" value="28" style="width:52px;padding:4px 6px;border:1px solid #cbd5e1;border-radius:8px;font-size:12px" title="Sab rows ki height (number badlo)">
     <button type="button" id="shReset" class="btn btn-outline btn-sm" title="Column width / row height default par wapas">&#8634; Reset</button>
@@ -148,15 +151,17 @@
     #sheet97 td.sc{white-space:nowrap}
     #sheet97 thead th{position:relative}
     #sheet97 td.sn{position:relative}
+    #sheet97 td.sel{text-align:center}
     #sheet97 .colGrip{position:absolute;top:0;right:-3px;width:7px;height:100%;cursor:col-resize;z-index:5}
     #sheet97 .rowGrip{position:absolute;left:0;bottom:-2px;width:100%;height:5px;cursor:row-resize;z-index:5}
     #sheet97 .colGrip:hover,#sheet97 .rowGrip:hover{background:#4338ca66}
     #sheet97 tbody tr[data-id]{height:28px}
     </style>
     <table class="stable" id="sheet97" style="border-collapse:collapse;width:100%;font-size:11.5px;background:#fff">
-      <colgroup id="sheetCols"><col data-f="sn"><col data-f="party_name"><col data-f="model_code"><col data-f="party_code"><col data-f="pcb_len"><col data-f="pcb_w"><col data-f="panel_len"><col data-f="panel_w"><col data-f="pcs_panel"><col data-f="cutting_len"><col data-f="x_qty"><col data-f="cutting_w"><col data-f="y_qty"><col data-f="panels_sheet"><col data-f="cnc_tool"><col data-f="per_sq_inch"><col data-f="sheet_thickness"><col data-f="pcb_price"><col data-f="fg_stock"><col data-f="__del"></colgroup>
+      <colgroup id="sheetCols"><col data-f="__sel"><col data-f="sn"><col data-f="party_name"><col data-f="model_code"><col data-f="party_code"><col data-f="pcb_len"><col data-f="pcb_w"><col data-f="panel_len"><col data-f="panel_w"><col data-f="pcs_panel"><col data-f="cutting_len"><col data-f="x_qty"><col data-f="cutting_w"><col data-f="y_qty"><col data-f="panels_sheet"><col data-f="cnc_tool"><col data-f="per_sq_inch"><col data-f="sheet_thickness"><col data-f="pcb_price"><col data-f="fg_stock"><col data-f="__del"></colgroup>
       <thead>
         <tr style="background:#eef2ff;position:sticky;top:0;z-index:2">
+          <th rowspan="2" data-f="__sel" title="Multiple select karke delete karo"><input type="checkbox" id="selAll" style="cursor:pointer"></th>
           <th rowspan="2" data-f="sn">S.N</th>
           <th rowspan="2" data-f="party_name">PARTY</th>
           <th rowspan="2" data-f="model_code">MODEL NO.</th>
@@ -173,28 +178,28 @@
           <th rowspan="2" data-f="__del">DEL</th>
         </tr>
         <tr style="background:#eef2ff;position:sticky;top:28px;z-index:2">
-          <th>X</th>
-          <th>Y</th>
-          <th>L</th>
-          <th>W</th>
-          <th>PCS</th>
-          <th>4a</th>
-          <th>N</th>
-          <th>4b</th>
-          <th>N</th>
+          <th data-f="pcb_len">X</th>
+          <th data-f="pcb_w">Y</th>
+          <th data-f="panel_len">L</th>
+          <th data-f="panel_w">W</th>
+          <th data-f="pcs_panel">PCS</th>
+          <th data-f="cutting_len">4a</th>
+          <th data-f="x_qty">N</th>
+          <th data-f="cutting_w">4b</th>
+          <th data-f="y_qty">N</th>
         </tr>
       </thead>
       <tbody>
         {% set NF18 = ['pcb_len','pcb_w','panel_len','panel_w','pcs_panel','cutting_len','x_qty','cutting_w','y_qty','panels_sheet','per_sq_inch','pcb_price','sheet_thickness'] %}
-        {% for m in models %}<tr data-id="{{ m.id }}"><td class="sn">{{ loop.index }}</td>{% for f, val in [('party_name', m.party_name or m.party or ''), ('model_code', m.model_code or ''), ('party_code', m.party_code or ''),
+        {% for m in models %}<tr data-id="{{ m.id }}"><td class="sel" data-f="__sel"><input type="checkbox" class="selCK" data-id="{{ m.id }}" style="cursor:pointer"></td><td class="sn" data-f="sn">{{ loop.index }}</td>{% for f, val in [('party_name', m.party_name or m.party or ''), ('model_code', m.model_code or ''), ('party_code', m.party_code or ''),
                             ('pcb_len', m.pcb_len or ''), ('pcb_w', m.pcb_w or ''),
                             ('panel_len', m.panel_len or ''), ('panel_w', m.panel_w or ''), ('pcs_panel', m.pcs_panel or ''),
                             ('cutting_len', m.cutting_len or ''), ('x_qty', m.x_qty or ''), ('cutting_w', m.cutting_w or ''), ('y_qty', m.y_qty or ''),
                             ('panels_sheet', m.panels_sheet or ''), ('cnc_tool', m.cnc_tool or ''),
-                            ('per_sq_inch', m.per_sq_inch or ''), ('sheet_thickness', m.sheet_thickness or ''), ('pcb_price', m.pcb_price or '')] %}<td class="sc" data-f="{{ f }}">{{ '' if val is none else (val|numfmt if f in NF18 else val) }}</td>{% endfor %}<td class="fs{{ ' z' if (m.fg_stock or 0) > 0 else '' }}" data-f="fg_stock">{{ m.fg_stock or 0 }}</td><td class="del"><button type="button" class="mdel97" data-id="{{ m.id }}" title="Is model ko SHEET se hatao">&#128465;</button></td></tr>
+                            ('per_sq_inch', m.per_sq_inch or ''), ('sheet_thickness', m.sheet_thickness or ''), ('pcb_price', m.pcb_price or '')] %}<td class="sc" data-f="{{ f }}">{{ '' if val is none else (val|numfmt if f in NF18 else val) }}</td>{% endfor %}<td class="fs{{ ' z' if (m.fg_stock or 0) > 0 else '' }}" data-f="fg_stock">{{ m.fg_stock or 0 }}</td><td class="del" data-f="__del"><button type="button" class="mdel97" data-id="{{ m.id }}" title="Is model ko SHEET se hatao">&#128465;</button></td></tr>
         {% endfor %}
         {% if not models %}
-        <tr><td colspan="20" style="border:1px solid #e2e8f0;padding:12px;text-align:center;color:#94a3b8">Abhi koi model nahi — Cut List Optimizer se save karo ya Add Manually.</td></tr>
+        <tr><td colspan="21" style="border:1px solid #e2e8f0;padding:12px;text-align:center;color:#94a3b8">Abhi koi model nahi — Cut List Optimizer se save karo ya Add Manually.</td></tr>
         {% endif %}
       </tbody>
     </table>
@@ -313,7 +318,7 @@
   var COLW21 = P21.colw || {};
   var ROWH21 = P21.rowh || {};
   var ROWDEF21 = P21.rowh_def || 28;
-  var DEFCOLS21 = {sn:36, party_name:96, model_code:112, party_code:88, pcb_len:52, pcb_w:52,
+  var DEFCOLS21 = {__sel:34, sn:36, party_name:96, model_code:112, party_code:88, pcb_len:52, pcb_w:52,
                    panel_len:58, panel_w:58, pcs_panel:48, cutting_len:58, x_qty:44, cutting_w:58,
                    y_qty:44, panels_sheet:48, cnc_tool:104, per_sq_inch:74, sheet_thickness:96,
                    pcb_price:56, fg_stock:56, __del:42};
@@ -394,6 +399,112 @@
     savePrefs21(['rowh', {}]);
     savePrefs21(['rowh_def', 28]);
     toast18('Width/height default par wapas');
+  });
+
+  /* ===== v4.22: MULTIPLE DELETE (checkboxes) + COLUMN add/remove (show/hide) ===== */
+  var HIDE22 = P21.colhide || {};
+  var GRP22 = {pcb_len: ['pcb_len', 'pcb_w'], panel_len: ['panel_len', 'panel_w', 'pcs_panel'],
+               cutting_len: ['cutting_len', 'x_qty', 'cutting_w', 'y_qty']};
+  var COLS22 = [['sn', 'S.N'], ['party_name', 'PARTY'], ['model_code', 'MODEL NO.'], ['party_code', 'PARTY CODE'],
+                ['pcb_len', 'X'], ['pcb_w', 'Y'], ['panel_len', 'L'], ['panel_w', 'W'], ['pcs_panel', 'PCS'],
+                ['cutting_len', '4a'], ['x_qty', 'N (4a)'], ['cutting_w', '4b'], ['y_qty', 'N (4b)'],
+                ['panels_sheet', 'UPS'], ['cnc_tool', 'CNC/TOOL'], ['per_sq_inch', 'PER SQ INCH'],
+                ['sheet_thickness', 'MATERIAL'], ['pcb_price', 'PRICE'], ['fg_stock', 'FIN. STOCK'], ['__del', 'DEL']];
+  function setCol22(f, hide){
+    if (hide) HIDE22[f] = 1; else delete HIDE22[f];
+    var col = colByF21[f];
+    if (col) col.style.display = hide ? 'none' : '';
+    document.querySelectorAll('#sheet97 td[data-f="' + f + '"]').forEach(function(td){ td.style.display = hide ? 'none' : ''; });
+    document.querySelectorAll('#sheet97 thead th[data-f="' + f + '"]').forEach(function(th){
+      if (th.classList.contains('grp')) return;
+      th.style.display = hide ? 'none' : '';
+    });
+    Object.keys(GRP22).forEach(function(gf){
+      var mem = GRP22[gf].filter(function(x){ return !HIDE22[x]; });
+      var gth = document.querySelector('#sheet97 thead th[data-f="' + gf + '"]');
+      if (gth){ gth.style.display = mem.length ? '' : 'none'; if (mem.length) gth.setAttribute('colspan', mem.length); }
+    });
+  }
+  function buildColPanel22(){
+    var pan = document.getElementById('shColPanel');
+    var h = document.createElement('div');
+    h.style.cssText = 'font-weight:800;font-size:11.5px;color:#334155;margin-bottom:6px';
+    h.textContent = 'COLUMNS (tick = dikhao)';
+    pan.appendChild(h);
+    COLS22.forEach(function(cd){
+      var lab = document.createElement('label');
+      lab.style.cssText = 'display:flex;align-items:center;gap:6px;font-size:12px;padding:2px 0;cursor:pointer';
+      var ck = document.createElement('input');
+      ck.type = 'checkbox'; ck.checked = !HIDE22[cd[0]];
+      ck.addEventListener('change', function(){
+        setCol22(cd[0], !ck.checked);
+        savePrefs21(['colhide', HIDE22]);
+        toast18('Column: ' + cd[1] + (ck.checked ? ' dikh raha hai' : ' chhup gaya'));
+      });
+      var sp = document.createElement('span'); sp.textContent = cd[1];
+      lab.appendChild(ck); lab.appendChild(sp);
+      pan.appendChild(lab);
+    });
+    var rst = document.createElement('button');
+    rst.type = 'button'; rst.className = 'btn btn-outline btn-sm';
+    rst.style.cssText = 'margin-top:8px;width:100%';
+    rst.textContent = 'Sab dikhao';
+    rst.addEventListener('click', function(){
+      COLS22.forEach(function(cd){ setCol22(cd[0], false); });
+      savePrefs21(['colhide', {}]);
+      toast18('Sab columns wapas dikh rahe hain');
+    });
+    pan.appendChild(rst);
+  }
+  buildColPanel22();
+  Object.keys(HIDE22).forEach(function(f){ setCol22(f, true); });
+  document.getElementById('shCols').addEventListener('click', function(e){
+    e.stopPropagation();
+    var pan = document.getElementById('shColPanel');
+    pan.style.display = (pan.style.display === 'none' || !pan.style.display) ? 'block' : 'none';
+  });
+  document.addEventListener('click', function(e){
+    var pan = document.getElementById('shColPanel');
+    if (pan.style.display === 'block' && !pan.contains(e.target) && e.target.id !== 'shCols') pan.style.display = 'none';
+  });
+
+  var delBtn22 = document.getElementById('shDelMany');
+  function updSel22(){
+    var n = document.querySelectorAll('#sheet97 .selCK:checked').length;
+    delBtn22.textContent = '\u{1F5D1} Delete (' + n + ')';
+    delBtn22.disabled = !n;
+    if (delBtn22._arm){ delBtn22._arm = 0; delBtn22.style.background = ''; delBtn22.style.color = ''; }
+  }
+  document.getElementById('sheet97').addEventListener('change', function(e){
+    if (e.target && e.target.classList && e.target.classList.contains('selCK')) updSel22();
+  });
+  document.getElementById('selAll').addEventListener('change', function(){
+    var on = this.checked;
+    document.querySelectorAll('#sheet97 tbody tr[data-id]').forEach(function(tr){
+      if (tr.style.display !== 'none'){ var ck = tr.querySelector('.selCK'); if (ck) ck.checked = on; }
+    });
+    updSel22();
+  });
+  delBtn22.addEventListener('click', function(){
+    var ids = [];
+    document.querySelectorAll('#sheet97 .selCK:checked').forEach(function(x){ ids.push(+x.getAttribute('data-id')); });
+    if (!ids.length) return;
+    if (!delBtn22._arm){
+      delBtn22._arm = 1;
+      delBtn22.textContent = '\u26a0 Pakka? (' + ids.length + ')';
+      delBtn22.style.background = '#ef4444'; delBtn22.style.color = '#fff';
+      setTimeout(function(){ delBtn22._arm = 0; delBtn22.style.background = ''; delBtn22.style.color = ''; updSel22(); }, 4000);
+      return;
+    }
+    delBtn22._arm = 0;
+    fetch('/api/products/sheet/delete_many?token=' + tok(), {
+      method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ids: ids})
+    }).then(function(r){ return r.json(); }).then(function(d){
+      if (!d.ok){ toast18(d.error || 'Delete fail', true); return; }
+      toast18(d.msg || ('Delete ho gaye: ' + d.deleted), (d.blocked || []).length > 0);
+      if (d.deleted > 0) setTimeout(function(){ location.reload(); }, 1400);
+      else updSel22();
+    }).catch(function(){ toast18('Delete fail — dobara try karo', true); });
   });
 })();
 
