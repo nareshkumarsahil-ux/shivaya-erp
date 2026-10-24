@@ -2726,6 +2726,16 @@ def products():
         _m["_cn4b"] = _c27["y_qty"] if _c27 else None
         _m["_cups"] = _c27["ups"] if _c27 else None
         _m["_cpps"] = _c27["pps"] if _c27 else None
+        # v4.28: PRICE <-> PER SQ INCH (Cut List wala formula) — sq.inch/PCB = SINGLE PANEL area (inch) / unit PCBs
+        if _c27 and _c27["ups"] and (_m.get("panel_len") or 0) > 0 and (_m.get("panel_w") or 0) > 0:
+            _sq28 = round(((float(_m["panel_len"]) / 25.4) * (float(_m["panel_w"]) / 25.4)) / _c27["ups"], 3)
+        else:
+            _sq28 = 0
+        _m["_csq"] = _sq28
+        _r28 = float(_m.get("per_sq_inch") or 0)
+        _p28 = float(_m.get("pcb_price") or 0)
+        _m["_cprice"] = round(_r28 * _sq28, 2) if (_sq28 and _r28 and not _p28) else None
+        _m["_crate"] = round(_p28 / _sq28, 3) if (_sq28 and _p28 and not _r28) else None
     party_opts = [r["party_name"] for r in
                   db.query("SELECT DISTINCT party_name FROM product_models WHERE IFNULL(party_name,'')!='' ORDER BY party_name")]
     # v3.18 HSN sweep — koi bhi naya model (apply-order/import) bina HSN na rahe (PCB default 85340000)

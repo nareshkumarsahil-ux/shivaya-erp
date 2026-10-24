@@ -200,7 +200,7 @@
                             ('panel_len', m.panel_len or ''), ('panel_w', m.panel_w or ''), ('pcs_panel', m.pcs_panel or ''),
                             ('cutting_len', m._c4a if m._c4a is not none else (m.cutting_len or '')), ('x_qty', m._cn4a if m._cn4a is not none else (m.x_qty or '')), ('cutting_w', m._c4b if m._c4b is not none else (m.cutting_w or '')), ('y_qty', m._cn4b if m._cn4b is not none else (m.y_qty or '')),
                             ('panels_sheet', m._cups if m._cups is not none else (m.panels_sheet or '')), ('cnc_tool', m.cnc_tool or ''),
-                            ('per_sq_inch', m.per_sq_inch or ''), ('sheet_thickness', m.sheet_thickness or ''), ('pcb_price', m.pcb_price or '')] %}<td class="sc" data-f="{{ f }}">{{ '' if val is none else (val|numfmt if f in NF18 else val) }}</td>{% endfor %}{% for cc in custom_cols %}<td class="sc" data-f="cc_{{ cc.id }}">{{ m['cc_' ~ cc.id] }}</td>{% endfor %}<td class="fs{{ ' z' if (m.fg_stock or 0) > 0 else '' }}" data-f="fg_stock">{{ m.fg_stock or 0 }}</td><td class="del" data-f="__del"><button type="button" class="mdel97" data-id="{{ m.id }}" title="Is model ko SHEET se hatao">&#128465;</button></td></tr>
+                            ('per_sq_inch', m.per_sq_inch or m._crate or ''), ('sheet_thickness', m.sheet_thickness or ''), ('pcb_price', m.pcb_price or m._cprice or '')] %}<td class="sc" data-f="{{ f }}"{% if f in ('per_sq_inch', 'pcb_price') and m._csq %} data-sq="{{ m._csq }}"{% endif %}>{{ '' if val is none else (val|numfmt if f in NF18 else val) }}</td>{% endfor %}{% for cc in custom_cols %}<td class="sc" data-f="cc_{{ cc.id }}">{{ m['cc_' ~ cc.id] }}</td>{% endfor %}<td class="fs{{ ' z' if (m.fg_stock or 0) > 0 else '' }}" data-f="fg_stock">{{ m.fg_stock or 0 }}</td><td class="del" data-f="__del"><button type="button" class="mdel97" data-id="{{ m.id }}" title="Is model ko SHEET se hatao">&#128465;</button></td></tr>
         {% endfor %}
         {% if not models %}
         <tr><td colspan="{{ 21 + custom_cols|length }}" style="border:1px solid #e2e8f0;padding:12px;text-align:center;color:#94a3b8">Abhi koi model nahi — Cut List Optimizer se save karo ya Add Manually.</td></tr>
@@ -307,7 +307,26 @@
           fetch('/api/product/' + tr.dataset.id + '/sheet_edit?token=' + encodeURIComponent(tok()), {
             method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)
           }).then(function(r){ return r.json(); }).then(function(j){
-            if (j.ok) { td.textContent = v; td.style.background = '#dcfce7'; setTimeout(function(){ td.style.background = ''; }, 900); }
+            if (j.ok) { td.textContent = v; td.style.background = '#dcfce7'; setTimeout(function(){ td.style.background = ''; }, 900);
+              /* v4.28: PER SQ INCH <-> PRICE two-way (Cut List formula: area = SINGLE PANEL inch / PCBs) */
+              var f28 = td.dataset.f, sq28 = parseFloat(td.getAttribute('data-sq')) || 0;
+              if ((f28 === 'pcb_price' || f28 === 'per_sq_inch') && sq28 > 0 && tr){
+                var num28 = parseFloat(String(v).replace(/,/g, '')) || 0;
+                var sib28 = tr.querySelector('td[data-f="' + (f28 === 'pcb_price' ? 'per_sq_inch' : 'pcb_price') + '"]');
+                var fld28 = f28 === 'pcb_price' ? 'per_sq_inch' : 'pcb_price';
+                var val28 = '';
+                if (num28 > 0) val28 = (f28 === 'per_sq_inch') ? String(Math.round(num28 * sq28 * 100) / 100) : String(Math.round((num28 / sq28) * 1000) / 1000);
+                if (sib28){
+                  var b28 = {}; b28[fld28] = val28;
+                  fetch('/api/product/' + tr.dataset.id + '/sheet_edit?token=' + encodeURIComponent(tok()), {
+                    method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(b28)
+                  }).then(function(r){ return r.json(); }).then(function(j2){
+                    if (j2.ok){ sib28.textContent = val28; sib28.style.background = '#dcfce7'; setTimeout(function(){ sib28.style.background = ''; }, 900);
+                      toast18('\u2194 ' + (fld28 === 'pcb_price' ? 'PRICE = \u20B9' + val28 : 'PER SQ INCH = ' + val28) + ' (area ' + sq28 + ' sq.inch)'); }
+                  }).catch(function(){});
+                }
+              }
+            }
             else { td.textContent = old; alert(j.error || 'save fail'); }
           }).catch(function(){ td.textContent = old; });
         } else td.textContent = old;
