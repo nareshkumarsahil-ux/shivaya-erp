@@ -1302,9 +1302,9 @@ def svg_panel_preview(r):
     W, TOP, AVH, BOTG, STR = 470, 48, 316, 58, 96
     H = TOP + AVH + BOTG + STR + 8
     pl, pw = r["panel_len"], r["panel_w"]
-    scale = min((W - 96) / pl, AVH / pw)
+    scale = min((W - 96) / pl, (AVH - 34) / pw)
     P, Q = pl * scale, pw * scale
-    x0, y0 = (W - 34 - P) / 2, TOP + 18 + (AVH - Q) / 2
+    x0, y0 = (W - 34 - P) / 2, TOP + 34 + (AVH - 34 - Q) / 2
     cw, ch = r["pcb_len"] * scale, r["pcb_w"] * scale
     gxs, gys = r["gap_x"] * scale, r["gap_y"] * scale
     bx, by = r["border_l"] * scale, r["border_t"] * scale
@@ -1314,8 +1314,20 @@ def svg_panel_preview(r):
     # Title + teal rule (image format)
     s.append(f'<text x="{W / 2:.0f}" y="24" text-anchor="middle" font-size="15.5" font-weight="800" fill="{NAVY}" font-family="Segoe UI,Arial" letter-spacing="1">PCB PANELIZATION LAYOUT</text>')
     s.append(f'<line x1="26" y1="33" x2="{W - 26}" y2="33" stroke="{TEAL}" stroke-width="2"/>')
+    # v4.15: hatch pattern (border strips) — image jaisa diagonal-shade
+    s.append('<defs><pattern id="hatchPL" patternUnits="userSpaceOnUse" width="4" height="4" '
+             'patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="4" stroke="#9db6c9" stroke-width="1"/></pattern></defs>')
     # Panel outline (navy, rounded, white fill)
     s.append(f'<rect x="{x0:.1f}" y="{y0:.1f}" width="{P:.1f}" height="{Q:.1f}" fill="#ffffff" stroke="{NAVY}" stroke-width="2.4" rx="5"/>')
+    # v4.15: BORDER strips hatched (L/R vertical, T/B horizontal)
+    if r["border_l"] > 0.05:
+        s.append(f'<rect x="{x0:.1f}" y="{y0:.1f}" width="{r["border_l"] * scale:.1f}" height="{Q:.1f}" fill="url(#hatchPL)"/>')
+    if r["border_r"] > 0.05:
+        s.append(f'<rect x="{x0 + P - r["border_r"] * scale:.1f}" y="{y0:.1f}" width="{r["border_r"] * scale:.1f}" height="{Q:.1f}" fill="url(#hatchPL)"/>')
+    if r["border_t"] > 0.05:
+        s.append(f'<rect x="{x0:.1f}" y="{y0:.1f}" width="{P:.1f}" height="{r["border_t"] * scale:.1f}" fill="url(#hatchPL)"/>')
+    if r["border_b"] > 0.05:
+        s.append(f'<rect x="{x0:.1f}" y="{y0 + Q - r["border_b"] * scale:.1f}" width="{P:.1f}" height="{r["border_b"] * scale:.1f}" fill="url(#hatchPL)"/>')
     # PCB cells (teal + 'L x W' label)
     if cw > 2.4 and ch > 2.4:
         ox = bx
@@ -1323,33 +1335,49 @@ def svg_panel_preview(r):
             oy = by
             for j in range(r["pcbs_y"]):
                 s.append(_pcb_shape_svg(x0 + ox, y0 + oy, cw, ch, r.get("shape") or "rect"))
-                if cw >= 26 and ch >= 14:
+                if cw >= 34 and ch >= 26:
+                    # v4.15: har cell ke apne DIMENSION ARROWS (image format) — hara L (upar), laal W (left, rotated)
+                    ax1, ax2, ay = x0 + ox + 2.5, x0 + ox + cw - 2.5, y0 + oy + 7
+                    s.append(f'<line x1="{ax1:.1f}" y1="{ay:.1f}" x2="{ax2:.1f}" y2="{ay:.1f}" stroke="#0a8f4c" stroke-width="0.9"/>')
+                    s.append(f'<path d="M {ax1:.1f} {ay:.1f} l 3.4 -1.9 v 3.8 z" fill="#0a8f4c"/><path d="M {ax2:.1f} {ay:.1f} l -3.4 -1.9 v 3.8 z" fill="#0a8f4c"/>')
+                    s.append(f'<text x="{(ax1 + ax2) / 2:.1f}" y="{ay - 2:.1f}" text-anchor="middle" font-size="7.5" font-weight="700" fill="#0a8f4c" font-family="Segoe UI,Arial">{r["pcb_len"]:g} mm</text>')
+                    rx_, ry1, ry2 = x0 + ox + 5.5, y0 + oy + 11, y0 + oy + ch - 1.5
+                    s.append(f'<line x1="{rx_:.1f}" y1="{ry1:.1f}" x2="{rx_:.1f}" y2="{ry2:.1f}" stroke="#d92b2b" stroke-width="0.9"/>')
+                    s.append(f'<path d="M {rx_:.1f} {ry1:.1f} l -1.9 3.4 h 3.8 z" fill="#d92b2b"/><path d="M {rx_:.1f} {ry2:.1f} l -1.9 -3.4 h 3.8 z" fill="#d92b2b"/>')
+                    s.append(f'<text x="{rx_ - 2.5:.1f}" y="{(ry1 + ry2) / 2:.1f}" text-anchor="middle" font-size="7.5" font-weight="700" fill="#d92b2b" font-family="Segoe UI,Arial" transform="rotate(-90 {rx_ - 2.5:.1f} {(ry1 + ry2) / 2:.1f})">{r["pcb_w"]:g} mm</text>')
+                elif cw >= 26 and ch >= 14:
                     s.append(f'<text x="{x0 + ox + cw / 2:.1f}" y="{y0 + oy + ch / 2 + 3:.1f}" text-anchor="middle" font-size="9.5" font-weight="700" fill="{NAVY}" font-family="Segoe UI,Arial">{r["pcb_len"]:g} \u00d7 {r["pcb_w"]:g}</text>')
                 oy += ch + (gaps_y_s[j] * scale if j < len(gaps_y_s) else gys)
             if i < r["pcbs_x"] - 1:
                 ox += cw + (gaps_x_s[i] * scale if i < len(gaps_x_s) else gxs)
-    # TOP dimension: panel width (double-arrow + text upar)
-    dy = y0 - 13
+    # TOP dimension: panel width (double-arrow + text upar) — v4.15: 2-tier (main upar, chhote neeche)
+    dy = y0 - 22
     s.append(f'<line x1="{x0:.1f}" y1="{dy:.1f}" x2="{x0 + P:.1f}" y2="{dy:.1f}" stroke="{NAVY}" stroke-width="1.2"/>')
     s.append(f'<path d="M {x0:.1f} {dy:.1f} l 7 -3.2 v 6.4 z" fill="{NAVY}"/><path d="M {x0 + P:.1f} {dy:.1f} l -7 -3.2 v 6.4 z" fill="{NAVY}"/>')
-    s.append(f'<line x1="{x0:.1f}" y1="{y0 - 2:.1f}" x2="{x0:.1f}" y2="{dy - 5:.1f}" stroke="{NAVY}" stroke-width="0.8"/>')
-    s.append(f'<line x1="{x0 + P:.1f}" y1="{y0 - 2:.1f}" x2="{x0 + P:.1f}" y2="{dy - 5:.1f}" stroke="{NAVY}" stroke-width="0.8"/>')
+    s.append(f'<line x1="{x0:.1f}" y1="{y0 - 2:.1f}" x2="{x0:.1f}" y2="{dy - 4:.1f}" stroke="{NAVY}" stroke-width="0.8"/>')
+    s.append(f'<line x1="{x0 + P:.1f}" y1="{y0 - 2:.1f}" x2="{x0 + P:.1f}" y2="{dy - 4:.1f}" stroke="{NAVY}" stroke-width="0.8"/>')
     s.append(f'<text x="{x0 + P / 2:.1f}" y="{dy - 5:.1f}" text-anchor="middle" font-size="11.5" font-weight="700" fill="{NAVY}" font-family="Segoe UI,Arial">{pl:.2f} mm</text>')
+    # v4.15: chhote dims (5mm | 2.40mm | 5mm) — border strips + pehla gap
+    def _mini_dim(m1, m2, mlabel):
+        my = y0 - 7
+        s.append(f'<line x1="{m1:.1f}" y1="{my:.1f}" x2="{m2:.1f}" y2="{my:.1f}" stroke="{NAVY}" stroke-width="0.8"/>')
+        s.append(f'<path d="M {m1:.1f} {my:.1f} l 3.4 -1.7 v 3.4 z" fill="{NAVY}"/><path d="M {m2:.1f} {my:.1f} l -3.4 -1.7 v 3.4 z" fill="{NAVY}"/>')
+        s.append(f'<line x1="{m1:.1f}" y1="{my - 2:.1f}" x2="{m1:.1f}" y2="{y0 - 1:.1f}" stroke="{NAVY}" stroke-width="0.6"/>')
+        s.append(f'<line x1="{m2:.1f}" y1="{my - 2:.1f}" x2="{m2:.1f}" y2="{y0 - 1:.1f}" stroke="{NAVY}" stroke-width="0.6"/>')
+        s.append(f'<text x="{(m1 + m2) / 2:.1f}" y="{my - 3:.1f}" text-anchor="middle" font-size="8" font-weight="700" fill="{NAVY}" font-family="Segoe UI,Arial">{mlabel}</text>')
+    if r["border_l"] > 0.05:
+        _mini_dim(x0, x0 + r["border_l"] * scale, f"{r['border_l']:g} mm")
+    if gaps_x_s and gaps_x_s[0] > 0.05 and cw > 2:
+        _gcen = x0 + r["border_l"] * scale + cw + (gaps_x_s[0] * scale) / 2
+        _half = max(4.0, gaps_x_s[0] * scale / 2)
+        _mini_dim(_gcen - _half, _gcen + _half, f"{gaps_x_s[0]:.2f} mm")
+    if r["border_r"] > 0.05:
+        _mini_dim(x0 + P - r["border_r"] * scale, x0 + P, f"{r['border_r']:g} mm")
     # RIGHT dimension: panel height (rotated text)
     dx = x0 + P + 13
     s.append(f'<line x1="{dx:.1f}" y1="{y0:.1f}" x2="{dx:.1f}" y2="{y0 + Q:.1f}" stroke="{NAVY}" stroke-width="1.2"/>')
     s.append(f'<path d="M {dx:.1f} {y0:.1f} l -3.2 7 h 6.4 z" fill="{NAVY}"/><path d="M {dx:.1f} {y0 + Q:.1f} l -3.2 -7 h 6.4 z" fill="{NAVY}"/>')
     s.append(f'<text x="{dx + 10:.1f}" y="{y0 + Q / 2:.1f}" text-anchor="middle" font-size="11.5" font-weight="700" fill="{NAVY}" font-family="Segoe UI,Arial" transform="rotate(90 {dx + 10:.1f} {y0 + Q / 2:.1f})">{pw:.2f} mm</text>')
-    # GAP dimension (neeche, pehle X-gap ke neeche — image jaisa)
-    if (gaps_x_s and gaps_x_s[0] > 0.05) and Q > 40:
-        gcen = x0 + bx + cw + (gaps_x_s[0] * scale) / 2
-        half = max(4.0, gaps_x_s[0] * scale / 2)
-        gy2 = y0 + Q + 11
-        s.append(f'<line x1="{gcen - half:.1f}" y1="{y0 + Q + 2:.1f}" x2="{gcen - half:.1f}" y2="{gy2 + 4:.1f}" stroke="{NAVY}" stroke-width="0.8"/>')
-        s.append(f'<line x1="{gcen + half:.1f}" y1="{y0 + Q + 2:.1f}" x2="{gcen + half:.1f}" y2="{gy2 + 4:.1f}" stroke="{NAVY}" stroke-width="0.8"/>')
-        s.append(f'<line x1="{gcen - half:.1f}" y1="{gy2:.1f}" x2="{gcen + half:.1f}" y2="{gy2:.1f}" stroke="{NAVY}" stroke-width="1"/>')
-        s.append(f'<path d="M {gcen - half:.1f} {gy2:.1f} l 4 -2.6 v 5.2 z" fill="{NAVY}"/><path d="M {gcen + half:.1f} {gy2:.1f} l -4 -2.6 v 5.2 z" fill="{NAVY}"/>')
-        s.append(f'<text x="{gcen:.1f}" y="{gy2 + 14:.1f}" text-anchor="middle" font-size="9.5" font-weight="700" fill="{NAVY}" font-family="Segoe UI,Arial">{gaps_x_s[0]:.2f} mm</text>')
     # Info strip (5 boxes — teal border, image format)
     sy, sh_ = TOP + AVH + BOTG, STR
     sx, sw_ = 8, W - 16
@@ -2641,11 +2669,13 @@ def products():
     _sql += " ORDER BY m.id DESC"
     rows = db.query(_sql, _prm)
     total_models = db.query("SELECT COUNT(*) AS n FROM product_models", one=True)["n"]
-    # v4.09: 2352+ models ek page par = 7-10MB HTML (Vercel response limit ~4.5MB par page 502).
-    # Page pehle 400 dikhata hai (naye pehle — ORDER BY id DESC), baaki search/filter/download se.
-    _sheet_cap = 400
+    # v4.16: SHEET par SAB models (2358+) — 400-cap hata. Asli problem page-size thi
+    # (v4.09 me 3068 B/row -> 2358 rows = 9MB -> Vercel 502), wo slim-rows (CSS classes,
+    # inline-style repeat band) se hal ki: ab ~0.9 KB/row -> @2358 page ~3.8MB = safe.
+    # Upar wala Saved-Models table apne 400-cap par hi rahega (SHEET hi main list hai).
     models_total = len(rows)
-    models_shown = rows[:_sheet_cap]
+    models_top = rows[:400]
+    models = rows
     party_opts = [r["party_name"] for r in
                   db.query("SELECT DISTINCT party_name FROM product_models WHERE IFNULL(party_name,'')!='' ORDER BY party_name")]
     # v3.18 HSN sweep — koi bhi naya model (apply-order/import) bina HSN na rahe (PCB default 85340000)
@@ -2699,8 +2729,8 @@ def products():
     _ib = request.args.get("import_batch")
     if _ib and not _import_preview(_ib):
         flash("\u26a0\ufe0f Import preview nahi mila (session expire/dua server par chala gaya) \u2014 file dobara upload karo.", "error")
-    return render_template("products.html", active="products", models=models_shown, pdf_counts=pdf_counts,
-                           models_total=models_total, sheet_cap=_sheet_cap,
+    return render_template("products.html", active="products", models=models, models_top=models_top, pdf_counts=pdf_counts,
+                           models_total=models_total,
                            bom_map=bom_map, history=history,
                            show_add=request.args.get("add"),
                            edit_model=edit_model,

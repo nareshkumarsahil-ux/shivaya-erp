@@ -109,46 +109,49 @@
     </span>
   </div>
   <div class="panel-body" style="max-height:60vh;overflow:auto">
+    <style>
+    /* v4.16: slim-rows — style ek baar (2358+ rows = chhota page, Vercel-safe) */
+    #sheet97 th{border:1px solid #cbd5e1;padding:5px 6px}
+    #sheet97 td{border:1px solid #e2e8f0;padding:4px 6px}
+    #sheet97 td.sn{text-align:center;color:#94a3b8}
+    #sheet97 td.sc{cursor:cell;min-width:44px}
+    #sheet97 td.fs{text-align:center;font-weight:800;color:#cbd5e1}
+    #sheet97 td.fs.z{color:#15803d}
+    #sheet97 td.del{text-align:center}
+    #sheet97 button.mdel97{background:#fef2f2;color:#b91c1c;padding:2px 7px}
+    </style>
     <table class="stable" id="sheet97" style="border-collapse:collapse;width:100%;font-size:11.5px;background:#fff">
       <thead>
         <tr style="background:#eef2ff;position:sticky;top:0;z-index:2">
-          <th style="border:1px solid #cbd5e1;padding:5px 6px">S.N</th>
-          <th style="border:1px solid #cbd5e1;padding:5px 6px">PARTY</th>
-          <th style="border:1px solid #cbd5e1;padding:5px 6px">MODEL NO.</th>
-          <th style="border:1px solid #cbd5e1;padding:5px 6px">PARTY CODE</th>
-          <th style="border:1px solid #cbd5e1;padding:5px 6px">PCB SIZE</th>
-          <th style="border:1px solid #cbd5e1;padding:5px 6px">PANEL L</th>
-          <th style="border:1px solid #cbd5e1;padding:5px 6px">PANEL W</th>
-          <th style="border:1px solid #cbd5e1;padding:5px 6px">PCS/PANEL</th>
-          <th style="border:1px solid #cbd5e1;padding:5px 6px">CUT L</th>
-          <th style="border:1px solid #cbd5e1;padding:5px 6px">X#</th>
-          <th style="border:1px solid #cbd5e1;padding:5px 6px">CUT W</th>
-          <th style="border:1px solid #cbd5e1;padding:5px 6px">Y#</th>
-          <th style="border:1px solid #cbd5e1;padding:5px 6px">PANELS/SHEET</th>
-          <th style="border:1px solid #cbd5e1;padding:5px 6px">SHEETS</th>
-          <th style="border:1px solid #cbd5e1;padding:5px 6px">CNC/TOOL</th>
-          <th style="border:1px solid #cbd5e1;padding:5px 6px">PER SQ INCH</th>
-          <th style="border:1px solid #cbd5e1;padding:5px 6px">MATERIAL</th>
-          <th style="border:1px solid #cbd5e1;padding:5px 6px">RATE ₹</th>
-          <th style="border:1px solid #cbd5e1;padding:5px 6px">FIN. STOCK</th>
-          <th style="border:1px solid #cbd5e1;padding:5px 6px">DEL</th>
+          <th>S.N</th>
+          <th>PARTY</th>
+          <th>MODEL NO.</th>
+          <th>PARTY CODE</th>
+          <th>PCB SIZE</th>
+          <th>PANEL L</th>
+          <th>PANEL W</th>
+          <th>PCS/PANEL</th>
+          <th>CUT L</th>
+          <th>X#</th>
+          <th>CUT W</th>
+          <th>Y#</th>
+          <th>PANELS/SHEET</th>
+          <th>SHEETS</th>
+          <th>CNC/TOOL</th>
+          <th>PER SQ INCH</th>
+          <th>MATERIAL</th>
+          <th>RATE ₹</th>
+          <th>FIN. STOCK</th>
+          <th>DEL</th>
         </tr>
       </thead>
       <tbody>
-        {% for m in models %}
-        <tr data-id="{{ m.id }}">
-          <td style="border:1px solid #e2e8f0;padding:4px 6px;text-align:center;color:#94a3b8">{{ loop.index }}</td>
-          {% for f, val in [('party_name', m.party_name or m.party or ''), ('model_code', m.model_code or ''), ('party_code', m.party_code or ''),
+        {% for m in models %}<tr data-id="{{ m.id }}"><td class="sn">{{ loop.index }}</td>{% for f, val in [('party_name', m.party_name or m.party or ''), ('model_code', m.model_code or ''), ('party_code', m.party_code or ''),
                             ('pcb_len', m.pcb_len or ''), ('pcb_w', m.pcb_w or ''),
                             ('panel_len', m.panel_len or ''), ('panel_w', m.panel_w or ''), ('pcs_panel', m.pcs_panel or ''),
                             ('cutting_len', m.cutting_len or ''), ('x_qty', m.x_qty or ''), ('cutting_w', m.cutting_w or ''), ('y_qty', m.y_qty or ''),
                             ('panels_sheet', m.panels_sheet or ''), ('sheets', m.sheets or ''), ('cnc_tool', m.cnc_tool or ''),
-                            ('per_sq_inch', m.per_sq_inch or ''), ('sheet_thickness', m.sheet_thickness or ''), ('pcb_price', m.pcb_price or '')] %}
-          <td class="sc" data-f="{{ f }}" style="border:1px solid #e2e8f0;padding:4px 6px;cursor:cell;min-width:44px">{{ '' if val is none else val }}</td>
-          {% endfor %}
-          <td style="border:1px solid #e2e8f0;padding:4px 6px;text-align:center;font-weight:800;color:{{ '#15803d' if (m.fg_stock or 0) > 0 else '#cbd5e1' }}">{{ m.fg_stock or 0 }}</td>
-          <td style="border:1px solid #e2e8f0;padding:4px 6px;text-align:center"><button type="button" class="btn btn-outline btn-xs mdel97" onclick="delModel({{ m.id }}, this)" title="Is model ko SHEET se hatao" style="background:#fef2f2;color:#b91c1c;padding:2px 7px">&#128465;</button></td>
-        </tr>
+                            ('per_sq_inch', m.per_sq_inch or ''), ('sheet_thickness', m.sheet_thickness or ''), ('pcb_price', m.pcb_price or '')] %}<td class="sc" data-f="{{ f }}">{{ '' if val is none else val }}</td>{% endfor %}<td class="fs{{ ' z' if (m.fg_stock or 0) > 0 else '' }}">{{ m.fg_stock or 0 }}</td><td class="del"><button type="button" class="mdel97" data-id="{{ m.id }}" title="Is model ko SHEET se hatao">&#128465;</button></td></tr>
         {% endfor %}
         {% if not models %}
         <tr><td colspan="20" style="border:1px solid #e2e8f0;padding:12px;text-align:center;color:#94a3b8">Abhi koi model nahi — Cut List Optimizer se save karo ya Add Manually.</td></tr>
@@ -197,6 +200,11 @@
 })();
 
 /* v4.03: SHEET row delete — 2-click (galti se na ho; PDF/BOM/production me ho to USE ME block) */
+/* v4.16: delete delegation — ek listener, 2358+ rows par inline onclick nahi */
+document.getElementById('sheet97').addEventListener('click', function(e){
+  var b = e.target && e.target.closest ? e.target.closest('button.mdel97') : null;
+  if (b) delModel(+b.getAttribute('data-id'), b);
+});
 var mdelArm = 0;
 function delModel(pid, el){
   if (mdelArm !== pid) {
@@ -434,7 +442,7 @@ function pmThickRate(){
 </div>
 
 <div class="panel">
-  <div class="panel-head"><h3>🗂️ Saved Models ({{ models|length }}{% if total_models and total_models != models|length %} of {{ total_models }}{% endif %})</h3>
+  <div class="panel-head"><h3>🗂️ Saved Models ({{ models_top|length }}{% if total_models and total_models != models_top|length %} of {{ total_models }}{% endif %})</h3>
     <div style="position:relative" id="colSetWrap">
       <button type="button" class="btn btn-outline btn-sm" onclick="var d=document.getElementById('colSetDrop');d.style.display=d.style.display==='none'?'block':'none'">⚙ Columns</button>
       <div id="colSetDrop" style="display:none;position:absolute;right:0;top:100%;z-index:999;background:#fff;border:1px solid var(--border);border-radius:10px;box-shadow:0 12px 34px rgba(0,0,0,.2);padding:10px 12px;width:230px;max-height:340px;overflow-y:auto">
@@ -484,7 +492,7 @@ function pmThickRate(){
         <tr><th>Model (Code + Type)</th><th>HSN/SAC</th><th>PCB &amp; PANEL</th><th class="t-right">FG Stock</th><th class="t-right">Current / Last Price</th><th>Sheet Thickness</th><th>Created</th><th>PDF</th><th></th></tr>
       </thead>
       <tbody>
-        {% for m in models %}
+        {% for m in models_top %}
         <tr>
           <td>
             {% set nt41 = (m.note or '')|upper %}

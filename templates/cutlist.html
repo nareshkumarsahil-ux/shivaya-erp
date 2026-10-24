@@ -1050,9 +1050,9 @@ function svgPanel(pcbL, pcbW, px, py, gapXs, gapYs, bl, br, bt, bb, pL, pW, pcsP
   if ((!effW || effW <= 0) && py > 0) effW = (pW - bt - bb - _sumArr(pgYs || gapYs)) / py;
   if (effL > 0 && effL < 200) effL = Math.round(effL * 100) / 100;
   if (effW > 0 && effW < 200) effW = Math.round(effW * 100) / 100;
-  var scale = Math.min((W - 96) / pL, AVH / pW);
+  var scale = Math.min((W - 96) / pL, (AVH - 34) / pW);
   var P = pL * scale, Q = pW * scale;
-  var x0 = (W - 34 - P) / 2, y0 = TOP + 18 + (AVH - Q) / 2;
+  var x0 = (W - 34 - P) / 2, y0 = TOP + 34 + (AVH - 34 - Q) / 2;
   var cw = (effL > 0 ? effL : 0) * scale, ch = (effW > 0 ? effW : 0) * scale;
   var bx = bl * scale, by = bt * scale;
   var f2 = function(n){ return (Math.round(n * 100) / 100).toFixed(2); };
@@ -1063,6 +1063,12 @@ function svgPanel(pcbL, pcbW, px, py, gapXs, gapYs, bl, br, bt, bb, pL, pW, pcsP
   s += '<line x1="26" y1="33" x2="' + (W - 26) + '" y2="33" stroke="' + TEAL + '" stroke-width="2"/>';
   /* Panel outline */
   s += '<rect x="' + x0.toFixed(1) + '" y="' + y0.toFixed(1) + '" width="' + P.toFixed(1) + '" height="' + Q.toFixed(1) + '" fill="#ffffff" stroke="' + NAVY + '" stroke-width="2.4" rx="5"/>';
+  /* v4.15: hatch border strips (L/R/T/B) — image jaisa */
+  s += '<defs><pattern id="hatchPL" patternUnits="userSpaceOnUse" width="4" height="4" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="4" stroke="#9db6c9" stroke-width="1"/></pattern></defs>';
+  if (bl > 0.05) s += '<rect x="' + x0.toFixed(1) + '" y="' + y0.toFixed(1) + '" width="' + (bl * scale).toFixed(1) + '" height="' + Q.toFixed(1) + '" fill="url(#hatchPL)"/>';
+  if (br > 0.05) s += '<rect x="' + (x0 + P - br * scale).toFixed(1) + '" y="' + y0.toFixed(1) + '" width="' + (br * scale).toFixed(1) + '" height="' + Q.toFixed(1) + '" fill="url(#hatchPL)"/>';
+  if (bt > 0.05) s += '<rect x="' + x0.toFixed(1) + '" y="' + y0.toFixed(1) + '" width="' + P.toFixed(1) + '" height="' + (bt * scale).toFixed(1) + '" fill="url(#hatchPL)"/>';
+  if (bb > 0.05) s += '<rect x="' + x0.toFixed(1) + '" y="' + (y0 + Q - bb * scale).toFixed(1) + '" width="' + P.toFixed(1) + '" height="' + (bb * scale).toFixed(1) + '" fill="url(#hatchPL)"/>';
   /* PCB cells (teal + label) */
   if (cw > 2.4 && ch > 2.4 && effL > 0 && effW > 0) {
     var ox = bx;
@@ -1072,34 +1078,50 @@ function svgPanel(pcbL, pcbW, px, py, gapXs, gapYs, bl, br, bt, bb, pL, pW, pcsP
         s += (shape === 'round')
           ? '<ellipse cx="' + (x0 + ox + cw / 2).toFixed(1) + '" cy="' + (y0 + oy + ch / 2).toFixed(1) + '" rx="' + (cw / 2).toFixed(1) + '" ry="' + (ch / 2).toFixed(1) + '" fill="' + PCBF + '" stroke="' + NAVY + '" stroke-width="1"/>'
           : '<rect x="' + (x0 + ox).toFixed(1) + '" y="' + (y0 + oy).toFixed(1) + '" width="' + cw.toFixed(1) + '" height="' + ch.toFixed(1) + '" fill="' + PCBF + '" stroke="' + NAVY + '" stroke-width="1"/>';
-        if (cw >= 26 && ch >= 14)
+        if (cw >= 34 && ch >= 26) {
+          /* v4.15: har cell ke DIMENSION ARROWS — hara L (upar), laal W (left rotated) */
+          var ax1 = x0 + ox + 2.5, ax2 = x0 + ox + cw - 2.5, ay = y0 + oy + 7;
+          s += '<line x1="' + ax1.toFixed(1) + '" y1="' + ay.toFixed(1) + '" x2="' + ax2.toFixed(1) + '" y2="' + ay.toFixed(1) + '" stroke="#0a8f4c" stroke-width="0.9"/>';
+          s += '<path d="M ' + ax1.toFixed(1) + ' ' + ay.toFixed(1) + ' l 3.4 -1.9 v 3.8 z" fill="#0a8f4c"/><path d="M ' + ax2.toFixed(1) + ' ' + ay.toFixed(1) + ' l -3.4 -1.9 v 3.8 z" fill="#0a8f4c"/>';
+          s += '<text x="' + ((ax1 + ax2) / 2).toFixed(1) + '" y="' + (ay - 2).toFixed(1) + '" text-anchor="middle" font-size="7.5" font-weight="700" fill="#0a8f4c" font-family="Segoe UI,Arial">' + (Math.round(effL * 100) / 100) + ' mm</text>';
+          var rx_ = x0 + ox + 5.5, ry1 = y0 + oy + 11, ry2 = y0 + oy + ch - 1.5;
+          s += '<line x1="' + rx_.toFixed(1) + '" y1="' + ry1.toFixed(1) + '" x2="' + rx_.toFixed(1) + '" y2="' + ry2.toFixed(1) + '" stroke="#d92b2b" stroke-width="0.9"/>';
+          s += '<path d="M ' + rx_.toFixed(1) + ' ' + ry1.toFixed(1) + ' l -1.9 3.4 h 3.8 z" fill="#d92b2b"/><path d="M ' + rx_.toFixed(1) + ' ' + ry2.toFixed(1) + ' l -1.9 -3.4 h 3.8 z" fill="#d92b2b"/>';
+          s += '<text x="' + (rx_ - 2.5).toFixed(1) + '" y="' + ((ry1 + ry2) / 2).toFixed(1) + '" text-anchor="middle" font-size="7.5" font-weight="700" fill="#d92b2b" font-family="Segoe UI,Arial" transform="rotate(-90 ' + (rx_ - 2.5).toFixed(1) + ' ' + ((ry1 + ry2) / 2).toFixed(1) + ')">' + (Math.round(effW * 100) / 100) + ' mm</text>';
+        } else if (cw >= 26 && ch >= 14) {
           s += '<text x="' + (x0 + ox + cw / 2).toFixed(1) + '" y="' + (y0 + oy + ch / 2 + 3).toFixed(1) + '" text-anchor="middle" font-size="9.5" font-weight="700" fill="' + NAVY + '" font-family="Segoe UI,Arial">' + (Math.round(effL * 100) / 100) + ' \u00d7 ' + (Math.round(effW * 100) / 100) + '</text>';
+        }
         oy += ch + ((j < gapYs.length ? gapYs[j] : 0) * scale);
       }
       if (i < px - 1) ox += cw + ((i < gapXs.length ? gapXs[i] : 0) * scale);
     }
   }
-  /* TOP dimension */
-  var dy = y0 - 13;
+  /* TOP dimension — v4.15: 2-tier (main + chhote border/gap) */
+  var dy = y0 - 22;
   s += '<line x1="' + x0.toFixed(1) + '" y1="' + dy.toFixed(1) + '" x2="' + (x0 + P).toFixed(1) + '" y2="' + dy.toFixed(1) + '" stroke="' + NAVY + '" stroke-width="1.2"/>';
   s += '<path d="M ' + x0.toFixed(1) + ' ' + dy.toFixed(1) + ' l 7 -3.2 v 6.4 z" fill="' + NAVY + '"/><path d="M ' + (x0 + P).toFixed(1) + ' ' + dy.toFixed(1) + ' l -7 -3.2 v 6.4 z" fill="' + NAVY + '"/>';
-  s += '<line x1="' + x0.toFixed(1) + '" y1="' + (y0 - 2).toFixed(1) + '" x2="' + x0.toFixed(1) + '" y2="' + (dy - 5).toFixed(1) + '" stroke="' + NAVY + '" stroke-width="0.8"/>';
-  s += '<line x1="' + (x0 + P).toFixed(1) + '" y1="' + (y0 - 2).toFixed(1) + '" x2="' + (x0 + P).toFixed(1) + '" y2="' + (dy - 5).toFixed(1) + '" stroke="' + NAVY + '" stroke-width="0.8"/>';
+  s += '<line x1="' + x0.toFixed(1) + '" y1="' + (y0 - 2).toFixed(1) + '" x2="' + x0.toFixed(1) + '" y2="' + (dy - 4).toFixed(1) + '" stroke="' + NAVY + '" stroke-width="0.8"/>';
+  s += '<line x1="' + (x0 + P).toFixed(1) + '" y1="' + (y0 - 2).toFixed(1) + '" x2="' + (x0 + P).toFixed(1) + '" y2="' + (dy - 4).toFixed(1) + '" stroke="' + NAVY + '" stroke-width="0.8"/>';
   s += '<text x="' + (x0 + P / 2).toFixed(1) + '" y="' + (dy - 5).toFixed(1) + '" text-anchor="middle" font-size="11.5" font-weight="700" fill="' + NAVY + '" font-family="Segoe UI,Arial">' + f2(pL) + ' mm</text>';
+  function _miniDim(m1, m2, mlabel) {
+    var my = y0 - 7;
+    s += '<line x1="' + m1.toFixed(1) + '" y1="' + my.toFixed(1) + '" x2="' + m2.toFixed(1) + '" y2="' + my.toFixed(1) + '" stroke="' + NAVY + '" stroke-width="0.8"/>';
+    s += '<path d="M ' + m1.toFixed(1) + ' ' + my.toFixed(1) + ' l 3.4 -1.7 v 3.4 z" fill="' + NAVY + '"/><path d="M ' + m2.toFixed(1) + ' ' + my.toFixed(1) + ' l -3.4 -1.7 v 3.4 z" fill="' + NAVY + '"/>';
+    s += '<line x1="' + m1.toFixed(1) + '" y1="' + (my - 2).toFixed(1) + '" x2="' + m1.toFixed(1) + '" y2="' + (y0 - 1).toFixed(1) + '" stroke="' + NAVY + '" stroke-width="0.6"/>';
+    s += '<line x1="' + m2.toFixed(1) + '" y1="' + (my - 2).toFixed(1) + '" x2="' + m2.toFixed(1) + '" y2="' + (y0 - 1).toFixed(1) + '" stroke="' + NAVY + '" stroke-width="0.6"/>';
+    s += '<text x="' + ((m1 + m2) / 2).toFixed(1) + '" y="' + (my - 3).toFixed(1) + '" text-anchor="middle" font-size="8" font-weight="700" fill="' + NAVY + '" font-family="Segoe UI,Arial">' + mlabel + '</text>';
+  }
+  if (bl > 0.05) _miniDim(x0, x0 + bl * scale, String(Math.round(bl * 100) / 100) + ' mm');
+  if (gapXs.length && gapXs[0] > 0.05 && cw > 2) {
+    var _gc = x0 + bl * scale + cw + (gapXs[0] * scale) / 2, _hf = Math.max(4, gapXs[0] * scale / 2);
+    _miniDim(_gc - _hf, _gc + _hf, f2(gapXs[0]) + ' mm');
+  }
+  if (br > 0.05) _miniDim(x0 + P - br * scale, x0 + P, String(Math.round(br * 100) / 100) + ' mm');
   /* RIGHT dimension */
   var dx = x0 + P + 13;
   s += '<line x1="' + dx.toFixed(1) + '" y1="' + y0.toFixed(1) + '" x2="' + dx.toFixed(1) + '" y2="' + (y0 + Q).toFixed(1) + '" stroke="' + NAVY + '" stroke-width="1.2"/>';
   s += '<path d="M ' + dx.toFixed(1) + ' ' + y0.toFixed(1) + ' l -3.2 7 h 6.4 z" fill="' + NAVY + '"/><path d="M ' + dx.toFixed(1) + ' ' + (y0 + Q).toFixed(1) + ' l -3.2 -7 h 6.4 z" fill="' + NAVY + '"/>';
   s += '<text x="' + (dx + 10).toFixed(1) + '" y="' + (y0 + Q / 2).toFixed(1) + '" text-anchor="middle" font-size="11.5" font-weight="700" fill="' + NAVY + '" font-family="Segoe UI,Arial" transform="rotate(90 ' + (dx + 10).toFixed(1) + ' ' + (y0 + Q / 2).toFixed(1) + ')">' + f2(pW) + ' mm</text>';
-  /* GAP dimension (pehla X-gap ke neeche) */
-  if (gapXs.length && gapXs[0] > 0.05 && Q > 40) {
-    var gcen = x0 + bx + cw + (gapXs[0] * scale) / 2, half = Math.max(4, gapXs[0] * scale / 2), gy2 = y0 + Q + 11;
-    s += '<line x1="' + (gcen - half).toFixed(1) + '" y1="' + (y0 + Q + 2).toFixed(1) + '" x2="' + (gcen - half).toFixed(1) + '" y2="' + (gy2 + 4).toFixed(1) + '" stroke="' + NAVY + '" stroke-width="0.8"/>';
-    s += '<line x1="' + (gcen + half).toFixed(1) + '" y1="' + (y0 + Q + 2).toFixed(1) + '" x2="' + (gcen + half).toFixed(1) + '" y2="' + (gy2 + 4).toFixed(1) + '" stroke="' + NAVY + '" stroke-width="0.8"/>';
-    s += '<line x1="' + (gcen - half).toFixed(1) + '" y1="' + gy2.toFixed(1) + '" x2="' + (gcen + half).toFixed(1) + '" y2="' + gy2.toFixed(1) + '" stroke="' + NAVY + '" stroke-width="1"/>';
-    s += '<path d="M ' + (gcen - half).toFixed(1) + ' ' + gy2.toFixed(1) + ' l 4 -2.6 v 5.2 z" fill="' + NAVY + '"/><path d="M ' + (gcen + half).toFixed(1) + ' ' + gy2.toFixed(1) + ' l -4 -2.6 v 5.2 z" fill="' + NAVY + '"/>';
-    s += '<text x="' + gcen.toFixed(1) + '" y="' + (gy2 + 14).toFixed(1) + '" text-anchor="middle" font-size="9.5" font-weight="700" fill="' + NAVY + '" font-family="Segoe UI,Arial">' + f2(gapXs[0]) + ' mm</text>';
-  }
   /* Info strip — 5 boxes */
   var sy = TOP + AVH + BOTG, sx = 8, sw_ = W - 16;
   s += '<rect x="' + sx + '" y="' + sy + '" width="' + sw_ + '" height="' + STR + '" fill="#ffffff" stroke="' + TEAL + '" stroke-width="1.5" rx="9"/>';
