@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+{% block title %}{{ emp.name }} — Monthly Report{% endblock %}
+{% block page_title %}Employee Report{% endblock %}
+{% block content %}
+<style>
+.rep-head{display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
+.rep-head h2{margin:0;font-size:19px}
+.monthnav{display:flex;align-items:center;gap:10px;margin-left:auto}
+.monthnav .mname{font-weight:800;min-width:130px;text-align:center}
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:14px}
+.stat-card{background:var(--bg2);border:1px solid var(--border);border-radius:11px;padding:11px 13px}
+.stat-card .n{font-size:20px;font-weight:800}
+.stat-card .l{font-size:11px;color:var(--muted);font-weight:600}
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:5px}
+.cal .wd{text-align:center;font-size:11px;color:var(--muted);font-weight:700;padding:4px 0}
+.cal .cell{border:1px solid var(--border);border-radius:8px;min-height:52px;padding:4px 6px;font-size:11.5px;background:var(--bg);display:flex;flex-direction:column;gap:1px}
+.cal .cell .d{font-weight:700}
+.cal .cell .st{font-size:10px;font-weight:800}
+.cal .cell.st-p{background:#dcfce7;border-color:#86efac}.cal .cell.st-p .st{color:#15803d}
+.cal .cell.st-a{background:#fee2e2;border-color:#fca5a5}.cal .cell.st-a .st{color:#b91c1c}
+.cal .cell.st-l{background:#fef3c7;border-color:#fcd34d}.cal .cell.st-l .st{color:#b45309}
+.cal .cell.st-h{background:#cffafe;border-color:#67e8f9}.cal .cell.st-h .st{color:#0e7490}
+.cal .cell.st-t{background:#fef3c7;border-color:#fbbf24}.cal .cell.st-t .st{color:#d97706}
+.cal .cell.st-x{background:var(--bg)}
+.cal .cell.st-f{background:#f9fafb;opacity:.55}
+.cal .cell.today{outline:2px solid #1d4ed8}
+.dist-row{display:flex;align-items:center;gap:10px;margin-bottom:7px;font-size:12.5px}
+.dist-row .lbl{width:85px;font-weight:700}
+.dist-row .bar{flex:1;height:16px;background:var(--bg);border-radius:8px;overflow:hidden;border:1px solid var(--border)}
+.dist-row .fill{height:100%;border-radius:8px}
+.dist-row .cnt{width:36px;text-align:right;font-weight:800;font-family:ui-monospace,monospace}
+.legend{display:flex;gap:12px;flex-wrap:wrap;font-size:11.5px;color:var(--muted);margin-top:8px}
+.legend .sw{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:4px;vertical-align:-1px}
+@media print{aside.sidebar,.toolbar,.no-print,form{display:none!important}body{background:#fff}.panel{box-shadow:none;border:1px solid #ddd}}
+</style>
+
+<div class="rep-head">
+  <div>
+    <h2>{{ emp.name }} <span class="muted small">{{ emp.emp_code }} · {{ emp.designation or '—' }}</span></h2>
+  </div>
+  <div class="monthnav no-print">
+    <a class="btn btn-outline btn-sm" href="/employees/{{ emp.id }}/report?month={{ prev_m }}">‹</a>
+    <span class="mname">{{ m.month_label }}</span>
+    <a class="btn btn-outline btn-sm" href="/employees/{{ emp.id }}/report?month={{ next_m }}">›</a>
+    <a class="btn btn-outline btn-sm" href="/employees/{{ emp.id }}">👤 Profile</a>
+    <button class="btn btn-outline btn-sm" onclick="window.print()">🖨 Print</button>
+  </div>
+</div>
+
+<div class="stat-grid">
+  <div class="stat-card"><div class="n" style="color:#15803d">{{ m.counts.present }}</div><div class="l">✅ Present</div></div>
+  <div class="stat-card"><div class="n" style="color:#b91c1c">{{ m.counts.absent }}</div><div class="l">❌ Absent</div></div>
+  <div class="stat-card"><div class="n" style="color:#b45309">{{ m.counts.leave }}</div><div class="l">🌴 Leave</div></div>
+  <div class="stat-card"><div class="n" style="color:#0e7490">{{ m.counts.halfday }}</div><div class="l">🕐 Half Day</div></div>
+  <div class="stat-card"><div class="n" style="color:#d97706">{{ m.counts.late }}</div><div class="l">⏰ Late</div></div>
+  <div class="stat-card"><div class="n">{{ m.leave_balance }}</div><div class="l">🌴 Leave Bal.</div></div>
+  <div class="stat-card"><div class="n" style="color:#7c3aed">₹{{ m.advance|inr0 }}</div><div class="l">🏦 Advance</div></div>
+  <div class="stat-card"><div class="n" style="color:#0e7490">₹{{ m.earned|inr0 }}</div><div class="l">💰 Earned Salary</div></div>
+  <div class="stat-card"><div class="n" style="color:{{'#b91c1c' if m.net < 0 else '#15803d'}}">₹{{ m.net|inr0 }}</div><div class="l">💸 Net Payable</div></div>
+</div>
+
+<div class="panel" style="margin-bottom:14px">
+  <div class="panel-head"><h3>📅 Monthly Attendance — {{ m.month_label }}</h3></div>
+  <div class="panel-body">
+    <div class="cal">
+      {% for w in ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'] %}<div class="wd">{{ w }}</div>{% endfor %}
+      {% for c in m.cal %}
+        {% if c.blank %}<div></div>
+        {% else %}
+        <div class="cell {{ c.cls }} {{'today' if c.is_today}}">
+          <span class="d">{{ c.day }}</span>
+          {% if c.label %}<span class="st">{{ c.label }}</span>{% endif %}
+        </div>
+        {% endif %}
+      {% endfor %}
+    </div>
+    <div class="legend">
+      <span><span class="sw" style="background:#86efac"></span>Present (P)</span>
+      <span><span class="sw" style="background:#fca5a5"></span>Absent (A)</span>
+      <span><span class="sw" style="background:#fcd34d"></span>Leave (L)</span>
+      <span><span class="sw" style="background:#67e8f9"></span>Half Day (HD)</span>
+      <span><span class="sw" style="background:#fbbf24"></span>Late (T)</span>
+      <span><span class="sw" style="background:#e5e7eb"></span>No record — defaults to Present</span>
+    </div>
+  </div>
+</div>
+
+<div class="panel" style="margin-bottom:14px">
+  <div class="panel-head"><h3>📈 Salary Progress — {{ m.month_label }}</h3></div>
+  <div class="panel-body">
+    <svg viewBox="0 0 600 260" style="width:100%;height:auto">
+      <line x1="50" y1="{{ m.target_y }}" x2="550" y2="{{ m.target_y }}" stroke="#9ca3af" stroke-width="1.5" stroke-dasharray="6 5"/>
+      <text x="8" y="{{ m.target_y }}" font-size="11" fill="#6b7280">₹{{ m.sal|inr0 }}</text>
+      <polyline points="{{ m.chart_points }}" fill="none" stroke="#0e7490" stroke-width="2.5" stroke-linejoin="round"/>
+      <line x1="50" y1="220" x2="550" y2="220" stroke="#d1d5db" stroke-width="1"/>
+      <text x="8" y="224" font-size="11" fill="#6b7280">₹0</text>
+      <text x="30" y="248" font-size="11" fill="#6b7280">Day 1</text>
+      <text x="520" y="248" font-size="11" fill="#6b7280">Day {{ m.dim }}</text>
+      <text x="240" y="16" font-size="11" fill="#0e7490" font-weight="700">─ Actual earned (attendance se)</text>
+      <text x="240" y="32" font-size="11" fill="#9ca3af" font-weight="700">- - Full salary target</text>
+    </svg>
+    <p class="muted small" style="margin-top:6px">💡 Har din ki earning: Present/Late = ₹{{ m.per_day|inr0 }}, Half Day = ₹{{ (m.per_day/2)|inr0 }}, Absent/Leave = ₹0{% if m.no_records %} — koi record nahi, isliye pura mahina Present mana gaya hai{% endif %}.</p>
+  </div>
+</div>
+
+<div class="panel" style="margin-bottom:14px">
+  <div class="panel-head"><h3>📊 Attendance Distribution</h3></div>
+  <div class="panel-body">
+    {% set tot = m.dim %}
+    <div class="dist-row"><span class="lbl" style="color:#15803d">Present</span><div class="bar"><div class="fill" style="width:{{ (m.counts.present/tot*100)|round(1) }}%;background:#16a34a"></div></div><span class="cnt">{{ m.counts.present }}</span></div>
+    <div class="dist-row"><span class="lbl" style="color:#b91c1c">Absent</span><div class="bar"><div class="fill" style="width:{{ (m.counts.absent/tot*100)|round(1) }}%;background:#dc2626"></div></div><span class="cnt">{{ m.counts.absent }}</span></div>
+    <div class="dist-row"><span class="lbl" style="color:#b45309">Leave</span><div class="bar"><div class="fill" style="width:{{ (m.counts.leave/tot*100)|round(1) }}%;background:#d97706"></div></div><span class="cnt">{{ m.counts.leave }}</span></div>
+    <div class="dist-row"><span class="lbl" style="color:#0e7490">Half Day</span><div class="bar"><div class="fill" style="width:{{ (m.counts.halfday/tot*100)|round(1) }}%;background:#0891b2"></div></div><span class="cnt">{{ m.counts.halfday }}</span></div>
+    <div class="dist-row"><span class="lbl" style="color:#d97706">Late</span><div class="bar"><div class="fill" style="width:{{ (m.counts.late/tot*100)|round(1) }}%;background:#f59e0b"></div></div><span class="cnt">{{ m.counts.late }}</span></div>
+  </div>
+</div>
+
+<div class="panel">
+  <div class="panel-head"><h3>💰 Salary Summary — {{ m.month_label }}</h3>
+    {% if m.paid %}<span class="badge b-done">PAID ✓</span>{% else %}<span class="badge b-amber">NOT PAID</span>{% endif %}
+  </div>
+  <div class="panel-body">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;font-size:13px">
+      <div>Monthly Salary<br><b>₹{{ m.sal|inr0 }}</b></div>
+      <div>Per Day ({{ m.dim }} days)<br><b>₹{{ m.per_day|inr0 }}</b></div>
+      <div>Deduction (absent + half)<br><b style="color:#b91c1c">−₹{{ m.ded|inr0 }}</b></div>
+      <div>Earned<br><b style="color:#0e7490">₹{{ m.earned|inr0 }}</b></div>
+      <div>Advance liya<br><b style="color:#7c3aed">₹{{ m.advance|inr0 }}</b></div>
+      <div>Net Payable<br><b style="color:{{'#b91c1c' if m.net < 0 else '#15803d'}}">₹{{ m.net|inr0 }}</b></div>
+    </div>
+    <p class="muted small" style="margin-top:10px">💡 Advance / Paid status <a href="/attendance">Attendance &amp; Salary page</a> se update hota hai.</p>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,1355 @@
+{% extends "base.html" %}
+{% block title %}Finished Products{% endblock %}
+{% block page_title %}Finished Products{% endblock %}
+{% block content %}
+<div class="toolbar">
+  <span class="muted small">💡 Cut List Optimizer se save kiye gaye layouts — yahan se load karke direct job order par apply kar sakte hain. Jab product <b>ready</b> ho jaye to <b>🏭 Produce</b> dabao — BOM ke hisaab se raw material inventory se cut hoga aur finished stock badhega.</span>
+  <div style="display:flex;gap:8px;flex-wrap:wrap">
+    <a class="btn btn-outline" href="/products?import=1#imp97" title="Excel/CSV upload karke saare models ek saath SHEET me add karo">📥 Import Excel/CSV</a>
+    <a class="btn btn-outline" href="/products?add=1">＋ Add Manually</a>
+    <a class="btn" href="/cutlist">＋ New in Cut List Optimizer</a>
+  </div>
+</div>
+
+{% if request.args.get('import') and not import_preview %}
+<div class="panel" id="imp97" style="border-left:4px solid #16a34a">
+  <div class="panel-head"><h3>📥 Import Finished Products — Google Sheet / Excel / CSV</h3><a class="btn btn-outline btn-sm" href="/products">✕ Close</a></div>
+  <div class="panel-body">
+    <form data-native="1" method="post" action="/products/import" enctype="multipart/form-data" style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;background:#f0fdf4;border:2px dashed #16a34a;border-radius:10px;padding:14px">
+      <input type="file" name="file" accept=".csv,.xlsx,.xls" required style="padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13.5px;background:#fff;max-width:330px">
+      <button class="btn" type="submit" id="impBtn97" style="background:#16a34a;font-size:14px">📤 Upload &amp; Preview</button>
+      <span class="muted small">Excel (.xlsx) / CSV / Google-Sheet download — <b>column naam aapke sheet jaise hi chalenge</b> (MODEL NO., PARTY, 4a, 4b, UPS...)</span>
+    </form>
+    <div class="muted small" style="margin-top:10px">
+      1️⃣ Upar <b>Choose File</b> → apni SIZE SHEET select karo → <b>📤 Upload &amp; Preview</b><br>
+      2️⃣ Preview me columns sahi lage to <b>✅ Confirm Import</b> — sab models neeche SHEET me aa jayenge<br>
+      ⬇️ Template CSV bhi mil sakta hai: <a href="/products/import/template">download</a> · Excel me pehli 1-2 row header ho sakti hai — system khud pakad lega
+    </div>
+  </div>
+</div>
+<script>
+(function(){
+  var f = document.querySelector('#imp97 form');
+  if (!f) return;
+  f.addEventListener('submit', function(){
+    var inp = f.querySelector('input[type=file]');
+    var b = document.getElementById('impBtn97');
+    if (!inp || !inp.files.length) { alert('Pehle Choose File par click karke apni Excel/CSV select karo.'); return; }
+    if (b) { b.disabled = true; b.textContent = '\u23f3 Padha ja raha hai... 2-5 second'; }
+  });
+})();
+</script>
+{% endif %}
+
+{% if import_preview %}
+<div class="panel" style="border-left:4px solid var(--amber)">
+  <div class="panel-head"><h3>👁️ IMPORT PREVIEW — Check karke Confirm karo</h3><a class="btn btn-outline btn-sm" href="/products">✕ Cancel</a></div>
+  <div class="panel-body">
+    <div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:12px">
+      <span class="badge b-green">{{ import_preview.total }} rows</span>
+      <span class="badge b-blue">{{ import_preview.new_count }} naye products</span>
+      <span class="badge b-amber">{{ import_preview.upd_count }} pehle se hain</span>
+      {% if import_preview.skip_count %}<span class="badge b-urgent">{{ import_preview.skip_count }} skip (name khaali)</span>{% endif %}
+    </div>
+
+    <div class="section-title" style="margin-top:0">COLUMN MATCHING (aapki sheet → ERP)</div>
+    <div style="overflow-x:auto;margin-bottom:14px">
+      <table style="min-width:520px;font-size:12.5px">
+        <thead><tr><th>Aapki sheet ka column</th><th>ERP field</th></tr></thead>
+        <tbody>
+          {% for h, desc, _ in import_preview.mapping %}
+          <tr>
+            <td><b>{{ h }}</b></td>
+            <td>{% if desc.1 %}<span style="color:#16a34a;font-weight:700">✅ {{ desc.0 }}</span>{% else %}<span style="color:#b91c1c">❌ ignored</span>{% endif %}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {% if import_preview.ignored %}
+    <div class="muted small" style="margin-bottom:14px">⚠️ Ignored columns: <b>{{ import_preview.ignored|join(', ') }}</b> — inka data import nahi hoga. Chahiye to bata dena.</div>
+    {% endif %}
+
+    <div class="section-title">DATA PREVIEW (pehli {{ import_preview.preview|length }} rows)</div>
+    <div style="overflow-x:auto;margin-bottom:14px">
+      <table style="min-width:640px;font-size:12px">
+        <thead><tr>
+          {% for pf in import_preview.preview_fields %}<th>{{ {'name':'Name','model_code':'Model No.','party':'Party','note':'CNC/Tool','pcb_len':'PCB L','pcb_w':'PCB W','pcbs_x':'PCBs X','pcbs_y':'PCBs Y','gap_x':'Gap X','gap_y':'Gap Y','border_l':'B L','border_r':'B R','border_t':'B T','border_b':'B B','gang_x':'Gang X','gang_y':'Gang Y','sheet_len':'Sheet L','sheet_w':'Sheet W','panel_len':'Panel L','panel_w':'Panel W','cutting_len':'Cut L','cutting_w':'Cut W','kerf_x':'Kerf X','kerf_y':'Kerf Y','cnc_margin_x':'CNC X','cnc_margin_y':'CNC Y','pcs_panel':'UP (PCS/Panel)','panels_sheet':'Panels/Sheet','sheets':'Sheets','x_qty':'X Qty','y_qty':'Y Qty','orientation':'Orient','party_code':'Party Code','cnc_tool':'CNC/Tool','sheet_thickness':'Material','per_sq_inch':'Per Sq Inch','pcb_price':'Price'}.get(pf, pf) }}</th>{% endfor %}
+        </tr></thead>
+        <tbody>
+          {% for row in import_preview.preview %}
+          <tr>{% for pf in import_preview.preview_fields %}
+            <td>{{ '%g'|format(row.get(pf)) if row.get(pf) is number else (row.get(pf) or '') }}</td>{% endfor %}
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <form data-native="1" method="post" action="/products/import/confirm" style="display:flex;gap:14px;align-items:center;flex-wrap:wrap">
+      <input type="hidden" name="batch" value="{{ import_preview.batch }}">
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
+        <input type="checkbox" name="update" value="1" checked style="width:17px;height:17px;accent-color:#16a34a">
+        <b>Same naam wale products update karo</b> (naye details se)
+      </label>
+      <button class="btn" type="submit" style="background:#16a34a" onclick="return confirm('Import confirm? {{ import_preview.new_count }} naye products add honge.')">✅ Confirm Import</button>
+    </form>
+  </div>
+</div>
+{% endif %}
+
+
+<!-- ================= v3.97: SHEET (apni Excel wali — sab models, inline edit) ================= -->
+<div class="panel" style="border-left:4px solid #4338ca">
+  <div class="panel-head">
+    <h3>📄 SHEET — Size Master (Excel jaisi · cell par click karo, value badlo, Enter = save)</h3>
+    <span class="muted small">Total <b style="color:#1d4ed8">{{ models_total }} models</b>{% if models_total > models|length %} — pehle {{ models|length }} dikhe (baaki: upar 🔍 search/filter ya ⬇ Download SHEET){% endif %}. PO read isko hi match karta hai.
+      <a class="btn btn-outline btn-sm" style="background:#eff6ff;color:#1d4ed8" href="/products/sheet/download{{ '?token=' ~ request.args.get('token') if request.args.get('token') else '' }}" title="Yehi SHEET aapki Excel ke format me (2-row header) download">&#11015;&#65039; Download SHEET (Excel)</a>
+      <button type="button" id="shUndo" class="btn btn-sm" style="background:#fef3c7;color:#92400e;border:1px solid #f59e0b" title="Galti se kuch type/save ho gaya? Pichhla edit wapas">&#8617; UNDO</button>
+    </span>
+  </div>
+  <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:0 0 8px;position:relative" id="shBar">
+    <select id="shParty" style="padding:5px 8px;border:1px solid #cbd5e1;border-radius:8px;background:#fff;font-size:12px;max-width:190px"><option value="">&#128101; Sab Parties</option>{% for po in party_opts %}<option value="{{ po }}">{{ po }}</option>{% endfor %}</select>
+    <input id="shQ" placeholder="&#128269; Search — party / model / code / tool / material..." style="flex:1;min-width:160px;max-width:290px;padding:5px 10px;border:1px solid #cbd5e1;border-radius:8px;font-size:12px">
+    <button type="button" id="shQx" class="btn btn-outline btn-sm" title="Search/filter saaf karo">&#10005;</button>
+    <span class="muted small" style="margin-left:4px">Align:</span>
+    <select id="shAlignCol" style="padding:5px 6px;border:1px solid #cbd5e1;border-radius:8px;background:#fff;font-size:12px">
+      <option value="">column...</option>
+      <option value="party_name">PARTY</option><option value="model_code">MODEL NO.</option><option value="party_code">PARTY CODE</option>
+      <option value="pcb_len">X</option><option value="pcb_w">Y</option><option value="panel_len">L</option><option value="panel_w">W</option><option value="pcs_panel">PCS</option>
+      <option value="cutting_len">4a</option><option value="x_qty">N (4a)</option><option value="cutting_w">4b</option><option value="y_qty">N (4b)</option>
+      <option value="panels_sheet">UPS</option><option value="cnc_tool">CNC/TOOL</option><option value="per_sq_inch">PER SQ INCH</option>
+      <option value="sheet_thickness">MATERIAL</option><option value="pcb_price">PRICE</option><option value="fg_stock">FIN. STOCK</option>
+    </select>
+    <button type="button" class="shAl btn btn-outline btn-sm" data-a="left" title="Left align">L</button>
+    <button type="button" class="shAl btn btn-outline btn-sm" data-a="center" title="Center align">C</button>
+    <button type="button" class="shAl btn btn-outline btn-sm" data-a="right" title="Right align">R</button>
+    <button type="button" id="shAddRow" class="btn btn-sm" title="Nayi khaali row add karo" style="background:#dcfce7;color:#15803d;border:1px solid #86efac">&#43; Row</button>
+    <button type="button" id="shAddCol" class="btn btn-sm" title="Apna naya column add karo" style="background:#dbeafe;color:#1d4ed8;border:1px solid #93c5fd">&#43; Column</button>
+    <button type="button" id="shCols" class="btn btn-outline btn-sm" title="Column add/remove (show/hide)">&#9636; Columns</button>
+    <button type="button" id="shDelMany" class="btn btn-sm" disabled title="Tick ki hui rows delete karo" style="background:#fee2e2;color:#b91c1c;border:1px solid #fca5a5">&#128465; Delete (0)</button>
+    <div id="shColPanel" style="display:none;position:absolute;top:38px;left:0;z-index:60;background:#fff;border:1px solid #cbd5e1;border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.15);padding:10px 12px;min-width:190px;max-height:330px;overflow:auto"></div>
+    <span class="muted small">Row H:</span>
+    <input id="shRowH" type="number" min="20" max="120" value="28" style="width:52px;padding:4px 6px;border:1px solid #cbd5e1;border-radius:8px;font-size:12px" title="Sab rows ki height (number badlo)">
+    <button type="button" id="shReset" class="btn btn-outline btn-sm" title="Column width / row height default par wapas">&#8634; Reset</button>
+    <span id="shCount" class="muted small" style="margin-left:auto"></span>
+  </div>
+  <div class="panel-body" style="max-height:60vh;overflow:auto">
+    <style>
+    /* v4.16: slim-rows — style ek baar (2358+ rows = chhota page, Vercel-safe) */
+    #sheet97 th{border:1px solid #cbd5e1;padding:5px 6px}
+    #sheet97 td{border:1px solid #e2e8f0;padding:4px 6px}
+    #sheet97 td.sn{text-align:center;color:#94a3b8}
+    #sheet97 td.sc{cursor:cell;min-width:44px}
+    #sheet97 td.fs{text-align:center;font-weight:800;color:#cbd5e1}
+    #sheet97 td.fs.z{color:#15803d}
+    #sheet97 td.del{text-align:center}
+    #sheet97 button.mdel97{background:#fef2f2;color:#b91c1c;padding:2px 7px}
+    #sheet97 th.grp{text-align:center;background:#e0e7ff}
+    /* v4.21: Excel-jaisa fixed layout + drag-grips (column width / row height adjust) */
+    #sheet97{table-layout:fixed}
+    #sheet97 td{overflow:hidden}
+    #sheet97 td.sc{white-space:nowrap}
+    #sheet97 thead th{position:relative}
+    #sheet97 td.sn{position:relative}
+    #sheet97 td.sel{text-align:center}
+    #sheet97 .colGrip{position:absolute;top:0;right:-3px;width:7px;height:100%;cursor:col-resize;z-index:5}
+    #sheet97 .rowGrip{position:absolute;left:0;bottom:-2px;width:100%;height:5px;cursor:row-resize;z-index:5}
+    #sheet97 .colGrip:hover,#sheet97 .rowGrip:hover{background:#4338ca66}
+    #sheet97 tbody tr[data-id]{height:28px}
+    </style>
+    <table class="stable" id="sheet97" style="border-collapse:collapse;width:100%;font-size:11.5px;background:#fff">
+      <colgroup id="sheetCols"><col data-f="__sel"><col data-f="sn"><col data-f="party_name"><col data-f="model_code"><col data-f="party_code"><col data-f="pcb_len"><col data-f="pcb_w"><col data-f="panel_len"><col data-f="panel_w"><col data-f="pcs_panel"><col data-f="cutting_len"><col data-f="x_qty"><col data-f="cutting_w"><col data-f="y_qty"><col data-f="panels_sheet"><col data-f="cnc_tool"><col data-f="per_sq_inch"><col data-f="sheet_thickness"><col data-f="pcb_price">{% for cc in custom_cols %}<col data-f="cc_{{ cc.id }}">{% endfor %}<col data-f="fg_stock"><col data-f="__del"></colgroup>
+      <thead>
+        <tr style="background:#eef2ff;position:sticky;top:0;z-index:2">
+          <th rowspan="2" data-f="__sel" title="Multiple select karke delete karo"><input type="checkbox" id="selAll" style="cursor:pointer"></th>
+          <th rowspan="2" data-f="sn">S.N</th>
+          <th rowspan="2" data-f="party_name">PARTY</th>
+          <th rowspan="2" data-f="model_code">MODEL NO.</th>
+          <th rowspan="2" data-f="party_code">PARTY CODE</th>
+          <th class="grp" colspan="2" data-f="pcb_len">SINGLE PCB SIZE</th>
+          <th class="grp" colspan="3" data-f="panel_len">SINGLE PANEL</th>
+          <th class="grp" colspan="4" data-f="cutting_len">CUTTING SIZE</th>
+          <th rowspan="2" data-f="panels_sheet">UPS</th>
+          <th rowspan="2" data-f="cnc_tool">CNC/TOOL</th>
+          <th rowspan="2" data-f="per_sq_inch">PER SQ INCH</th>
+          <th rowspan="2" data-f="sheet_thickness">MATERIAL</th>
+          <th rowspan="2" data-f="pcb_price">PRICE</th>
+          {% for cc in custom_cols %}<th rowspan="2" data-f="cc_{{ cc.id }}">{{ cc.name }}</th>{% endfor %}
+          <th rowspan="2" data-f="fg_stock">FIN. STOCK</th>
+          <th rowspan="2" data-f="__del">DEL</th>
+        </tr>
+        <tr style="background:#eef2ff;position:sticky;top:28px;z-index:2">
+          <th data-f="pcb_len">X</th>
+          <th data-f="pcb_w">Y</th>
+          <th data-f="panel_len">L</th>
+          <th data-f="panel_w">W</th>
+          <th data-f="pcs_panel">PCS</th>
+          <th data-f="cutting_len">4a</th>
+          <th data-f="x_qty">N</th>
+          <th data-f="cutting_w">4b</th>
+          <th data-f="y_qty">N</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% set NF18 = ['pcb_len','pcb_w','panel_len','panel_w','pcs_panel','cutting_len','x_qty','cutting_w','y_qty','panels_sheet','per_sq_inch','pcb_price','sheet_thickness'] %}
+        {% for m in models %}<tr data-id="{{ m.id }}"><td class="sel" data-f="__sel"><input type="checkbox" class="selCK" data-id="{{ m.id }}" style="cursor:pointer"></td><td class="sn" data-f="sn">{{ loop.index }}</td>{% for f, val in [('party_name', m.party_name or m.party or ''), ('model_code', m.model_code or ''), ('party_code', m.party_code or ''),
+                            ('pcb_len', m.pcb_len or ''), ('pcb_w', m.pcb_w or ''),
+                            ('panel_len', m.panel_len or ''), ('panel_w', m.panel_w or ''), ('pcs_panel', m.pcs_panel or ''),
+                            ('cutting_len', m.cutting_len or ''), ('x_qty', m.x_qty or ''), ('cutting_w', m.cutting_w or ''), ('y_qty', m.y_qty or ''),
+                            ('panels_sheet', m.panels_sheet or ''), ('cnc_tool', m.cnc_tool or ''),
+                            ('per_sq_inch', m.per_sq_inch or ''), ('sheet_thickness', m.sheet_thickness or ''), ('pcb_price', m.pcb_price or '')] %}<td class="sc" data-f="{{ f }}">{{ '' if val is none else (val|numfmt if f in NF18 else val) }}</td>{% endfor %}{% for cc in custom_cols %}<td class="sc" data-f="cc_{{ cc.id }}">{{ m['cc_' ~ cc.id] }}</td>{% endfor %}<td class="fs{{ ' z' if (m.fg_stock or 0) > 0 else '' }}" data-f="fg_stock">{{ m.fg_stock or 0 }}</td><td class="del" data-f="__del"><button type="button" class="mdel97" data-id="{{ m.id }}" title="Is model ko SHEET se hatao">&#128465;</button></td></tr>
+        {% endfor %}
+        {% if not models %}
+        <tr><td colspan="{{ 21 + custom_cols|length }}" style="border:1px solid #e2e8f0;padding:12px;text-align:center;color:#94a3b8">Abhi koi model nahi — Cut List Optimizer se save karo ya Add Manually.</td></tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+<script>
+/* v3.97: SHEET cell edit — click -> input -> Enter/blur = save */
+(function(){
+  var NUM = ['pcb_len','pcb_w','panel_len','panel_w','pcs_panel','cutting_len','x_qty','cutting_w','y_qty',
+             'panels_sheet','sheets','per_sq_inch','pcb_price'];
+  var T = (document.cookie.match(/(?:^|; )token=([^;]*)/) || [])[1];
+  function tok(){ return T || (window.T ? window.T() : ''); }
+
+  /* ===== v4.18: UNDO + column align + party filter + search (Excel jaisa) ===== */
+  var ALIGN18 = {{ align_prefs|tojson }} || {};
+  var LBL18 = {party_name:'PARTY', model_code:'MODEL NO.', party_code:'PARTY CODE', pcb_len:'X', pcb_w:'Y',
+               panel_len:'L', panel_w:'W', pcs_panel:'PCS', cutting_len:'4a', x_qty:'N (4a)', cutting_w:'4b',
+               y_qty:'N (4b)', panels_sheet:'UPS', cnc_tool:'CNC/TOOL', per_sq_inch:'PER SQ INCH',
+               sheet_thickness:'MATERIAL', pcb_price:'PRICE', fg_stock:'FIN. STOCK'};
+  function toast18(msg, bad){
+    var t = document.getElementById('shToast');
+    if (!t){ t = document.createElement('div'); t.id = 'shToast';
+      t.style.cssText = 'position:fixed;top:14px;right:14px;z-index:9999;padding:10px 14px;border-radius:10px;font-size:12.5px;font-weight:600;box-shadow:0 6px 18px rgba(0,0,0,.18)';
+      document.body.appendChild(t); }
+    t.style.background = bad ? '#fee2e2' : '#dcfce7'; t.style.color = bad ? '#b91c1c' : '#15803d';
+    t.textContent = msg; t.style.display = 'block';
+    clearTimeout(t._h); t._h = setTimeout(function(){ t.style.display = 'none'; }, 4000);
+  }
+  function applyAlign18(f){
+    var a = ALIGN18[f]; if (!a) return;
+    document.querySelectorAll('#sheet97 td[data-f="' + f + '"]').forEach(function(td){ td.style.textAlign = a; });
+  }
+  Object.keys(ALIGN18).forEach(applyAlign18);
+  document.querySelectorAll('.shAl').forEach(function(b){
+    b.addEventListener('click', function(){
+      var f = document.getElementById('shAlignCol').value;
+      if (!f){ toast18('Pehle column chuno (Align dropdown se)', true); return; }
+      var a = b.getAttribute('data-a');
+      ALIGN18[f] = (ALIGN18[f] === a) ? '' : a;
+      applyAlign18(f);
+      fetch('/api/products/sheet/prefs?token=' + tok(), {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(ALIGN18)})
+        .then(function(r){ return r.json(); })
+        .then(function(d){ if (d.ok) toast18('Align: ' + (LBL18[f] || f) + ' -> ' + (a ? a.toUpperCase() : 'DEFAULT')); });
+    });
+  });
+  var _shT = 0;
+  function shFilter18(){
+    var q = (document.getElementById('shQ').value || '').toLowerCase().trim();
+    var pt = document.getElementById('shParty').value;
+    var rows = document.querySelectorAll('#sheet97 tbody tr[data-id]'), vis = 0;
+    rows.forEach(function(tr){
+      var ok = (!pt || (tr.children[2] && tr.children[2].textContent.trim() === pt)) &&
+               (!q || tr.textContent.toLowerCase().indexOf(q) >= 0) && shOK23(tr);
+      tr.style.display = ok ? '' : 'none'; if (ok) vis++;
+    });
+    var c = document.getElementById('shCount');
+    if (c) c.textContent = (q || pt) ? (vis + ' / ' + rows.length + ' dikhe') : '';
+  }
+  ['shQ','shParty'].forEach(function(id){
+    document.getElementById(id).addEventListener(id === 'shQ' ? 'input' : 'change', function(){
+      clearTimeout(_shT); _shT = setTimeout(shFilter18, 120);
+    });
+  });
+  document.getElementById('shQx').addEventListener('click', function(){
+    document.getElementById('shQ').value = ''; document.getElementById('shParty').value = '';
+    FILTERS23 = {};   /* v4.23: column filters bhi saaf */
+    document.querySelectorAll('#sheet97 .fB23.on').forEach(function(b){ b.classList.remove('on'); b.style.background = ''; b.style.color = ''; });
+    shFilter18();
+  });
+  document.getElementById('shUndo').addEventListener('click', function(){
+    var btn = this; btn.disabled = true;
+    fetch('/api/products/sheet/undo?token=' + tok(), {method:'POST'})
+      .then(function(r){ return r.json(); })
+      .then(function(d){
+        btn.disabled = false;
+        if (!d.ok){ toast18(d.msg || 'Undo nahi hua', true); return; }
+        if (d.model_id && d.field && d.disp !== undefined){
+          var tr = document.querySelector('#sheet97 tbody tr[data-id="' + d.model_id + '"]');
+          if (tr){ var td = tr.querySelector('td[data-f="' + d.field + '"]');
+            if (td){ td.textContent = d.disp; td.style.textAlign = ALIGN18[d.field] || ''; } }
+        }
+        toast18(d.msg || 'Undo ho gaya');
+      })
+      .catch(function(){ btn.disabled = false; toast18('Undo fail — dobara try karo', true); });
+  });
+  document.querySelectorAll('#sheet97 td.sc').forEach(function(td){
+    td.addEventListener('click', function(){
+      if (td.querySelector('input')) return;
+      var old = td.textContent.trim();
+      td.innerHTML = '';
+      var inp = document.createElement('input');
+      inp.value = old;
+      inp.style.cssText = 'width:100%;box-sizing:border-box;font:inherit;font-weight:700;border:1.5px solid #4338ca;border-radius:4px;padding:1px 3px';
+      td.appendChild(inp);
+      inp.focus(); inp.select();
+      function done(save){
+        var v = inp.value.trim();
+        if (save && v !== old) {
+          var tr = td.closest('tr');
+          var body = {}; body[td.dataset.f] = v;
+          fetch('/api/product/' + tr.dataset.id + '/sheet_edit?token=' + encodeURIComponent(tok()), {
+            method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)
+          }).then(function(r){ return r.json(); }).then(function(j){
+            if (j.ok) { td.textContent = v; td.style.background = '#dcfce7'; setTimeout(function(){ td.style.background = ''; }, 900); }
+            else { td.textContent = old; alert(j.error || 'save fail'); }
+          }).catch(function(){ td.textContent = old; });
+        } else td.textContent = old;
+      }
+      inp.addEventListener('keydown', function(e){
+        if (e.key === 'Enter') { e.preventDefault(); inp.blur(); }
+        if (e.key === 'Escape') { inp.value = old; inp.blur(); }
+      });
+      inp.addEventListener('blur', function(){ done(true); });
+    });
+  });
+
+  /* ===== v4.21: Excel-jaisa column-width + row-height DRAG (persist DB me) ===== */
+  var P21 = {{ prefs21|tojson }} || {};
+  var COLW21 = P21.colw || {};
+  var ROWH21 = P21.rowh || {};
+  var ROWDEF21 = P21.rowh_def || 28;
+  var DEFCOLS21 = {__sel:34, sn:36, party_name:96, model_code:112, party_code:88, pcb_len:52, pcb_w:52,
+                   panel_len:58, panel_w:58, pcs_panel:48, cutting_len:58, x_qty:44, cutting_w:58,
+                   y_qty:44, panels_sheet:48, cnc_tool:104, per_sq_inch:74, sheet_thickness:96,
+                   pcb_price:56, fg_stock:56, __del:42};
+  var colEls21 = document.querySelectorAll('#sheetCols col');
+  var colByF21 = {};
+  colEls21.forEach(function(c){
+    var f = c.getAttribute('data-f');
+    colByF21[f] = c;
+    c.style.width = (COLW21[f] || DEFCOLS21[f] || 64) + 'px';
+  });
+  document.querySelectorAll('#sheet97 tbody tr[data-id]').forEach(function(tr){
+    var h = ROWH21[tr.getAttribute('data-id')];
+    if (h) tr.style.height = h + 'px';
+  });
+  document.getElementById('shRowH').value = ROWDEF21;
+  var _sv21 = 0, _pend21 = {};
+  function savePrefs21(part){
+    _pend21[part[0]] = part[1];   /* v4.21: saare pending parts EK hi request me (debounce ek-dusre ko na khaye) */
+    clearTimeout(_sv21);
+    _sv21 = setTimeout(function(){
+      fetch('/api/products/sheet/prefs?token=' + tok(), {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(_pend21)});
+      _pend21 = {};
+    }, 300);
+  }
+  document.querySelectorAll('#sheet97 thead tr:first-child th').forEach(function(th){
+    var col = colByF21[th.getAttribute('data-f')];
+    if (!col) return;
+    var g = document.createElement('span');
+    g.className = 'colGrip';
+    th.appendChild(g);
+    g.addEventListener('mousedown', function(e){
+      e.preventDefault(); e.stopPropagation();
+      var sx = e.clientX, sw0 = parseFloat(col.style.width) || 64;
+      function mv(ev){ col.style.width = Math.max(34, Math.min(420, sw0 + ev.clientX - sx)) + 'px'; }
+      function up(){
+        document.removeEventListener('mousemove', mv); document.removeEventListener('mouseup', up);
+        COLW21[col.getAttribute('data-f')] = parseFloat(col.style.width);
+        savePrefs21(['colw', COLW21]);
+      }
+      document.addEventListener('mousemove', mv); document.addEventListener('mouseup', up);
+    });
+  });
+  document.querySelectorAll('#sheet97 tbody tr[data-id]').forEach(function(tr){
+    var sn = tr.querySelector('td.sn');
+    if (!sn) return;
+    var g = document.createElement('span');
+    g.className = 'rowGrip';
+    sn.appendChild(g);
+    g.addEventListener('mousedown', function(e){
+      e.preventDefault(); e.stopPropagation();
+      var sy = e.clientY, sh0 = tr.getBoundingClientRect().height;
+      function mv(ev){ tr.style.height = Math.max(20, Math.min(160, sh0 + ev.clientY - sy)) + 'px'; }
+      function up(){
+        document.removeEventListener('mousemove', mv); document.removeEventListener('mouseup', up);
+        ROWH21[tr.getAttribute('data-id')] = Math.round(parseFloat(tr.style.height));
+        savePrefs21(['rowh', ROWH21]);
+      }
+      document.addEventListener('mousemove', mv); document.addEventListener('mouseup', up);
+    });
+  });
+  document.getElementById('shRowH').addEventListener('change', function(){
+    var h = Math.max(20, Math.min(120, parseInt(this.value || '28', 10) || 28));
+    ROWDEF21 = h; this.value = h;
+    document.querySelectorAll('#sheet97 tbody tr[data-id]').forEach(function(tr){
+      tr.style.height = h + 'px';
+      delete ROWH21[tr.getAttribute('data-id')];
+    });
+    savePrefs21(['rowh', ROWH21]);
+    savePrefs21(['rowh_def', h]);
+    toast18('Row height: sab rows ' + h + 'px');
+  });
+  document.getElementById('shReset').addEventListener('click', function(){
+    COLW21 = {}; ROWH21 = {}; ROWDEF21 = 28;
+    colEls21.forEach(function(c){ c.style.width = (DEFCOLS21[c.getAttribute('data-f')] || 64) + 'px'; });
+    document.querySelectorAll('#sheet97 tbody tr[data-id]').forEach(function(tr){ tr.style.height = ''; });
+    document.getElementById('shRowH').value = 28;
+    savePrefs21(['colw', {}]);
+    savePrefs21(['rowh', {}]);
+    savePrefs21(['rowh_def', 28]);
+    toast18('Width/height default par wapas');
+  });
+
+  /* ===== v4.22: MULTIPLE DELETE (checkboxes) + COLUMN add/remove (show/hide) ===== */
+  var HIDE22 = P21.colhide || {};
+  var GRP22 = {pcb_len: ['pcb_len', 'pcb_w'], panel_len: ['panel_len', 'panel_w', 'pcs_panel'],
+               cutting_len: ['cutting_len', 'x_qty', 'cutting_w', 'y_qty']};
+  var COLS22 = [['sn', 'S.N'], ['party_name', 'PARTY'], ['model_code', 'MODEL NO.'], ['party_code', 'PARTY CODE'],
+                ['pcb_len', 'X'], ['pcb_w', 'Y'], ['panel_len', 'L'], ['panel_w', 'W'], ['pcs_panel', 'PCS'],
+                ['cutting_len', '4a'], ['x_qty', 'N (4a)'], ['cutting_w', '4b'], ['y_qty', 'N (4b)'],
+                ['panels_sheet', 'UPS'], ['cnc_tool', 'CNC/TOOL'], ['per_sq_inch', 'PER SQ INCH'],
+                ['sheet_thickness', 'MATERIAL'], ['pcb_price', 'PRICE'], ['fg_stock', 'FIN. STOCK'], ['__del', 'DEL']];
+  function setCol22(f, hide){
+    if (hide) HIDE22[f] = 1; else delete HIDE22[f];
+    var col = colByF21[f];
+    if (col) col.style.display = hide ? 'none' : '';
+    document.querySelectorAll('#sheet97 td[data-f="' + f + '"]').forEach(function(td){ td.style.display = hide ? 'none' : ''; });
+    document.querySelectorAll('#sheet97 thead th[data-f="' + f + '"]').forEach(function(th){
+      if (th.classList.contains('grp')) return;
+      th.style.display = hide ? 'none' : '';
+    });
+    Object.keys(GRP22).forEach(function(gf){
+      var mem = GRP22[gf].filter(function(x){ return !HIDE22[x]; });
+      var gth = document.querySelector('#sheet97 thead th[data-f="' + gf + '"]');
+      if (gth){ gth.style.display = mem.length ? '' : 'none'; if (mem.length) gth.setAttribute('colspan', mem.length); }
+    });
+  }
+  function buildColPanel22(){
+    var pan = document.getElementById('shColPanel');
+    var h = document.createElement('div');
+    h.style.cssText = 'font-weight:800;font-size:11.5px;color:#334155;margin-bottom:6px';
+    h.textContent = 'COLUMNS (tick = dikhao)';
+    pan.appendChild(h);
+    COLS22.forEach(function(cd){
+      var lab = document.createElement('label');
+      lab.style.cssText = 'display:flex;align-items:center;gap:6px;font-size:12px;padding:2px 0;cursor:pointer';
+      var ck = document.createElement('input');
+      ck.type = 'checkbox'; ck.checked = !HIDE22[cd[0]];
+      ck.addEventListener('change', function(){
+        setCol22(cd[0], !ck.checked);
+        savePrefs21(['colhide', HIDE22]);
+        toast18('Column: ' + cd[1] + (ck.checked ? ' dikh raha hai' : ' chhup gaya'));
+      });
+      var sp = document.createElement('span'); sp.textContent = cd[1];
+      lab.appendChild(ck); lab.appendChild(sp);
+      pan.appendChild(lab);
+    });
+    var rst = document.createElement('button');
+    rst.type = 'button'; rst.className = 'btn btn-outline btn-sm';
+    rst.style.cssText = 'margin-top:8px;width:100%';
+    rst.textContent = 'Sab dikhao';
+    rst.addEventListener('click', function(){
+      COLS22.forEach(function(cd){ setCol22(cd[0], false); });
+      savePrefs21(['colhide', {}]);
+      toast18('Sab columns wapas dikh rahe hain');
+    });
+    pan.appendChild(rst);
+  }
+  buildColPanel22();
+  Object.keys(HIDE22).forEach(function(f){ setCol22(f, true); });
+  document.getElementById('shCols').addEventListener('click', function(e){
+    e.stopPropagation();
+    var pan = document.getElementById('shColPanel');
+    pan.style.display = (pan.style.display === 'none' || !pan.style.display) ? 'block' : 'none';
+  });
+  document.addEventListener('click', function(e){
+    var pan = document.getElementById('shColPanel');
+    if (pan.style.display === 'block' && !pan.contains(e.target) && e.target.id !== 'shCols') pan.style.display = 'none';
+  });
+
+  var delBtn22 = document.getElementById('shDelMany');
+  function updSel22(){
+    var n = document.querySelectorAll('#sheet97 .selCK:checked').length;
+    delBtn22.textContent = '\u{1F5D1} Delete (' + n + ')';
+    delBtn22.disabled = !n;
+    if (delBtn22._arm){ delBtn22._arm = 0; delBtn22.style.background = ''; delBtn22.style.color = ''; }
+  }
+  document.getElementById('sheet97').addEventListener('change', function(e){
+    if (e.target && e.target.classList && e.target.classList.contains('selCK')) updSel22();
+  });
+  document.getElementById('selAll').addEventListener('change', function(){
+    var on = this.checked;
+    document.querySelectorAll('#sheet97 tbody tr[data-id]').forEach(function(tr){
+      if (tr.style.display !== 'none'){ var ck = tr.querySelector('.selCK'); if (ck) ck.checked = on; }
+    });
+    updSel22();
+  });
+  delBtn22.addEventListener('click', function(){
+    var ids = [];
+    document.querySelectorAll('#sheet97 .selCK:checked').forEach(function(x){ ids.push(+x.getAttribute('data-id')); });
+    if (!ids.length) return;
+    if (!delBtn22._arm){
+      delBtn22._arm = 1;
+      delBtn22.textContent = '\u26a0 Pakka? (' + ids.length + ')';
+      delBtn22.style.background = '#ef4444'; delBtn22.style.color = '#fff';
+      setTimeout(function(){ delBtn22._arm = 0; delBtn22.style.background = ''; delBtn22.style.color = ''; updSel22(); }, 4000);
+      return;
+    }
+    delBtn22._arm = 0;
+    fetch('/api/products/sheet/delete_many?token=' + tok(), {
+      method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ids: ids})
+    }).then(function(r){ return r.json(); }).then(function(d){
+      if (!d.ok){ toast18(d.error || 'Delete fail', true); return; }
+      toast18(d.msg || ('Delete ho gaye: ' + d.deleted), (d.blocked || []).length > 0);
+      if (d.deleted > 0) setTimeout(function(){ location.reload(); }, 1400);
+      else updSel22();
+    }).catch(function(){ toast18('Delete fail — dobara try karo', true); });
+  });
+
+  /* ===== v4.23: per-column FILTER (Excel AutoFilter) + ROW/COLUMN add ===== */
+  var FILTERS23 = {};
+  var CC23 = {{ custom_cols|tojson }} || [];
+  function shOK23(tr){
+    for (var f in FILTERS23){
+      var td = tr.querySelector('td[data-f="' + f + '"]');
+      if (!td || FILTERS23[f].indexOf(td.textContent.trim()) < 0) return false;
+    }
+    return true;
+  }
+  function fVal23(tr, f){
+    var td = tr.querySelector('td[data-f="' + f + '"]');
+    return td ? td.textContent.trim() : '';
+  }
+  document.querySelectorAll('#sheet97 thead th[data-f]').forEach(function(th){
+    var f = th.getAttribute('data-f');
+    if (f === '__sel' || f === '__del' || f === 'sn' || th.classList.contains('grp')) return;
+    var b = document.createElement('span');
+    b.className = 'fB23'; b.textContent = '\u25be'; b.title = 'Filter: ' + (LBL18[f] || f);
+    b.style.cssText = 'position:absolute;left:2px;top:50%;transform:translateY(-50%);cursor:pointer;font-size:9px;color:#64748b;padding:1px 3px;border-radius:4px;line-height:1';
+    th.appendChild(b);
+    b.addEventListener('click', function(e){
+      e.stopPropagation();
+      openFilter23(f, b);
+    });
+  });
+  function openFilter23(f, btn){
+    var old23 = document.getElementById('fPanel23');
+    if (old23){ old23.remove(); if (old23._f === f) return; }
+    var vals = [], seen = {};
+    var rows = document.querySelectorAll('#sheet97 tbody tr[data-id]');
+    rows.forEach(function(tr){
+      if (tr.style.display === 'none') return;
+      if (!shOK23except(tr, f)) return;
+      var v = fVal23(tr, f) || '(khaali)';
+      if (!seen[v]){ seen[v] = 1; vals.push(v); }
+    });
+    vals.sort();
+    var cur = FILTERS23[f];
+    var pan = document.createElement('div');
+    pan.id = 'fPanel23'; pan._f = f;
+    pan.style.cssText = 'position:fixed;z-index:9998;background:#fff;border:1px solid #cbd5e1;border-radius:10px;box-shadow:0 12px 34px rgba(0,0,0,.2);padding:8px 10px;min-width:170px;max-width:230px;font-size:12px';
+    var r = btn.getBoundingClientRect();
+    pan.style.left = Math.max(8, Math.min(window.innerWidth - 240, r.left)) + 'px';
+    pan.style.top = (r.bottom + 6) + 'px';
+    var h = document.createElement('div');
+    h.style.cssText = 'font-weight:800;color:#334155;margin-bottom:5px;font-size:11.5px';
+    h.textContent = 'Filter: ' + (LBL18[f] || f);
+    pan.appendChild(h);
+    var list = document.createElement('div');
+    list.style.cssText = 'max-height:210px;overflow:auto;border:1px solid #e2e8f0;border-radius:8px;padding:4px 6px';
+    var cks = [];
+    vals.forEach(function(v){
+      var lab = document.createElement('label');
+      lab.style.cssText = 'display:flex;gap:6px;align-items:center;padding:2px 0;cursor:pointer;white-space:nowrap';
+      var ck = document.createElement('input');
+      ck.type = 'checkbox'; ck.value = v;
+      ck.checked = !cur || cur.indexOf(v) >= 0;
+      cks.push(ck);
+      var sp = document.createElement('span');
+      sp.textContent = v.length > 22 ? v.slice(0, 22) + '\u2026' : v;
+      sp.title = v;
+      lab.appendChild(ck); lab.appendChild(sp);
+      list.appendChild(lab);
+    });
+    if (!vals.length) list.innerHTML = '<span class="muted small">koi value nahi</span>';
+    pan.appendChild(list);
+    var row = document.createElement('div');
+    row.style.cssText = 'display:flex;gap:6px;margin-top:7px';
+    function mkBtn(t, bg, fg){
+      var x = document.createElement('button');
+      x.type = 'button'; x.textContent = t;
+      x.style.cssText = 'flex:1;padding:4px 0;border-radius:8px;border:1px solid #cbd5e1;cursor:pointer;font-size:11.5px;font-weight:700;background:' + bg + ';color:' + fg;
+      return x;
+    }
+    var okB = mkBtn('Filter', '#4338ca', '#fff');
+    okB.addEventListener('click', function(){
+      var sel = cks.filter(function(c){ return c.checked; }).map(function(c){ return c.value; });
+      if (!sel.length || sel.length === vals.length) delete FILTERS23[f];
+      else FILTERS23[f] = sel;
+      styleF23(btn, f);
+      pan.remove(); shFilter18();
+      toast18('Filter: ' + (LBL18[f] || f) + (FILTERS23[f] ? ' (' + FILTERS23[f].length + ' values)' : ' hata diya'));
+    });
+    var clB = mkBtn('Hatao', '#f1f5f9', '#334155');
+    clB.addEventListener('click', function(){
+      delete FILTERS23[f];
+      styleF23(btn, f);
+      pan.remove(); shFilter18();
+    });
+    row.appendChild(okB); row.appendChild(clB);
+    pan.appendChild(row);
+    document.body.appendChild(pan);
+    setTimeout(function(){
+      document.addEventListener('click', function h(ev){
+        if (!pan.contains(ev.target)){ pan.remove(); document.removeEventListener('click', h); }
+      });
+    }, 0);
+  }
+  function shOK23except(tr, f){
+    for (var g in FILTERS23){
+      if (g === f) continue;
+      var td = tr.querySelector('td[data-f="' + g + '"]');
+      if (!td || FILTERS23[g].indexOf(td.textContent.trim()) < 0) return false;
+    }
+    return true;
+  }
+  function styleF23(btn, f){
+    if (FILTERS23[f]){ btn.classList.add('on'); btn.style.background = '#f59e0b'; btn.style.color = '#fff'; }
+    else { btn.classList.remove('on'); btn.style.background = ''; btn.style.color = ''; }
+  }
+  /* + ROW / + COLUMN */
+  document.getElementById('shAddRow').addEventListener('click', function(){
+    var btn = this; btn.disabled = true;
+    fetch('/api/products/sheet/add_row?token=' + tok(), {method: 'POST'})
+      .then(function(r){ return r.json(); })
+      .then(function(d){
+        btn.disabled = false;
+        if (d.ok){ toast18('Nayi khaali row add ho gayi — MODEL NO. me naam likho'); setTimeout(function(){ location.reload(); }, 900); }
+        else toast18(d.error || 'Row add fail', true);
+      }).catch(function(){ btn.disabled = false; toast18('Row add fail', true); });
+  });
+  document.getElementById('shAddCol').addEventListener('click', function(){
+    var nm = prompt('Naye column ka naam? (jaise: GST / REMARK / BATCH)');
+    if (nm === null) return;
+    nm = (nm || '').trim();
+    if (!nm){ toast18('Naam likho', true); return; }
+    fetch('/api/products/sheet/custom_col?token=' + tok(), {
+      method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({name: nm})
+    }).then(function(r){ return r.json(); })
+      .then(function(d){
+        if (d.ok){ toast18('Column: ' + d.name + ' add ho gaya'); setTimeout(function(){ location.reload(); }, 900); }
+        else toast18(d.error || 'Column add fail', true);
+      }).catch(function(){ toast18('Column add fail', true); });
+  });
+  /* Columns panel me custom cols (+ remove) */
+  CC23.forEach(function(cc){
+    var f = 'cc_' + cc.id;
+    var pan = document.getElementById('shColPanel');
+    var lab = document.createElement('label');
+    lab.style.cssText = 'display:flex;align-items:center;gap:6px;font-size:12px;padding:2px 0;cursor:pointer';
+    var ck = document.createElement('input');
+    ck.type = 'checkbox'; ck.checked = !HIDE22[f];
+    ck.addEventListener('change', function(){
+      setCol22(f, !ck.checked);
+      savePrefs21(['colhide', HIDE22]);
+    });
+    var sp = document.createElement('span'); sp.textContent = cc.name + ' (apna)';
+    lab.appendChild(ck); lab.appendChild(sp);
+    var x = document.createElement('span');
+    x.textContent = '\u2715'; x.title = 'Column hatao (data DB me rahega)';
+    x.style.cssText = 'cursor:pointer;color:#b91c1c;font-weight:800;margin-left:4px';
+    x.addEventListener('click', function(){
+      fetch('/api/products/sheet/custom_col?token=' + tok(), {
+        method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({remove_id: cc.id})
+      }).then(function(r){ return r.json(); })
+        .then(function(d){ if (d.ok){ toast18('Column: ' + cc.name + ' hata diya'); setTimeout(function(){ location.reload(); }, 800); } });
+    });
+    lab.appendChild(x);
+    pan.insertBefore(lab, pan.querySelector('button'));
+  });
+})();
+
+/* v4.03: SHEET row delete — 2-click (galti se na ho; PDF/BOM/production me ho to USE ME block) */
+/* v4.16: delete delegation — ek listener, 2358+ rows par inline onclick nahi */
+document.getElementById('sheet97').addEventListener('click', function(e){
+  var b = e.target && e.target.closest ? e.target.closest('button.mdel97') : null;
+  if (b) delModel(+b.getAttribute('data-id'), b);
+});
+var mdelArm = 0;
+function delModel(pid, el){
+  if (mdelArm !== pid) {
+    mdelArm = pid;
+    el.textContent = '\u26a0 Pakka?';
+    el.style.background = '#ef4444'; el.style.color = '#fff'; el.style.borderColor = '#ef4444';
+    setTimeout(function(){ if (mdelArm === pid) { mdelArm = 0; location.reload(); } }, 4000);
+    return;
+  }
+  mdelArm = 0;
+  el.disabled = true; el.textContent = '...';
+  var t = new URLSearchParams(location.search).get('token');
+  fetch('/api/product/' + pid + '/delete' + (t ? '?token=' + encodeURIComponent(t) : ''), { method: 'POST' })
+    .then(function(r){ return r.json(); })
+    .then(function(j){
+      if (j.ok) { location.reload(); }
+      else { alert(j.msg || 'Delete nahi hua'); location.reload(); }
+    })
+    .catch(function(){ el.disabled = false; el.textContent = '\u{1F5D1}'; });
+}
+</script>
+
+
+{% if show_add or edit_model %}
+<div class="panel">
+  <div class="panel-head"><h3>{% if edit_model %}✏️ Edit Finished Product — {{ edit_model.name }}{% else %}➕ Add Finished Product Manually{% endif %}</h3><a class="btn btn-outline btn-sm" href="/products">✕ Close</a></div>
+  <div class="panel-body">
+    <form method="post" action="/products">
+      {% if edit_model %}<input type="hidden" name="edit_id" value="{{ edit_model.id }}">{% endif %}
+      <div class="form-grid">
+        <div class="field full"><label>Product Name *</label><input name="name" required placeholder="e.g. LED Driver 12W Board" value="{{ edit_model.name if edit_model else '' }}"></div>
+        <div class="field full"><label>Model Code</label><input name="model_code" placeholder="e.g. SCPL-105" value="{{ edit_model.model_code if edit_model else '' }}"></div>
+        <div class="field"><label>PCB Code</label><input name="pcb_code" placeholder="jaise PCB-101" value="{{ edit_model.pcb_code if edit_model else '' }}"></div>
+        <div class="field"><label>Party Code</label><input name="party_code" placeholder="jaise P-22" value="{{ edit_model.party_code if edit_model else '' }}"></div>
+        <div class="field"><label>Party Name</label><input name="party_name" placeholder="party ka naam" value="{{ edit_model.party_name if edit_model else '' }}"></div>
+        <div class="field"><label>HSN/SAC Code</label><input name="hsn" placeholder="jaise 85340000" value="{{ edit_model.hsn if edit_model and edit_model.hsn else '85340000' }}"></div>
+        <div class="field"><label>PCB Shape</label>
+          <select name="shape">
+            <option value="rect" {{ 'selected' if not edit_model or (edit_model.shape or 'rect') == 'rect' }}>Rectangle</option>
+            <option value="square" {{ 'selected' if edit_model and edit_model.shape == 'square' }}>Square</option>
+            <option value="round" {{ 'selected' if edit_model and edit_model.shape == 'round' }}>Round (Gol)</option>
+          </select>
+        </div>
+        <div class="section-title">PCB SIZE (single pcb)</div>
+        <div class="field"><label>PCB Length (mm)</label><input type="number" step="0.1" id="pm_pcb_len" name="pcb_len" value="{{ edit_model.pcb_len if edit_model else 40 }}"></div>
+        <div class="field"><label>PCB Width (mm)</label><input type="number" step="0.1" id="pm_pcb_w" name="pcb_w" value="{{ edit_model.pcb_w if edit_model else 50 }}"></div>
+        <div class="field"><label>PCBs in X</label><input type="number" name="pcbs_x" value="{{ edit_model.pcbs_x if edit_model else 10 }}"></div>
+        <div class="field"><label>PCBs in Y</label><input type="number" name="pcbs_y" value="{{ edit_model.pcbs_y if edit_model else 5 }}"></div>
+        <div class="field"><label>Gap X (PC to PC)</label><input type="number" step="0.1" name="gap_x" value="{{ edit_model.gap_x if edit_model else 0 }}"></div>
+        <div class="field"><label>Gap Y (PC to PC)</label><input type="number" step="0.1" name="gap_y" value="{{ edit_model.gap_y if edit_model else 0 }}"></div>
+        <div class="section-title">PANEL SIZE (with border)</div>
+        <div class="field"><label>Border Top (mm)</label><input type="number" step="0.1" name="border_t" value="{{ edit_model.border_t if edit_model else 5 }}"></div>
+        <div class="field"><label>Border Bottom (mm)</label><input type="number" step="0.1" name="border_b" value="{{ edit_model.border_b if edit_model else 5 }}"></div>
+        <div class="field"><label>Border Left (mm)</label><input type="number" step="0.1" name="border_l" value="{{ edit_model.border_l if edit_model else 0 }}"></div>
+        <div class="field"><label>Border Right (mm)</label><input type="number" step="0.1" name="border_r" value="{{ edit_model.border_r if edit_model else 0 }}"></div>
+        <div class="field"><label>Panel Length (mm)</label><input type="number" step="0.1" id="pm_panel_len" name="panel_len" value="{{ edit_model.panel_len if edit_model else 400 }}"></div>
+        <div class="field"><label>Panel Width (mm)</label><input type="number" step="0.1" id="pm_panel_w" name="panel_w" value="{{ edit_model.panel_w if edit_model else 260 }}"></div>
+        <div class="section-title">CUTTING PANEL (gang multiplier → cutting size)</div>
+        <div class="field"><label>Gang X (multiplier)</label><input type="number" id="pm_gang_x" name="gang_x" min="1" value="{{ edit_model.gang_x if edit_model else 1 }}"></div>
+        <div class="field"><label>Gang Y (multiplier)</label><input type="number" id="pm_gang_y" name="gang_y" min="1" value="{{ edit_model.gang_y if edit_model else 1 }}"></div>
+        <div class="field"><label>Kerf X (mm)</label><input type="number" step="0.1" id="pm_kerf_x" name="kerf_x" value="{{ edit_model.kerf_x if edit_model else 2 }}"></div>
+        <div class="field"><label>Kerf Y (mm)</label><input type="number" step="0.1" id="pm_kerf_y" name="kerf_y" value="{{ edit_model.kerf_y if edit_model else 2 }}"></div>
+        <div class="field"><label>CUTTING L (mm) — gang panel size</label><input type="number" step="0.1" id="pm_cutting_len" name="cutting_len" value="{{ edit_model.cutting_len if edit_model else '' }}" placeholder="panel × gang + kerf se auto"></div>
+        <div class="field"><label>CUTTING W (mm) — gang panel size</label><input type="number" step="0.1" id="pm_cutting_w" name="cutting_w" value="{{ edit_model.cutting_w if edit_model else '' }}" placeholder="panel × gang + kerf se auto"></div>
+        <div class="section-title">SHEET + COUNTS</div>
+        <div class="field"><label>Sheet Length (mm)</label><input type="number" step="1" name="sheet_len" value="{{ edit_model.sheet_len if edit_model else 1200 }}"></div>
+        <div class="field"><label>Sheet Width (mm)</label><input type="number" step="1" name="sheet_w" value="{{ edit_model.sheet_w if edit_model else 1000 }}"></div>
+        <div class="field"><label>PCS/Panel</label><input type="number" id="pm_pcs_panel" name="pcs_panel" value="{{ edit_model.pcs_panel if edit_model else 50 }}"></div>
+        <div class="field"><label>Panels/Sheet</label><input type="number" name="panels_sheet" value="{{ edit_model.panels_sheet if edit_model else 8 }}"></div>
+        <div class="field"><label>Sheets</label><input type="number" name="sheets" value="{{ edit_model.sheets if edit_model else 1 }}"></div>
+        <div class="field"><label>X Qty (sheet me panel count X)</label><input type="number" name="x_qty" value="{{ edit_model.x_qty if edit_model else '' }}"></div>
+        <div class="field"><label>Y Qty (sheet me panel count Y)</label><input type="number" name="y_qty" value="{{ edit_model.y_qty if edit_model else '' }}"></div>
+        <div class="field"><label>Orientation</label>
+          <select name="orientation">
+            <option value="normal" {{'selected' if edit_model and edit_model.orientation=='normal'}}>Normal</option>
+            <option value="rotated" {{'selected' if edit_model and edit_model.orientation=='rotated'}}>Rotated 90°</option>
+          </select>
+        </div>
+        <div class="section-title">CNC + PRICE</div>
+        <div class="field"><label>CNC Margin X (mm)</label><input type="number" step="0.1" name="cnc_margin_x" value="{{ edit_model.cnc_margin_x if edit_model else '' }}"></div>
+        <div class="field"><label>CNC Margin Y (mm)</label><input type="number" step="0.1" name="cnc_margin_y" value="{{ edit_model.cnc_margin_y if edit_model else '' }}"></div>
+        <div class="field"><label>PCB PRICE (₹)</label><input type="number" step="0.01" id="pm_pcb_price" name="pcb_price" value="{{ edit_model.pcb_price if edit_model else '' }}" style="font-weight:700;background:#fffdf3"></div>
+        <div class="field"><label>PER SQUARE INCH (₹)</label><input type="number" step="0.001" id="pm_per_sq_inch" name="per_sq_inch" value="{{ edit_model.per_sq_inch if edit_model else '' }}"></div>
+        <div class="field">
+          <label>Sheet Thickness (material + mm)</label>
+          <input name="sheet_thickness" id="pm_sheet_thickness" list="pm_thick_opts" placeholder="e.g. FR4 1.6MM / METAL 1MM" value="{{ edit_model.sheet_thickness if edit_model else '' }}">
+          <datalist id="pm_thick_opts">
+            {% for r in rates %}<option value="{{ r.material }} {{ r.thickness }}">{% endfor %}
+          </datalist>
+          <div class="muted" style="font-size:10px" id="pm_thick_hint">Rate card se auto ₹/sq.inch aayega (e.g. METAL 1MM → ₹2)</div>
+        </div>
+        <div class="full"><button class="btn" type="submit">{% if edit_model %}💾 Update Finished Product{% else %}➕ Add Finished Product{% endif %}</button></div>
+      </div>
+    </form>
+    <p class="muted small" style="margin-top:8px">💡 <b>CUTTING L/W</b> = gang panel ka size — Panel × Gang + Kerf se auto banta hai (gang 1×1 ho to khali chhodo). <b>PCB PRICE</b> ↔ <b>PER SQ.INCH</b> dono taraf calculate — area PANEL size ÷ PCS/PANEL se.</p>
+  </div>
+</div>
+{% if edit_model %}
+<div class="panel" style="border-left:4px solid #b45309">
+  <div class="panel-head"><h3>📜 Price History — {{ edit_model.name }}</h3></div>
+  <div class="panel-body" style="padding:0;overflow-x:auto">
+    {% if ph_rows %}
+    <table>
+      <thead><tr><th>Date</th><th class="t-right">PCB Price (₹)</th><th class="t-right">₹/sq.inch</th><th>Thickness</th><th>Party</th><th>Order</th></tr></thead>
+      <tbody>
+        {% for p in ph_rows %}
+        <tr>
+          <td class="mono small">{{ p.ddate }}</td>
+          <td class="t-right mono"><b>₹{{ p.price|inr0 }}</b></td>
+          <td class="t-right mono">{{ p.rs_pcb|gfmt }}</td>
+          <td class="small">{% if p.sheet_thickness %}<span class="badge b-blue">{{ p.sheet_thickness }}</span>{% else %}—{% endif %}</td>
+          <td class="small">{{ p.party or '—' }}</td>
+          <td class="mono small">{% if p.order_id %}<a href="/jobcard/{{ p.order_id }}{% if request.args.get('token') %}?token={{ request.args.get('token') }}{% endif %}">{{ p.order_no or '#' ~ p.order_id }}</a>{% else %}—{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}<div class="empty">Abhi koi price history nahi — Job Card save ya dispatch par auto banegi (is item ka pichhla rate yahan dikhega).</div>{% endif %}
+  </div>
+</div>
+{% endif %}
+<script>
+/* ---- GANG auto: panel × gang + kerf → CUTTING SIZE (cut list layout save) ---- */
+(function(){
+  function cc(){
+    var pl = parseFloat((document.getElementById('pm_panel_len')||{}).value) || 0;
+    var pw = parseFloat((document.getElementById('pm_panel_w')||{}).value) || 0;
+    var gx = Math.max(1, parseInt((document.getElementById('pm_gang_x')||{}).value) || 1);
+    var gy = Math.max(1, parseInt((document.getElementById('pm_gang_y')||{}).value) || 1);
+    var kx = parseFloat((document.getElementById('pm_kerf_x')||{}).value) || 0;
+    var ky = parseFloat((document.getElementById('pm_kerf_y')||{}).value) || 0;
+    if (gx > 1 || gy > 1) {
+      if (pl > 0) document.getElementById('pm_cutting_len').value = Math.round((pl * gx + kx * (gx - 1)) * 100) / 100;
+      if (pw > 0) document.getElementById('pm_cutting_w').value = Math.round((pw * gy + ky * (gy - 1)) * 100) / 100;
+    }
+  }
+  ['pm_panel_len','pm_panel_w','pm_gang_x','pm_gang_y','pm_kerf_x','pm_kerf_y'].forEach(function(id){
+    var el = document.getElementById(id);
+    if (el) el.addEventListener('input', cc);
+  });
+})();
+/* ---- PCB PRICE two-way: PANEL size se (PCB size nahi) ---- */
+var _pmLastEdit = 'rate';
+function pmArea(){
+  var cl = parseFloat((document.getElementById('pm_cutting_len')||{}).value) || 0;
+  var cw = parseFloat((document.getElementById('pm_cutting_w')||{}).value) || 0;
+  var pl = parseFloat((document.getElementById('pm_panel_len')||{}).value) || 0;
+  var pw = parseFloat((document.getElementById('pm_panel_w')||{}).value) || 0;
+  var pcs = parseInt((document.getElementById('pm_pcs_panel')||{}).value) || 0;
+  if (cl > 0 && cw > 0 && pcs > 0) return ((cl / 25.4) * (cw / 25.4)) / pcs;
+  if (pl > 0 && pw > 0 && pcs > 0) return ((pl / 25.4) * (pw / 25.4)) / pcs;
+  return 0;
+}
+function pmPrice(){
+  var sq = pmArea();
+  var re = document.getElementById('pm_per_sq_inch'), pe = document.getElementById('pm_pcb_price');
+  if (!re || !pe || sq <= 0) return;
+  var rate = parseFloat(re.value) || 0, price = parseFloat(pe.value) || 0;
+  if (_pmLastEdit === 'price') {
+    re.value = price > 0 ? String(Math.round((price / sq) * 1000) / 1000) : '';
+  } else {
+    pe.value = String(Math.round(rate * sq * 100) / 100);
+  }
+}
+(function(){
+  var re = document.getElementById('pm_per_sq_inch'), pe = document.getElementById('pm_pcb_price');
+  if (re) re.addEventListener('input', function(){ _pmLastEdit = 'rate'; pmPrice(); });
+  if (pe) pe.addEventListener('input', function(){ _pmLastEdit = 'price'; pmPrice(); });
+})();
+/* ---- THICKNESS → RATE CARD auto price (metal-1mm ₹2, fr4-1mm ₹2.70 …) ---- */
+var PM_RATES = {};
+{% for r in rates %}PM_RATES['{{ r.material|e }} {{ r.thickness|e }}'] = {{ r.per_sq_inch }};{% endfor %}
+function pmNorm(s){ return (s||'').toUpperCase().replace(/[^0-9A-Z]/g,' ').replace(/\s+/g,' ').trim(); }
+function pmThickRate(){
+  var t = document.getElementById('pm_sheet_thickness');
+  var re = document.getElementById('pm_per_sq_inch');
+  var hint = document.getElementById('pm_thick_hint');
+  if (!t || !re) return;
+  var key = pmNorm(t.value);
+  var rate = PM_RATES[key];
+  if (!rate && key) {
+    Object.keys(PM_RATES).forEach(function(k){
+      var nk = pmNorm(k);
+      if (!rate && (nk === key || nk.indexOf(key) === 0 || key.indexOf(nk) === 0)) rate = PM_RATES[k];
+    });
+  }
+  if (rate) {
+    re.value = String(rate);
+    _pmLastEdit = 'rate';
+    pmPrice();
+    if (hint) hint.innerHTML = '✅ Rate card: <b>' + key + ' → ₹' + rate + '/sq.inch</b> — PCB price auto set ho gaya';
+  } else if (hint) {
+    hint.innerHTML = '⚠️ Rate card me ye thickness nahi mili — ₹/sq.inch khud bharo ya neeche Rate Card me add karo';
+  }
+}
+(function(){
+  var t = document.getElementById('pm_sheet_thickness');
+  if (t) { t.addEventListener('input', pmThickRate); t.addEventListener('change', pmThickRate); }
+})();
+</script>
+{% endif %}
+
+<!-- v4.23: rate-card wala purana panel hata diya (user request) — rates DB me hain, form auto-price chalta rahega -->
+
+<div class="panel">
+  <div class="panel-head"><h3>🗂️ Saved Models ({{ models_top|length }}{% if total_models and total_models != models_top|length %} of {{ total_models }}{% endif %})</h3>
+    <div style="position:relative" id="colSetWrap">
+      <button type="button" class="btn btn-outline btn-sm" onclick="var d=document.getElementById('colSetDrop');d.style.display=d.style.display==='none'?'block':'none'">⚙ Columns</button>
+      <div id="colSetDrop" style="display:none;position:absolute;right:0;top:100%;z-index:999;background:#fff;border:1px solid var(--border);border-radius:10px;box-shadow:0 12px 34px rgba(0,0,0,.2);padding:10px 12px;width:230px;max-height:340px;overflow-y:auto">
+        <div style="font-size:10.5px;font-weight:800;letter-spacing:1px;color:#94a3b8;margin-bottom:6px">COLUMN DIKHAO / CHUPAO</div>
+        <label style="display:flex;gap:7px;align-items:center;font-size:12.5px;padding:3px 0;cursor:pointer"><input type="checkbox" class="colTog" data-col="0" checked> Model</label>
+        <label style="display:flex;gap:7px;align-items:center;font-size:12.5px;padding:3px 0;cursor:pointer"><input type="checkbox" class="colTog" data-col="1" checked> HSN/SAC</label>
+        <label style="display:flex;gap:7px;align-items:center;font-size:12.5px;padding:3px 0;cursor:pointer"><input type="checkbox" class="colTog" data-col="2" checked> PCB &amp; PANEL</label>
+        <label style="display:flex;gap:7px;align-items:center;font-size:12.5px;padding:3px 0;cursor:pointer"><input type="checkbox" class="colTog" data-col="3" checked> FG Stock</label>
+        <label style="display:flex;gap:7px;align-items:center;font-size:12.5px;padding:3px 0;cursor:pointer"><input type="checkbox" class="colTog" data-col="4" checked> Price</label>
+        <label style="display:flex;gap:7px;align-items:center;font-size:12.5px;padding:3px 0;cursor:pointer"><input type="checkbox" class="colTog" data-col="5" checked> Sheet Thickness</label>
+        <label style="display:flex;gap:7px;align-items:center;font-size:12.5px;padding:3px 0;cursor:pointer"><input type="checkbox" class="colTog" data-col="6" checked> Created</label>
+        <label style="display:flex;gap:7px;align-items:center;font-size:12.5px;padding:3px 0;cursor:pointer"><input type="checkbox" class="colTog" data-col="7" checked> PDF</label>
+        <label style="display:flex;gap:7px;align-items:center;font-size:12.5px;padding:3px 0;cursor:pointer"><input type="checkbox" class="colTog" data-col="8" checked> Actions</label>
+        <button type="button" class="btn btn-outline btn-xs" style="width:100%;margin-top:8px" onclick="colReset()">↺ Sab wapas</button>
+        <div style="font-size:10px;color:#94a3b8;margin-top:6px">Setting yaad rehti hai (isi browser me)</div>
+      </div>
+    </div>
+  </div>
+  <div style="padding:10px 14px;border-bottom:1px solid var(--border);background:#fbfaf7">
+    <form method="get" action="/products" id="fltForm" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <input type="hidden" name="token" value="{{ request.args.get('token','') }}" id="fltTok">
+      <input type="text" name="q" value="{{ flt_q }}" placeholder="🔍 Model / MODEL NO / Order No / Note search..."
+             style="flex:1;min-width:200px;padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:#fff">
+      <select name="party" style="padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:#fff;max-width:190px">
+        <option value="">👥 Sab Parties</option>
+        {% for p in party_opts %}<option value="{{ p }}" {{ 'selected' if p == flt_party }}>{{ p }}</option>{% endfor %}
+      </select>
+      <input type="date" name="from" value="{{ flt_from }}" title="Date se" style="padding:7px 8px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:#fff">
+      <span class="muted small">se</span>
+      <input type="date" name="to" value="{{ flt_to }}" title="Date tak" style="padding:7px 8px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:#fff">
+      <span class="muted small">tak</span>
+      <button class="btn btn-sm" type="submit" style="background:var(--ui-brand,#f59e0b);color:#fff">🔍 Filter</button>
+      <a class="btn btn-outline btn-sm" href="/products{% if request.args.get('token') %}?token={{ request.args.get('token') }}{% endif %}">✕ Clear</a>
+    </form>
+    <script>
+    (function () {
+      var tk = new URLSearchParams(window.location.search).get('token');
+      if (!tk) { try { tk = localStorage.getItem('jcToken'); } catch (e) {} }
+      var h = document.getElementById('fltTok');
+      if (tk && h && !h.value) h.value = tk;
+    })();
+    </script>
+  </div>
+  <div class="panel-body" style="padding:0">
+    <table id="modelsTable" style="width:100%;table-layout:auto">
+      <thead>
+        <tr><th>Model (Code + Type)</th><th>HSN/SAC</th><th>PCB &amp; PANEL</th><th class="t-right">FG Stock</th><th class="t-right">Current / Last Price</th><th>Sheet Thickness</th><th>Created</th><th>PDF</th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for m in models_top %}
+        <tr>
+          <td>
+            {% set nt41 = (m.note or '')|upper %}
+            {% set toolsize49 = (m.note|toolmm) or (m.name|toolmm) %}
+            <div style="display:flex;flex-direction:column;gap:3px;align-items:flex-start">
+              {% if m.pcb_code %}
+              <span class="badge b-blue" style="font-size:10.5px;letter-spacing:.3px;box-shadow:0 1px 3px rgba(29,78,216,.25)">{{ m.pcb_code }}
+                {% if 'TOOL' in nt41 %}<span style="background:#7c3aed;color:#fff;font-size:8.5px;border-radius:6px;padding:1px 5px;margin-left:4px;font-weight:800">TOOL{% if toolsize49 %} · {{ toolsize49 }}{% endif %}</span>
+                {% elif 'CNC' in nt41 %}<span style="background:#0e7490;color:#fff;font-size:8.5px;border-radius:6px;padding:1px 5px;margin-left:4px;font-weight:800">CNC</span>{% endif %}
+              </span>
+              {% else %}
+              <span class="badge" style="background:#f1f5f9;color:#334155;font-size:10.5px">{{ m.name }}</span>
+              {% endif %}
+              {% if m.party_code %}<span class="badge b-amber" style="font-size:9.5px" title="Party ka code">⬥ {{ m.party_code }}</span>{% endif %}
+              {% if m.party_name %}<span style="font-size:10px;color:#64748b">👤 {{ m.party_name }}</span>{% endif %}
+              {% if m.attachment_data %}<span style="font-size:10px" title="{{ m.attachment_name or 'attachment hai' }}">📎</span>{% endif %}
+            </div>
+          </td>
+          <td class="mono small">{{ m.hsn or '85340000' }}</td>
+          <td>
+            <div style="white-space:nowrap"><b>{{ m.pcb_len|gfmt }}×{{ m.pcb_w|gfmt }}</b><span style="color:#94a3b8"> mm</span>
+              <span class="badge b-blue" style="font-size:8.5px">{% if m.shape == 'round' %}RD{% elif m.shape == 'square' %}SQ{% else %}RECT{% endif %}</span>
+              <b style="color:#334155">— 1 PC</b>
+            </div>
+            {% if m.pcbs_x and m.pcbs_y and (m.pcbs_x|int > 1 or m.pcbs_y|int > 1) %}
+            <div style="white-space:nowrap;color:#1d4ed8;font-weight:700;font-size:11.5px">{{ m.pcbs_x }}×{{ m.pcbs_y }} = {{ m.panel_len|gfmt }}×{{ m.panel_w|gfmt }}MM <span style="font-weight:800">— {{ m.pcs_panel }} PC</span></div>
+            {% endif %}
+            {% if m.cutting_len %}
+            <div style="white-space:nowrap;color:#166534;font-weight:700;font-size:11.5px" title="Sheet cutting wala panel (gang)">PANEL: {{ m.cutting_len|gfmt }}×{{ m.cutting_w|gfmt }}MM <span style="font-weight:800">— {{ (m.pcs_panel or 0) * (m.gang_x or 1) * (m.gang_y or 1) }} PC</span></div>
+            {% if m.panels_sheet %}
+            <div class="muted" style="font-size:9.5px;white-space:nowrap">sheet me {{ m.panels_sheet }} panel · gang {{ m.gang_x }}×{{ m.gang_y }}</div>
+            {% endif %}
+            {% endif %}
+          </td>
+          <td class="t-right"><span class="badge {{'b-green' if (m.fg_stock or 0) > 0 else 'b-gray'}}">{{ m.fg_stock or 0 }} PCS</span></td>
+          <td class="t-right mono small" style="white-space:nowrap">
+            <b style="color:#166534">{% if m.pcb_price %}₹{{ m.pcb_price|inr0 }}{% else %}—{% endif %}</b>
+            {% set lp = lp_map.get(m.name) %}
+            {% if lp %}<div class="muted" style="font-size:10px">last ₹{{ lp.price|inr0 }}{% if lp.sheet_thickness %} · {{ lp.sheet_thickness }}{% endif %} · {{ lp.ddate }} · {{ lp.order_no }}</div>{% endif %}
+          </td>
+          <td class="small mono" style="white-space:nowrap">{% if m.sheet_thickness %}<span class="badge b-blue">{{ m.sheet_thickness }}</span>{% else %}<span class="muted">—</span>{% endif %}</td>
+          <td class="small muted">{{ m.created_on }}</td>
+          <td class="t-right" style="white-space:nowrap">
+            <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;max-width:120px;margin-left:auto">
+            <a class="btn btn-xs" style="background:#2563eb;color:#fff;justify-content:center" href="/po" title="PO upload karke job card banao — model select par details auto">🧾 MAKE ORDER (PO se)</a>
+            <button type="button" class="btn btn-xs" style="background:#16a34a;color:#fff;justify-content:center" onclick="toggleProduce({{ m.id }})">🏭 Produce</button>
+            <a class="btn btn-outline btn-xs" style="justify-content:center" href="/products?edit={{ m.id }}">✏️ Edit</a>
+            <a class="btn btn-outline btn-xs" style="justify-content:center" href="/cutlist?model={{ m.id }}">📂 Load</a>
+            <a class="btn btn-outline btn-xs" style="justify-content:center" href="/products/{{ m.id }}/bom">🧪 BOM</a>
+            <button type="button" class="btn btn-outline btn-xs att-btn" style="justify-content:center" data-id="{{ m.id }}" data-name="{{ m.name|e }}" data-has="{{ '1' if m.attachment_data else '' }}" data-fname="{{ (m.attachment_name or '')|e }}" title="PDF / Image attach karo">📎</button>
+            <form method="post" action="/products/{{ m.id }}/delete" style="display:inline" onsubmit="return confirm('Delete this finished product?')">
+              <button class="btn btn-danger btn-xs" style="justify-content:center" type="submit">🗑</button>
+            </form>
+            </div>
+          </td>
+            <td style="white-space:nowrap">
+              {% if pdf_counts.get(m.id) %}<a href="/pdfs?model={{ m.id }}{% if request.args.get('token') %}&token={{ request.args.get('token') }}{% endif %}" title="Is model ki PDFs dekho">📄 {{ pdf_counts.get(m.id) }}</a>{% else %}<span style="color:#c0c6cf">—</span>{% endif %}
+              <a class="btn btn-outline btn-xs" href="/pdfs?model={{ m.id }}&add=1{% if request.args.get('token') %}&token={{ request.args.get('token') }}{% endif %}" title="Is model ki Final PDF upload karo">＋</a>
+            </td>
+        </tr>
+        <tr id="produce-{{ m.id }}" style="display:none">
+          <td colspan="12" style="background:#f0fdf4;border-top:1px dashed #bbf7d0">
+            <form method="post" action="/products/{{ m.id }}/produce" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+              <b style="color:#166534">🏭 {{ m.name }} — Ready hua?</b>
+              <label class="small">QTY (PCS)
+                <input type="number" name="qty" min="1" value="1000" style="width:110px" required>
+              </label>
+              <button type="submit" class="btn" style="background:#16a34a;color:#fff">✅ Produce — Inventory se consume karo</button>
+              <button type="button" class="btn btn-outline btn-xs" onclick="toggleProduce({{ m.id }})">Cancel</button>
+              <div class="muted small" style="flex-basis:100%">
+                🧪 BOM (qty per item-basis):
+                {% if bom_map.get(m.id) %}
+                  {% for b in bom_map[m.id] %}<span class="badge b-blue" style="margin:2px">{{ b }}</span>{% endfor %}
+                {% else %}
+                  <span class="badge b-amber">BOM khali hai — pehle 🧪 BOM set karo</span>
+                {% endif %}
+              </div>
+            </form>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="12"><div class="empty">No finished products yet — Cut List Optimizer mein layout bana kar "Save Layout to Model" karein.</div></td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="panel" style="margin-top:14px">
+  <div class="panel-head"><h3>🏭 Production History (Finished Ready)</h3></div>
+  <div class="panel-body" style="padding:0;overflow-x:auto">
+    <table>
+      <thead>
+        <tr><th>#</th><th>Product</th><th class="t-right">Qty</th><th>Raw Materials Consumed (Inventory se)</th><th>By</th><th>Date/Time</th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for p in history %}
+        <tr>
+          <td class="mono small">#{{ p.id }}</td>
+          <td><b>{{ p.product_name }}</b></td>
+          <td class="t-right"><span class="badge b-green">{{ p.qty }} PCS</span></td>
+          <td class="small">
+            {% if p.consumed %}
+              {% for c in p.consumed %}
+                <span class="badge b-amber" style="margin:2px">− {{ c.qty_used|gfmt }} {{ c.unit }} {{ c.item_name }}</span>
+              {% endfor %}
+            {% else %}
+              <span class="muted">—</span>
+            {% endif %}
+          </td>
+          <td class="small">{{ p.made_by }}</td>
+          <td class="small muted">{{ p.created_on }}</td>
+          <td class="t-right">
+            <form method="post" action="/fg-production/{{ p.id }}/undo" style="display:inline" onsubmit="return confirm('Entry undo karein? Inventory stock wapas add hoga aur FG stock minus.')">
+              <button class="btn btn-outline btn-xs" type="submit">↩ Undo</button>
+            </form>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7"><div class="empty">Abhi koi finished product ready nahi hua — 🏭 Produce dabao.</div></td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- 📎 attachment modal -->
+<div id="attModal" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:100;align-items:center;justify-content:center;padding:14px">
+  <div style="background:var(--card);border-radius:12px;padding:18px 20px;max-width:440px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.35)">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <b id="attTitle" style="font-size:15px">📎 Attachment</b>
+      <button type="button" class="btn btn-outline btn-xs" onclick="closeAtt()">✕</button>
+    </div>
+    <div class="muted small" id="attInfo" style="margin-bottom:10px"></div>
+    <div id="attHas" style="display:none;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+      <a class="btn btn-outline btn-sm" id="attView" target="_blank" href="#">👁 View / Open</a>
+      <button type="button" class="btn btn-outline btn-sm" id="attDel" style="color:#b91c1c">🗑 Delete</button>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <input type="file" id="attFile" accept=".pdf,.png,.jpg,.jpeg,.webp,.gif,.bmp" style="padding:6px;border:1px solid var(--border);border-radius:8px;font-size:12.5px;flex:1;min-width:180px">
+      <button type="button" class="btn" id="attUp" style="background:#16a34a">⬆️ Upload</button>
+    </div>
+    <div class="small" id="attMsg" style="margin-top:10px;min-height:16px"></div>
+  </div>
+</div>
+
+<script>
+function toggleProduce(id){
+  var r = document.getElementById('produce-' + id);
+  if (r) r.style.display = (r.style.display === 'none' || r.style.display === '') ? 'table-row' : 'none';
+}
+/* ---- 📎 attachment (PDF / image per model) ---- */
+var attPid = 0;
+document.querySelectorAll('.att-btn').forEach(function(b){
+  b.addEventListener('click', function(){
+    attPid = this.getAttribute('data-id');
+    var has = this.getAttribute('data-has') === '1';
+    var fname = this.getAttribute('data-fname') || '';
+    document.getElementById('attTitle').textContent = '📎 Attachment — ' + this.getAttribute('data-name');
+    document.getElementById('attInfo').textContent = has
+      ? 'Maujooda file: ' + fname + ' — nayi upload karne par replace ho jayegi.'
+      : 'Koi file nahi hai. PDF (drawing/datasheet) ya image (photo/artwork) upload karo — max 3MB.';
+    document.getElementById('attHas').style.display = has ? 'flex' : 'none';
+    if (has) document.getElementById('attView').href = '/products/' + attPid + '/attachment';
+    document.getElementById('attMsg').textContent = '';
+    document.getElementById('attFile').value = '';
+    document.getElementById('attModal').style.display = 'flex';
+  });
+});
+function closeAtt(){ document.getElementById('attModal').style.display = 'none'; }
+document.getElementById('attUp').addEventListener('click', function(){
+  var f = document.getElementById('attFile');
+  if (!f.files || !f.files.length) {
+    document.getElementById('attMsg').innerHTML = '<span style="color:#b91c1c">Pehle file choose karo.</span>';
+    return;
+  }
+  var fd = new FormData();
+  fd.append('file', f.files[0]);
+  /* preview/proxy iframe mein session cookie nahi jaati — URL wala token bhejo */
+  var t = new URLSearchParams(window.location.search).get('token');
+  if (t) fd.append('token', t);
+  this.disabled = true;
+  document.getElementById('attMsg').textContent = '⏳ Upload ho raha hai...';
+  fetch('/products/' + attPid + '/attachment', { method: 'POST', body: fd })
+    .then(function(r){ return r.json().then(function(j){ return {ok: r.ok, j: j}; }); })
+    .then(function(res){
+      if (res.ok) { location.reload(); }
+      else {
+        document.getElementById('attMsg').innerHTML = '<span style="color:#b91c1c">' + (res.j && res.j.msg ? res.j.msg : 'Upload fail') + '</span>';
+        document.getElementById('attUp').disabled = false;
+      }
+    })
+    .catch(function(e){
+      document.getElementById('attMsg').innerHTML = '<span style="color:#b91c1c">Upload fail: ' + e + '</span>';
+      document.getElementById('attUp').disabled = false;
+    });
+});
+document.getElementById('attDel').addEventListener('click', function(){
+  if (!confirm('Attachment delete karni hai?')) return;
+  var u = '/products/' + attPid + '/attachment/delete';
+  var t = new URLSearchParams(window.location.search).get('token');
+  if (t) u += '?token=' + encodeURIComponent(t);
+  fetch(u, { method: 'POST' })
+    .then(function(r){ return r.json(); })
+    .then(function(j){
+      if (j.ok) { location.reload(); }
+      else { alert(j.msg || 'Delete fail'); }
+    })
+    .catch(function(e){ alert('Delete fail: ' + e); });
+});
+document.getElementById('attModal').addEventListener('click', function(e){
+  if (e.target === this) closeAtt();
+});
+/* ---- Sheet Rate Card: inline edit (✏️) ---- */
+function rcEdit(id, rate){
+  var cell = document.getElementById('rc_rate_' + id);
+  if (!cell) return;
+  cell.innerHTML =
+    '<form method="post" action="/products" style="display:inline-flex;gap:4px;align-items:center">' +
+    '<input type="hidden" name="rate_action" value="edit">' +
+    '<input type="hidden" name="rate_id" value="' + id + '">' +
+    '<input type="number" step="0.01" min="0.01" name="rate_per_sq_inch" value="' + rate + '" ' +
+    'style="width:84px;padding:3px 6px;border:1.5px solid var(--amber);border-radius:6px;font-size:12px;font-weight:700">' +
+    '<button class="btn btn-xs" type="submit" style="background:#16a34a;color:#fff">💾</button>' +
+    '<button type="button" class="btn btn-outline btn-xs" onclick="rcCancel(' + id + ',' + rate + ')">✕</button>' +
+    '</form>';
+}
+function rcCancel(id, rate){
+  var cell = document.getElementById('rc_rate_' + id);
+  if (cell) cell.innerHTML = '<b>₹' + (Math.round(rate * 100) / 100) + '</b>';
+}
+</script>
+<style>
+/* FINISHED PRODUCT table header — CSS fallback (container overflow ke andar kam kar sakta hai,
+   isliye neeche JS clone se pakka freeze kiya hai) */
+/* v3.41 — table ek page me fit: lamba text wrap hota hai, row vertically badhti hai */
+#modelsTable td { word-break:break-word; overflow-wrap:anywhere; line-height:1.45;
+  vertical-align:top; padding:8px; font-size:12px; white-space:normal; }
+#modelsTable thead th { white-space:normal; }
+#modelsTable thead th {
+  position: sticky;
+  top: 0;
+  background: #fbfaf7;
+  z-index: 5;
+  box-shadow: 0 2px 4px rgba(0,0,0,.12);
+}
+#modelsHeadClone th { background: #fbfaf7; }
+</style>
+<script>
+/* ---- v3.44 COLUMN ENABLE/DISABLE (localStorage persist) ---- */
+(function(){
+  var table = document.getElementById('modelsTable');
+  if (!table) return;
+  var KEY = 'fpColsV2';
+  function cols(){
+    try { return JSON.parse(localStorage.getItem(KEY) || '{}'); } catch(e){ return {}; }
+  }
+  function apply(){
+    var st = cols();
+    var thead = table.querySelectorAll('thead th');
+    for (var i = 0; i < thead.length; i++) {
+      var off = st[String(i)] === false;
+      for (var r = 0; r < table.tBodies.length; r++) {
+        var trs = table.tBodies[r].rows;
+        for (var j = 0; j < trs.length; j++) if (trs[j].cells[i]) trs[j].cells[i].style.display = off ? 'none' : '';
+      }
+      thead[i].style.display = off ? 'none' : '';
+    }
+    var cg = table.querySelector('colgroup');
+    if (cg) { var cs = cg.children; for (var k = 0; k < cs.length; k++) cs[k].style.display = (st[String(k)] === false) ? 'none' : ''; }
+  }
+  window.colReset = function(){
+    try { localStorage.removeItem(KEY); } catch(e){}
+    document.querySelectorAll('.colTog').forEach(function(cb){ cb.checked = true; });
+    apply();
+  };
+  document.querySelectorAll('.colTog').forEach(function(cb){
+    var st = cols();
+    if (st[String(cb.dataset.col)] === false) cb.checked = false;
+    cb.addEventListener('change', function(){
+      var s2 = cols();
+      s2[String(cb.dataset.col)] = cb.checked;
+      try { localStorage.setItem(KEY, JSON.stringify(s2)); } catch(e){}
+      apply();
+    });
+  });
+  apply();
+  document.addEventListener('click', function(e){
+    var w = document.getElementById('colSetWrap');
+    if (w && !w.contains(e.target)) { var d = document.getElementById('colSetDrop'); if (d) d.style.display = 'none'; }
+  });
+})();
+/* ---- FINISHED PRODUCT header FREEZE (fixed clone — window scroll + panel scroll dono par) ----
+   .panel-body ka overflow-x:auto CSS sticky ko tod deta hai, isliye header ka fixed clone
+   banate hain jo scroll karte hi topbar ke neeche chipak jata hai. */
+(function(){
+  var table = document.getElementById('modelsTable');
+  if (!table) return;
+  var srcThead = table.querySelector('thead');
+  if (!srcThead) return;
+  var clone = document.createElement('table');
+  clone.id = 'modelsHeadClone';
+  clone.appendChild(srcThead.cloneNode(true));
+  clone.style.cssText = 'position:fixed;left:0;z-index:30;margin:0;display:none;' +
+    'border-collapse:collapse;table-layout:fixed;background:#fbfaf7;' +
+    'box-shadow:0 3px 8px rgba(0,0,0,.18);';
+  document.body.appendChild(clone);
+  var topbar = document.querySelector('.topbar');
+  function sync(){
+    var r = table.getBoundingClientRect();
+    var thH = srcThead.getBoundingClientRect().height || 40;
+    var off = topbar ? topbar.getBoundingClientRect().height : 0;
+    var show = r.top < off && r.bottom > thH + off + 10;
+    if (show) {
+      clone.style.display = 'table';
+      clone.style.top = off + 'px';
+      clone.style.left = r.left + 'px';
+      clone.style.width = r.width + 'px';
+      var srcs = srcThead.querySelectorAll('th');
+      var dsts = clone.querySelectorAll('th');
+      for (var i = 0; i < srcs.length && i < dsts.length; i++) {
+        var w = srcs[i].getBoundingClientRect().width;
+        dsts[i].style.width = w + 'px';
+        dsts[i].style.minWidth = w + 'px';
+        dsts[i].style.boxSizing = 'border-box';
+      }
+    } else {
+      clone.style.display = 'none';
+    }
+  }
+  window.addEventListener('scroll', sync, {passive: true});
+  window.addEventListener('resize', sync);
+  var sc = table.closest('.panel-body');
+  if (sc) sc.addEventListener('scroll', sync, {passive: true});
+  sync();
+})();
+</script>
+
+<style>
+  /* v2.67 \u2014 EK hi scrollbar: table ki apni (bottom) wali chhupi */
+  .no-nativescroll{scrollbar-width:none}
+  .no-nativescroll::-webkit-scrollbar{display:none;height:0}
+</style>
+<script>
+/* 📌 v2.68 FINISHED PRODUCT EDGE SCROLLBAR (FIXED) \u2014 bar screen ke NICHLE EDGE par
+   chipki rehti hai jab tak wide table nazar me hai (jahan aap dekh rahe ho WAHI par).
+   Sirf TABLE ko right-left karti hai (page kabhi nahi). 2-tarafa sync + wheel support.
+   Table viewport se bahar → bar khud chhup jati hai. Ek samay me sirf EK bar. */
+(function(){
+  var bar = null, sp = null, conts = [], active = null, lock = 0;
+  function ensureBar(){
+    if (bar) return;
+    bar = document.createElement('div');
+    bar.id = 'fgEdgeScroll';
+    bar.title = 'Horizontal scrollbar \u2014 screen ke edge par fixed (table ke niche tak jaane ki zaroorat nahi)';
+    bar.style.cssText = 'position:fixed;right:0;bottom:2px;height:16px;overflow-x:auto;overflow-y:hidden;z-index:96;background:#e8eef6;border-top:1.5px solid #94a3b8;display:none';
+    sp = document.createElement('div');
+    sp.style.height = '1px';
+    bar.appendChild(sp);
+    document.body.appendChild(bar);
+    bar.addEventListener('scroll', function(){
+      if (Date.now() < lock || !active) return;
+      lock = Date.now() + 60;
+      active.scrollLeft = bar.scrollLeft;
+    });
+    bar.addEventListener('wheel', function(e){
+      if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) { e.preventDefault(); if (active) active.scrollLeft += e.deltaY; }
+    }, {passive:false});
+  }
+  function scan(){
+    var divs = document.querySelectorAll('div');
+    for (var i = 0; i < divs.length; i++){
+      var cont = divs[i];
+      if (cont.hasAttribute('data-topdone')) continue;
+      if (!cont.querySelector('table')){ continue; }
+      var s = getComputedStyle(cont);
+      cont.setAttribute('data-topdone', '1');
+      if (s.overflowX !== 'auto' && s.overflowX !== 'scroll') continue;
+      cont.classList.add('no-nativescroll');
+      conts.push(cont);
+    }
+  }
+  function refresh(){
+    ensureBar(); scan();
+    var mid = window.innerHeight / 2, best = null, bestD = 1e9;
+    for (var i = 0; i < conts.length; i++){
+      var c = conts[i];
+      if (!document.contains(c)) continue;
+      if (c.scrollWidth <= c.clientWidth + 2) continue;
+      var r = c.getBoundingClientRect();
+      if (r.height < 40 || r.bottom < 60 || r.top > window.innerHeight - 30) continue;
+      var d = Math.abs((r.top + r.bottom) / 2 - mid);
+      if (d < bestD){ bestD = d; best = c; }
+    }
+    if (!best){ bar.style.display = 'none'; active = null; return; }
+    active = best;
+    var r2 = active.getBoundingClientRect();
+    var left = Math.max(0, r2.left), width = Math.min(r2.width, window.innerWidth - left);
+    bar.style.left = left + 'px';
+    bar.style.width = width + 'px';
+    var ds = document.getElementById('docHScroll');
+    bar.style.bottom = (ds && ds.style.display === 'block') ? '18px' : '2px';
+    bar.style.display = 'block';
+    var w = active.scrollWidth + 'px';
+    if (sp.style.width !== w) sp.style.width = w;
+    if (Date.now() > lock && Math.abs(bar.scrollLeft - active.scrollLeft) > 1) bar.scrollLeft = active.scrollLeft;
+  }
+  window.addEventListener('scroll', refresh, {passive:true});
+  window.addEventListener('resize', refresh);
+  setInterval(refresh, 500);
+  refresh();
+})();
+</script>
+
+{% endblock %}
