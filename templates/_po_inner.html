@@ -247,19 +247,7 @@ function showImg(id){
   var a = document.getElementById('newTab'); a.href = url; a.style.display = 'inline-block';
   document.getElementById('preview').innerHTML = '<img src="' + url + '" style="max-width:100%;display:block;margin:auto">';
 }
-/* v3.86b: scanned-PDF / photo -> browser OCR (pdf.js pages 1-2 canvas scale 2 -> tesseract.js v5 PSM 6) */
-function ocrFile(j){
-  var on = document.getElementById('ocrNote');
-  if (on) on.textContent = '🔎 OCR chal raha hai (browser me)…';
-  function done(){
-    var n = document.getElementById('ocrNote');
-    if (n) n.textContent = 'OCR engine load nahi hua — lines khud bharo, ＋ Line jodo. (File library me safe hai)';
-  }
-  function loadScript(src, cb){
-    var sc = document.createElement('script');
-    sc.src = src; sc.onload = cb; sc.onerror = cb;
-    document.head.appendChild(sc);
-  }
+/* v4.10: poPdfCanvas + tessRun ab TOP-LEVEL (RE-READ bhi OCR use karega) */
   function poPdfCanvas(url){
     pdfjsLib.GlobalWorkerOptions.workerSrc = '/static/vendor/pdfjs/pdf.worker.min.js';
     return pdfjsLib.getDocument(url).promise.then(function(pdf){
@@ -301,6 +289,19 @@ function ocrFile(j){
       }).then(function(w){
         return w.recognize(src).then(function(r){ try { w.terminate(); } catch (e2) {} return r; });
       });
+  }
+/* v3.86b: scanned-PDF / photo -> browser OCR (pdf.js pages 1-2 canvas scale 2 -> tesseract.js v5 PSM 6) */
+function ocrFile(j){
+  var on = document.getElementById('ocrNote');
+  if (on) on.textContent = '🔎 OCR chal raha hai (browser me)…';
+  function done(){
+    var n = document.getElementById('ocrNote');
+    if (n) n.textContent = 'OCR engine load nahi hua — lines khud bharo, ＋ Line jodo. (File library me safe hai)';
+  }
+  function loadScript(src, cb){
+    var sc = document.createElement('script');
+    sc.src = src; sc.onload = cb; sc.onerror = cb;
+    document.head.appendChild(sc);
   }
   function tessGo(j){
     var url = '/api/po/file/' + j.file_id + '?token=' + encodeURIComponent(T());
@@ -432,6 +433,7 @@ function renderInbox(){
           '<div><label>PRICE \u20B9</label><input id="ce_r' + i + '" type="number" step="any" value="' + esc(l.rate || '') + '"></div>' +
           '<div style="display:flex;gap:6px;align-items:flex-end;flex-wrap:wrap">' +
             '<button type="button" class="btn btn-xs" style="background:#1e3a8a" onclick="saveEdit(' + i + ')">💾 SAVE</button>' +
+            '<button type="button" class="btn btn-outline btn-xs" id="rrbtn' + i + '" style="background:#ecfeff;color:#0e7490" onclick="rereadPo(' + i + ')" title="PO file dobara padho — khaali PO NO/DATE/MODEL khud bhar jayega">\ud83d\udd04 PO RE-READ</button>' +
             (l.oid ? '<button type="button" class="btn btn-outline btn-xs" onclick="openVerify(' + l.oid + ')">👁 VERIFY</button>' : '') +
             '<button type="button" class="btn btn-outline btn-xs" onclick="closeEdit(' + i + ')">\u2716 CLOSE</button>' +
           '</div>' +
@@ -484,6 +486,80 @@ function autoSaveAll(){
     var done = LINES.filter(function(x){ return x.saved; }).length;
     toast(done + '/' + LINES.length + ' temp job cards ban gayi \u2705 — chip click = VERIFY, APPROVE = process');
   });
+}
+/* ---------- v4.10: PO RE-READ — editor se PO file dobara padho, khaali fields bharo ---------- */
+function rereadPo(i){
+  var l = LINES[i]; if (!l) return;
+  var fid = l.file_id || (FILES[FILES.length - 1] && FILES[FILES.length - 1].file_id) || 0;
+  if (!fid) { toast('Is line ki PO file nahi mili — khud bharo.', true); return; }
+  var msg = document.getElementById('ce_msg' + i);
+  var btn = document.getElementById('rrbtn' + i);
+  function reset208(){ if (btn) { btn.disabled = false; btn.textContent = '\ud83d\udd04 PO RE-READ'; } }
+  if (btn) { btn.disabled = true; btn.textContent = '\u23f3 re-read\u2026'; }
+  if (msg) msg.textContent = 'PO dobara padhi ja rahi hai\u2026';
+  fetch('/api/po/reread/' + fid + '?token=' + encodeURIComponent(T()))
+    .then(function(r){ return r.json(); })
+    .then(function(j){
+      if (!j.ok) { if (msg) msg.textContent = j.error || 're-read fail'; reset208(); return; }
+      if (j.text && j.text.trim()) { merge208(i, j.text); reset208(); }
+      else if (j.needs_ocr) { ensureTess208(function(){ ocrReread208(fid, i, j.mime !== 'application/pdf'); }); }
+      else { if (msg) msg.textContent = 'PO me text nahi mila — phir RE-READ dabao ya khud bharo.'; reset208(); }
+    })
+    .catch(function(){ if (msg) msg.textContent = 'network fail'; reset208(); });
+}
+function ensureTess208(cb){
+  if (window.Tesseract) { cb(); return; }
+  var sc = document.createElement('script');
+  sc.src = '/static/vendor/tess/tesseract.min.js';
+  sc.onload = function(){ if (window.Tesseract) cb(); else {
+    var sc2 = document.createElement('script');
+    sc2.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';
+    sc2.onload = function(){ if (window.Tesseract) cb(); };
+    sc2.onerror = function(){ toast('OCR engine load nahi hua — khud bharo.', true); };
+    document.head.appendChild(sc2);
+  } };
+  sc.onerror = sc.onload;
+  document.head.appendChild(sc);
+}
+function ocrReread208(fid, i, isImg){
+  var msg = document.getElementById('ce_msg' + i);
+  var btn = document.getElementById('rrbtn' + i);
+  function reset208(){ if (btn) { btn.disabled = false; btn.textContent = '\ud83d\udd04 PO RE-READ'; } }
+  if (msg) msg.textContent = 'PO scan dobara padha ja raha hai (OCR)\u2026';
+  var url = '/api/po/file/' + fid + '?token=' + encodeURIComponent(T());
+  var prep = isImg ? Promise.resolve(url) : poPdfCanvas(url);
+  prep.then(function(src){ return tessRun(src); }).then(function(r){
+    var text = (r && r.data && r.data.text) || '';
+    if (text.trim()) merge208(i, text);
+    else { if (msg) msg.textContent = 'OCR se text nahi mila — phir RE-READ dabao (ya khud bharo).'; }
+    reset208();
+  }).catch(function(){ if (msg) msg.textContent = 'OCR fail — phir RE-READ dabao.'; reset208(); });
+}
+function merge208(i, text){
+  var l = LINES[i]; if (!l) return;
+  var masters = MODELS.map(function(m){ return { id: m.id, model: m.model_code || m.name, party: m.party_name || '' }; });
+  var ls = (window.PCBFlowPO ? PCBFlowPO.parsePoText(text, masters) : []);
+  var msg = document.getElementById('ce_msg' + i);
+  if (!ls.length) {
+    renderInbox();
+    if (msg) msg.textContent = 'PO dobara padhi par lines nahi bani — phir RE-READ dabao.';
+    return;
+  }
+  var hit = null;
+  for (var k = 0; k < ls.length; k++) { if (l.sno && ls[k].sno === l.sno) { hit = ls[k]; break; } }
+  if (!hit && l.model) { for (k = 0; k < ls.length; k++) { if (POnorm(ls[k].model) === POnorm(l.model)) { hit = ls[k]; break; } } }
+  if (!hit) { for (k = 0; k < ls.length; k++) { if (ls[k].model) { hit = ls[k]; break; } } }
+  var filled = [];
+  [['po_no', 'PO NO'], ['order_date', 'DATE'], ['model', 'MODEL'], ['party_model', 'PARTY MODEL'],
+   ['qty', 'QTY'], ['rate', 'PRICE'], ['material', 'MATERIAL']].forEach(function(pr){
+    if (!String(l[pr[0]] || '').trim() && String(hit[pr[0]] || '').trim()) { l[pr[0]] = hit[pr[0]]; filled.push(pr[1]); }
+  });
+  if (hit.master_id && !l.master_id) l.master_id = hit.master_id;
+  if (hit.party && !l.party) l.party = hit.party;
+  renderInbox();   /* editor khula hi rehta hai — inputs ab bhari */
+  var m2 = document.getElementById('ce_msg' + i);
+  if (m2) m2.textContent = filled.length ? ('\u2705 PO re-read: ' + filled.join(' + ') + ' bhar gaya') : ('PO re-read: is line ke liye kuch naya nahi mila — khud bharo.');
+  toast(filled.length ? ('\u2705 RE-READ: ' + filled.join(' + ') + ' mil gaya') : 'RE-READ: naya data nahi mila — phir dabao', !filled.length);
 }
 function selLine(i){ SEL = (SEL === i) ? -1 : i; renderInbox(); }   /* v3.95: click = editor khula/band */
 function closeEdit(i){ if (SEL === i) SEL = -1; renderInbox(); }

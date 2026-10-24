@@ -15,6 +15,7 @@
   function guessPoNo(text) {
     text = String(text || '');
     var pats = [
+      /\bP\s?O\s?\d{2}\s?-\s?\d{2,6}(?:\s?[-\/]\s?\d+)?/,            /* v4.10: PO 26-27366/6107 & PO26-27366-6355 — OCR space-tolerant */
       /\bPO\d{2}-\d{2,}(?:\/\d+)?\b/,                                  /* PO26-27366/6381 */
       /\bPO-\d{3,}\b/,                                                 /* PO-02002 */
       /\bP\.?O\.?\s*#\s*([A-Z0-9][A-Z0-9\-\/]*[A-Z0-9])/i,             /* P.O. # ABC123 */
@@ -22,7 +23,7 @@
     ];
     for (var i = 0; i < pats.length; i++) {
       var m = text.match(pats[i]);
-      if (m) return String(m[1] || m[0]).toUpperCase();
+      if (m) return String(m[1] || m[0]).toUpperCase().replace(/\s+/g, '');   /* v4.10: spaces hatein */
     }
     return '';
   }
@@ -147,8 +148,16 @@
     var order_date = '', due_date = '', priority = /urgent/i.test(text) ? 'urgent' : 'normal';
     var party = '';
     var lines = text.split(/\r?\n/);
+    var dateNext = false;   /* v4.10: "Date" label akela -> agli pure-date line value hai */
     lines.forEach(function (l) {
       if (!order_date && /^\s*Date\b/i.test(l)) order_date = dateIso(l);
+      if (!order_date) {
+        var lt = String(l).trim();
+        if (/^\s*(?:Date|Dt)\s*[:\-]?\s*$/i.test(lt)) dateNext = true;
+        else if (dateNext && /^\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4}$/.test(lt)) { order_date = dateIso(lt); dateNext = false; }
+        else if (dateNext) dateNext = false;
+        if (!order_date && /^\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4}$/.test(lt)) order_date = dateIso(lt);   /* akeli date-line */
+      }
       if (!due_date && /(delivery date|delivery\s*[:\-]|dispatch)/i.test(l)) due_date = dateIso(l);
       if (!party) {
         var m = l.match(/(?:buyer|party|consignee)(?:'s)?\s*name\s*:?\s*(.{3,60})/i);

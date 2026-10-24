@@ -129,9 +129,9 @@
       <div class="panel-head"><h3>🔲 PANEL PREVIEW — 1 PANEL + INDIVIDUAL PCB</h3>
         <button type="button" class="btn btn-outline btn-xs" style="margin-left:auto" onclick="printPanelPreview()">🖨️ PRINT / PDF</button><button type="button" class="btn btn-outline btn-xs" onclick="printPreviews()">🖨️ SAB (3 PAGE)</button>
         <span class="muted small" style="display:inline-flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:2px">
-          <span style="display:inline-flex;gap:4px;align-items:center"><span style="width:11px;height:11px;background:#dbeafe;border:1.5px solid #2563eb;border-radius:2px;display:inline-block"></span>Panel</span>
-          <span style="display:inline-flex;gap:4px;align-items:center"><span style="width:11px;height:11px;background:#fbbf24;border:1.5px solid #f59e0b;border-radius:2px;display:inline-block"></span>PCB</span>
-            <span style="font-weight:800;color:#92400e">PCB DIMS: TOP = LENGTH (X) · LEFT = WIDTH (Y)</span>
+          <span style="display:inline-flex;gap:4px;align-items:center"><span style="width:11px;height:11px;background:#e4f2f3;border:1.5px solid #2ba7b5;border-radius:2px;display:inline-block"></span>Panel</span>
+          <span style="display:inline-flex;gap:4px;align-items:center"><span style="width:11px;height:11px;background:#d2e8e9;border:1.5px solid #16324f;border-radius:2px;display:inline-block"></span>PCB</span>
+            <span style="font-weight:800;color:#16324f">PCB DIMS: TOP = LENGTH (X) · LEFT = WIDTH (Y)</span>
         </span>
       </div>
       <div class="panel-body" style="padding:10px">
@@ -152,9 +152,9 @@
         <div style="margin-top:12px">
           <span class="muted small" style="display:inline-flex;gap:10px;align-items:center;flex-wrap:wrap">
             <span style="display:inline-flex;gap:4px;align-items:center"><span style="width:12px;height:12px;background:#ede9fe;border:3px solid #7c3aed;border-radius:2px;display:inline-block"></span><b style="color:#7c3aed">GANG PANEL</b> (thick violet)</span>
-            <span style="display:inline-flex;gap:4px;align-items:center"><span style="width:12px;height:12px;background:#dbeafe;border:1.5px solid #2563eb;border-radius:2px;display:inline-block"></span>Panel</span>
-            <span style="display:inline-flex;gap:4px;align-items:center"><span style="width:12px;height:12px;background:#fbbf24;border:1.5px solid #f59e0b;border-radius:2px;display:inline-block"></span>PCB</span>
-            <span style="font-weight:800;color:#92400e">PCB DIMS: TOP = LENGTH (X) · LEFT = WIDTH (Y)</span>
+            <span style="display:inline-flex;gap:4px;align-items:center"><span style="width:12px;height:12px;background:#e4f2f3;border:1.5px solid #2ba7b5;border-radius:2px;display:inline-block"></span>Panel</span>
+            <span style="display:inline-flex;gap:4px;align-items:center"><span style="width:12px;height:12px;background:#d2e8e9;border:1.5px solid #16324f;border-radius:2px;display:inline-block"></span>PCB</span>
+            <span style="font-weight:800;color:#16324f">PCB DIMS: TOP = LENGTH (X) · LEFT = WIDTH (Y)</span>
           </span>
           <div id="svgGangPanel" style="margin-top:8px;max-width:640px;margin-left:auto;margin-right:auto">{{ svg_gang_panel|safe }}{% if not svg_gang_panel %}<div class="muted small" style="padding:18px;text-align:center">Value bharke ⚙️ CALCULATE dabao — preview yahan banega</div>{% endif %}</div>
         </div>
@@ -635,7 +635,7 @@ function _pcbDim(cx, cy, w, h, dl, dw){
   var lt = String(Math.round(dl * 100) / 100), lw = String(Math.round(dw * 100) / 100);
   var fs = Math.min(8, h * 0.3, w * 0.18);
   if (fs < 5.5) return '';
-  var base = 'text-anchor="middle" font-size="' + fs.toFixed(1) + '" font-weight="700" fill="#92400e" font-family="Segoe UI,Arial" style="paint-order:stroke" stroke="#ffffff" stroke-width="1.6"';
+  var base = 'text-anchor="middle" font-size="' + fs.toFixed(1) + '" font-weight="700" fill="#16324f" font-family="Segoe UI,Arial" style="paint-order:stroke" stroke="#ffffff" stroke-width="1.6"';
   var out = '';
   if (lt.length * fs * 0.6 <= w - 6 && h >= 13)
     out += '<text x="' + cx.toFixed(1) + '" y="' + (cy - h / 2 + fs + 2).toFixed(1) + '" ' + base + '>' + lt + '</text>';
@@ -1035,65 +1035,93 @@ function computeLive(){
   _zApply('svgPanel');
   var sheetHead = document.getElementById('sheetPreviewHead');
   if (sheetHead) sheetHead.innerHTML = (best === 'mixed')
-    ? '🔲 <span style="color:#16a34a;font-weight:700">Normal rows</span> · <span style="color:#2563eb;font-weight:700">Rotated rows</span> — <span style="display:inline-flex;gap:4px;align-items:center"><span style="width:10px;height:10px;background:#dcfce7;border:1.5px solid #16a34a;border-radius:2px;display:inline-block"></span>Gang</span> <span style="display:inline-flex;gap:4px;align-items:center"><span style="width:10px;height:10px;background:#bfdbfe;border:1.5px solid #2563eb;border-radius:2px;display:inline-block"></span>Panel</span>'
-    : '🔲 <span style="color:#16a34a;font-weight:700">Gang panels</span> · Sheet — <span style="display:inline-flex;gap:4px;align-items:center"><span style="width:10px;height:10px;background:#dcfce7;border:1.5px solid #16a34a;border-radius:2px;display:inline-block"></span>Gang</span> <span style="display:inline-flex;gap:4px;align-items:center"><span style="width:10px;height:10px;background:#bfdbfe;border:1.5px solid #2563eb;border-radius:2px;display:inline-block"></span>Panel</span>';
+    ? '🔲 <span style="color:#16324f;font-weight:700">Normal rows</span> · <span style="color:#2ba7b5;font-weight:700">Rotated rows</span> — <span style="display:inline-flex;gap:4px;align-items:center"><span style="width:10px;height:10px;background:#d2e8e9;border:1.5px solid #16324f;border-radius:2px;display:inline-block"></span>Gang</span> <span style="display:inline-flex;gap:4px;align-items:center"><span style="width:10px;height:10px;background:#e4f2f3;border:1.5px solid #2ba7b5;border-radius:2px;display:inline-block"></span>Panel</span>'
+    : '🔲 <span style="color:#16324f;font-weight:700">Gang panels</span> · Sheet — <span style="display:inline-flex;gap:4px;align-items:center"><span style="width:10px;height:10px;background:#d2e8e9;border:1.5px solid #16324f;border-radius:2px;display:inline-block"></span>Gang</span> <span style="display:inline-flex;gap:4px;align-items:center"><span style="width:10px;height:10px;background:#e4f2f3;border:1.5px solid #2ba7b5;border-radius:2px;display:inline-block"></span>Panel</span>';
 }
 
 function svgPanel(pcbL, pcbW, px, py, gapXs, gapYs, bl, br, bt, bb, pL, pW, pcsPanel, gx, gy, kx, ky, pgXs, pgYs, shape){
-  shape = shape || 'rect';   /* v3.20 */
-  /* PREVIEW #1 — PANEL: sirf EK panel + individual PCBs (borders + per-boundary gaps).
-     Multiplier copies GANG PANEL PREVIEW (#2) me — sheet fit #3 me.
-     v2.86 \u2014 canvas me FIXED bottom zone (dims + captions) = koi overlap nahi.
-     PCB size na diya ho (panel-mode) to grid se NIKALO: (panel - borders - gaps) / grid. */
-  var W = 460, H = 356, pad = 22, BOT = 64;
+  shape = shape || 'rect';
+  /* v4.11 — navy-teal 'PCB PANELIZATION LAYOUT' theme (user ka exact format):
+     title + teal rule, navy panel, teal PCBs ('L x W'), top/right dim arrows, gap dim, 5-box info strip. */
+  var NAVY = '#16324f', TEAL = '#2ba7b5', PCBF = '#d2e8e9', MUT = '#5b7484';
+  var W = 470, TOP = 48, AVH = 316, BOTG = 58, STR = 96, H = TOP + AVH + BOTG + STR + 8;
   var effL = pcbL, effW = pcbW;
   if ((!effL || effL <= 0) && px > 0) effL = (pL - bl - br - _sumArr(pgXs || gapXs)) / px;
   if ((!effW || effW <= 0) && py > 0) effW = (pW - bt - bb - _sumArr(pgYs || gapYs)) / py;
   if (effL > 0 && effL < 200) effL = Math.round(effL * 100) / 100;
   if (effW > 0 && effW < 200) effW = Math.round(effW * 100) / 100;
-  var availW = W - 2*pad - 16, availH = H - pad - BOT;
-  var scale = Math.min(availW / pL, availH / pW);
+  var scale = Math.min((W - 96) / pL, AVH / pW);
   var P = pL * scale, Q = pW * scale;
-  var x0 = pad + (availW - P) / 2, y0 = pad;
+  var x0 = (W - 34 - P) / 2, y0 = TOP + 18 + (AVH - Q) / 2;
   var cw = (effL > 0 ? effL : 0) * scale, ch = (effW > 0 ? effW : 0) * scale;
   var bx = bl * scale, by = bt * scale;
-  var s = '<svg viewBox="0 0 ' + W + ' ' + H + '" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;display:block">';
+  var f2 = function(n){ return (Math.round(n * 100) / 100).toFixed(2); };
+  var s = '<svg viewBox="0 0 ' + W + ' ' + H + '" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;display:block;background:#ffffff">';
   var i, j;
-  s += '<rect x="' + x0.toFixed(1) + '" y="' + y0.toFixed(1) + '" width="' + P.toFixed(1) + '" height="' + Q.toFixed(1) + '" fill="#dbeafe" stroke="#2563eb" stroke-width="2" rx="3"/>';
+  /* Title + teal rule */
+  s += '<text x="' + (W / 2) + '" y="24" text-anchor="middle" font-size="15.5" font-weight="800" fill="' + NAVY + '" font-family="Segoe UI,Arial" letter-spacing="1">PCB PANELIZATION LAYOUT</text>';
+  s += '<line x1="26" y1="33" x2="' + (W - 26) + '" y2="33" stroke="' + TEAL + '" stroke-width="2"/>';
+  /* Panel outline */
+  s += '<rect x="' + x0.toFixed(1) + '" y="' + y0.toFixed(1) + '" width="' + P.toFixed(1) + '" height="' + Q.toFixed(1) + '" fill="#ffffff" stroke="' + NAVY + '" stroke-width="2.4" rx="5"/>';
+  /* PCB cells (teal + label) */
   if (cw > 2.4 && ch > 2.4 && effL > 0 && effW > 0) {
     var ox = bx;
     for (i = 0; i < px; i++) {
       var oy = by;
       for (j = 0; j < py; j++) {
         s += (shape === 'round')
-          ? '<ellipse cx="' + (x0 + ox + cw / 2).toFixed(1) + '" cy="' + (y0 + oy + ch / 2).toFixed(1) + '" rx="' + (cw / 2).toFixed(1) + '" ry="' + (ch / 2).toFixed(1) + '" fill="#fbbf24" fill-opacity="0.5" stroke="#f59e0b" stroke-width="0.8"/>'
-          : '<rect x="' + (x0 + ox).toFixed(1) + '" y="' + (y0 + oy).toFixed(1) + '" width="' + cw.toFixed(1) + '" height="' + ch.toFixed(1) + '" fill="#fbbf24" fill-opacity="0.5" stroke="#f59e0b" stroke-width="0.8"/>';
-        s += _pcbDim(x0 + ox + cw / 2, y0 + oy + ch / 2, cw, ch, effL, effW);   /* v2.91 PCB DIMENSION */
+          ? '<ellipse cx="' + (x0 + ox + cw / 2).toFixed(1) + '" cy="' + (y0 + oy + ch / 2).toFixed(1) + '" rx="' + (cw / 2).toFixed(1) + '" ry="' + (ch / 2).toFixed(1) + '" fill="' + PCBF + '" stroke="' + NAVY + '" stroke-width="1"/>'
+          : '<rect x="' + (x0 + ox).toFixed(1) + '" y="' + (y0 + oy).toFixed(1) + '" width="' + cw.toFixed(1) + '" height="' + ch.toFixed(1) + '" fill="' + PCBF + '" stroke="' + NAVY + '" stroke-width="1"/>';
+        if (cw >= 26 && ch >= 14)
+          s += '<text x="' + (x0 + ox + cw / 2).toFixed(1) + '" y="' + (y0 + oy + ch / 2 + 3).toFixed(1) + '" text-anchor="middle" font-size="9.5" font-weight="700" fill="' + NAVY + '" font-family="Segoe UI,Arial">' + (Math.round(effL * 100) / 100) + ' \u00d7 ' + (Math.round(effW * 100) / 100) + '</text>';
         oy += ch + ((j < gapYs.length ? gapYs[j] : 0) * scale);
       }
       if (i < px - 1) ox += cw + ((i < gapXs.length ? gapXs[i] : 0) * scale);
     }
-    if (bl || br || bt || bb)
-      s += '<rect x="' + (x0 + bx).toFixed(1) + '" y="' + (y0 + by).toFixed(1) + '" width="' + (px*cw + _sumArr(gapXs)*scale).toFixed(1) + '" height="' + (py*ch + _sumArr(gapYs)*scale).toFixed(1) + '" fill="none" stroke="#64748b" stroke-width="1" stroke-dasharray="4 3"/>';
   }
-  if ((_sumArr(gapXs) > 0 || _sumArr(gapYs) > 0) && Q > 24)
-    s += '<text x="' + (x0 + P/2).toFixed(1) + '" y="' + (y0 + Q - 10).toFixed(1) + '" text-anchor="middle" font-size="10" fill="#b45309" font-family="Segoe UI,Arial">gap X:' + fmtNum(_sumArr(gapXs)) + ' / Y:' + fmtNum(_sumArr(gapYs)) + ' mm</text>';
-  /* v2.83 \u2014 PANEL DIMENSION side me (neeche = length, right = rotated width) */
-  var dmc = '#475569';
-  var dy = y0 + Q + 13;
-  s += '<line x1="' + x0.toFixed(1) + '" y1="' + dy.toFixed(1) + '" x2="' + (x0+P).toFixed(1) + '" y2="' + dy.toFixed(1) + '" stroke="' + dmc + '" stroke-width="1"/>';
-  s += '<line x1="' + x0.toFixed(1) + '" y1="' + (dy-3).toFixed(1) + '" x2="' + x0.toFixed(1) + '" y2="' + (dy+3).toFixed(1) + '" stroke="' + dmc + '" stroke-width="1"/>';
-  s += '<line x1="' + (x0+P).toFixed(1) + '" y1="' + (dy-3).toFixed(1) + '" x2="' + (x0+P).toFixed(1) + '" y2="' + (dy+3).toFixed(1) + '" stroke="' + dmc + '" stroke-width="1"/>';
-  s += '<text x="' + (x0+P/2).toFixed(1) + '" y="' + (dy+11).toFixed(1) + '" text-anchor="middle" font-size="11" fill="#334155" font-weight="700" font-family="Segoe UI,Arial">' + fmtNum(pL) + ' mm</text>';
+  /* TOP dimension */
+  var dy = y0 - 13;
+  s += '<line x1="' + x0.toFixed(1) + '" y1="' + dy.toFixed(1) + '" x2="' + (x0 + P).toFixed(1) + '" y2="' + dy.toFixed(1) + '" stroke="' + NAVY + '" stroke-width="1.2"/>';
+  s += '<path d="M ' + x0.toFixed(1) + ' ' + dy.toFixed(1) + ' l 7 -3.2 v 6.4 z" fill="' + NAVY + '"/><path d="M ' + (x0 + P).toFixed(1) + ' ' + dy.toFixed(1) + ' l -7 -3.2 v 6.4 z" fill="' + NAVY + '"/>';
+  s += '<line x1="' + x0.toFixed(1) + '" y1="' + (y0 - 2).toFixed(1) + '" x2="' + x0.toFixed(1) + '" y2="' + (dy - 5).toFixed(1) + '" stroke="' + NAVY + '" stroke-width="0.8"/>';
+  s += '<line x1="' + (x0 + P).toFixed(1) + '" y1="' + (y0 - 2).toFixed(1) + '" x2="' + (x0 + P).toFixed(1) + '" y2="' + (dy - 5).toFixed(1) + '" stroke="' + NAVY + '" stroke-width="0.8"/>';
+  s += '<text x="' + (x0 + P / 2).toFixed(1) + '" y="' + (dy - 5).toFixed(1) + '" text-anchor="middle" font-size="11.5" font-weight="700" fill="' + NAVY + '" font-family="Segoe UI,Arial">' + f2(pL) + ' mm</text>';
+  /* RIGHT dimension */
   var dx = x0 + P + 13;
-  s += '<line x1="' + dx.toFixed(1) + '" y1="' + y0.toFixed(1) + '" x2="' + dx.toFixed(1) + '" y2="' + (y0+Q).toFixed(1) + '" stroke="' + dmc + '" stroke-width="1"/>';
-  s += '<line x1="' + (dx-3).toFixed(1) + '" y1="' + y0.toFixed(1) + '" x2="' + (dx+3).toFixed(1) + '" y2="' + y0.toFixed(1) + '" stroke="' + dmc + '" stroke-width="1"/>';
-  s += '<line x1="' + (dx-3).toFixed(1) + '" y1="' + (y0+Q).toFixed(1) + '" x2="' + (dx+3).toFixed(1) + '" y2="' + (y0+Q).toFixed(1) + '" stroke="' + dmc + '" stroke-width="1"/>';
-  s += '<text x="' + (dx+10).toFixed(1) + '" y="' + (y0+Q/2).toFixed(1) + '" text-anchor="middle" font-size="11" fill="#334155" font-weight="700" font-family="Segoe UI,Arial" transform="rotate(90 ' + (dx+10).toFixed(1) + ' ' + (y0+Q/2).toFixed(1) + ')">' + fmtNum(pW) + ' mm</text>';
-  var lbl = 'PANEL: ' + fmtNum(pL) + '\u00d7' + fmtNum(pW) + ' mm \u00b7 PCB: ' + (effL > 0 ? fmtNum(effL) + '\u00d7' + fmtNum(effW) : '\u2014') + ' mm \u00b7 ' + pcsPanel + ' PCBs (' + px + '\u00d7' + py + ')';
-  s += '<text x="' + (W/2) + '" y="' + (H-32) + '" text-anchor="middle" font-size="12" fill="#8a8f98" font-family="Segoe UI,Arial">' + lbl + '</text>';
-  var lbl2 = 'BORDER: L ' + fmtNum(bl) + ' / R ' + fmtNum(br) + ' / T ' + fmtNum(bt) + ' / B ' + fmtNum(bb) + ' mm';
-  s += '<text x="' + (W/2) + '" y="' + (H-16) + '" text-anchor="middle" font-size="11" fill="#b45309" font-weight="700" font-family="Segoe UI,Arial">' + lbl2 + '</text>';
+  s += '<line x1="' + dx.toFixed(1) + '" y1="' + y0.toFixed(1) + '" x2="' + dx.toFixed(1) + '" y2="' + (y0 + Q).toFixed(1) + '" stroke="' + NAVY + '" stroke-width="1.2"/>';
+  s += '<path d="M ' + dx.toFixed(1) + ' ' + y0.toFixed(1) + ' l -3.2 7 h 6.4 z" fill="' + NAVY + '"/><path d="M ' + dx.toFixed(1) + ' ' + (y0 + Q).toFixed(1) + ' l -3.2 -7 h 6.4 z" fill="' + NAVY + '"/>';
+  s += '<text x="' + (dx + 10).toFixed(1) + '" y="' + (y0 + Q / 2).toFixed(1) + '" text-anchor="middle" font-size="11.5" font-weight="700" fill="' + NAVY + '" font-family="Segoe UI,Arial" transform="rotate(90 ' + (dx + 10).toFixed(1) + ' ' + (y0 + Q / 2).toFixed(1) + ')">' + f2(pW) + ' mm</text>';
+  /* GAP dimension (pehla X-gap ke neeche) */
+  if (gapXs.length && gapXs[0] > 0.05 && Q > 40) {
+    var gcen = x0 + bx + cw + (gapXs[0] * scale) / 2, half = Math.max(4, gapXs[0] * scale / 2), gy2 = y0 + Q + 11;
+    s += '<line x1="' + (gcen - half).toFixed(1) + '" y1="' + (y0 + Q + 2).toFixed(1) + '" x2="' + (gcen - half).toFixed(1) + '" y2="' + (gy2 + 4).toFixed(1) + '" stroke="' + NAVY + '" stroke-width="0.8"/>';
+    s += '<line x1="' + (gcen + half).toFixed(1) + '" y1="' + (y0 + Q + 2).toFixed(1) + '" x2="' + (gcen + half).toFixed(1) + '" y2="' + (gy2 + 4).toFixed(1) + '" stroke="' + NAVY + '" stroke-width="0.8"/>';
+    s += '<line x1="' + (gcen - half).toFixed(1) + '" y1="' + gy2.toFixed(1) + '" x2="' + (gcen + half).toFixed(1) + '" y2="' + gy2.toFixed(1) + '" stroke="' + NAVY + '" stroke-width="1"/>';
+    s += '<path d="M ' + (gcen - half).toFixed(1) + ' ' + gy2.toFixed(1) + ' l 4 -2.6 v 5.2 z" fill="' + NAVY + '"/><path d="M ' + (gcen + half).toFixed(1) + ' ' + gy2.toFixed(1) + ' l -4 -2.6 v 5.2 z" fill="' + NAVY + '"/>';
+    s += '<text x="' + gcen.toFixed(1) + '" y="' + (gy2 + 14).toFixed(1) + '" text-anchor="middle" font-size="9.5" font-weight="700" fill="' + NAVY + '" font-family="Segoe UI,Arial">' + f2(gapXs[0]) + ' mm</text>';
+  }
+  /* Info strip — 5 boxes */
+  var sy = TOP + AVH + BOTG, sx = 8, sw_ = W - 16;
+  s += '<rect x="' + sx + '" y="' + sy + '" width="' + sw_ + '" height="' + STR + '" fill="#ffffff" stroke="' + TEAL + '" stroke-width="1.5" rx="9"/>';
+  var cols = [0.235, 0.195, 0.175, 0.185, 0.21];
+  var labels = ['PANEL SIZE', 'PCB SIZE', 'QTY / ARRAY', 'GAP', 'BORDER'];
+  var vals = [
+    [f2(pL) + ' \u00d7 ' + f2(pW) + ' mm', ''],
+    [(effL > 0 ? f2(effL) : '\u2014') + ' \u00d7 ' + (effW > 0 ? f2(effW) : '\u2014') + ' mm', ''],
+    [pcsPanel + ' PCBs (' + px + '\u00d7' + py + ')', ''],
+    ['X: ' + f2(gapXs.length ? gapXs[0] : 0) + ' mm', 'Y: ' + f2(gapYs.length ? gapYs[0] : 0) + ' mm'],
+    ['L: ' + f2(bl) + '  R: ' + f2(br), 'T: ' + f2(bt) + '  B: ' + f2(bb)]
+  ];
+  var cx = sx;
+  for (var k = 0; k < 5; k++) {
+    var cwid = sw_ * cols[k];
+    if (k) s += '<line x1="' + cx.toFixed(1) + '" y1="' + (sy + 14) + '" x2="' + cx.toFixed(1) + '" y2="' + (sy + STR - 14) + '" stroke="' + TEAL + '" stroke-width="0.9"/>';
+    var mid = cx + cwid / 2;
+    s += '<text x="' + mid.toFixed(1) + '" y="' + (sy + 22) + '" text-anchor="middle" font-size="8" font-weight="700" fill="' + MUT + '" font-family="Segoe UI,Arial" letter-spacing="0.6">' + labels[k] + '</text>';
+    s += '<text x="' + mid.toFixed(1) + '" y="' + (sy + 47) + '" text-anchor="middle" font-size="' + (k < 3 ? 10.5 : 9.5) + '" font-weight="800" fill="' + NAVY + '" font-family="Segoe UI,Arial">' + vals[k][0] + '</text>';
+    if (vals[k][1]) s += '<text x="' + mid.toFixed(1) + '" y="' + (sy + 66) + '" text-anchor="middle" font-size="9.5" font-weight="800" fill="' + NAVY + '" font-family="Segoe UI,Arial">' + vals[k][1] + '</text>';
+    cx += cwid;
+  }
   s += '</svg>';
   return s;
 }
@@ -1112,7 +1140,7 @@ function svgSheet(sl, sw, cl, cw, gx2, gy2, gx, gy, kx, ky, pps, waste, best, mN
       var p = (Cl - Kx * (gx - 1)) / gx, q = (Cw - Ky * (gy - 1)) / gy;
       for (a = 0; a < gx; a++)
         for (b = 0; b < gy; b++)
-          s += '<rect x="' + (cx + a*(p+Kx)).toFixed(1) + '" y="' + (cy + b*(q+Ky)).toFixed(1) + '" width="' + p.toFixed(1) + '" height="' + q.toFixed(1) + '" fill="#bfdbfe" stroke="#2563eb" stroke-width="0.7"/>';
+          s += '<rect x="' + (cx + a*(p+Kx)).toFixed(1) + '" y="' + (cy + b*(q+Ky)).toFixed(1) + '" width="' + p.toFixed(1) + '" height="' + q.toFixed(1) + '" fill="#e4f2f3" stroke="#2ba7b5" stroke-width="0.7"/>';
     }
   }
   if (best === 'mixed') {
@@ -1196,8 +1224,8 @@ function svgSheetLayout(sl, sw, cl, cw, gx2, gy2, gx, gy, kx, ky, pps, best, mN,
   /* v3.21 — PCB SHAPE sheet layout me bhi (rot = rotated panel me grid swap) */
   function pcbShapeSvg(x, y, wd, ht){
     return (shape === 'round')
-      ? '<ellipse cx="' + (x + wd/2).toFixed(1) + '" cy="' + (y + ht/2).toFixed(1) + '" rx="' + (wd/2).toFixed(1) + '" ry="' + (ht/2).toFixed(1) + '" fill="#fbbf24" fill-opacity="0.35" stroke="#f59e0b" stroke-width="0.6"/>'
-      : '<rect x="' + x.toFixed(1) + '" y="' + y.toFixed(1) + '" width="' + wd.toFixed(1) + '" height="' + ht.toFixed(1) + '" fill="#fbbf24" fill-opacity="0.35" stroke="#f59e0b" stroke-width="0.6"/>';
+      ? '<ellipse cx="' + (x + wd/2).toFixed(1) + '" cy="' + (y + ht/2).toFixed(1) + '" rx="' + (wd/2).toFixed(1) + '" ry="' + (ht/2).toFixed(1) + '" fill="#d2e8e9" fill-opacity="0.35" stroke="#16324f" stroke-width="0.6"/>'
+      : '<rect x="' + x.toFixed(1) + '" y="' + y.toFixed(1) + '" width="' + wd.toFixed(1) + '" height="' + ht.toFixed(1) + '" fill="#d2e8e9" fill-opacity="0.35" stroke="#16324f" stroke-width="0.6"/>';
   }
   function pcbGrid(px0, py0, pw, ph, rot){
     var L = pcbL * scale, Wd = pcbW * scale, nx = px, ny = py;
@@ -1220,7 +1248,7 @@ function svgSheetLayout(sl, sw, cl, cw, gx2, gy2, gx, gy, kx, ky, pps, best, mN,
     /* v3.82 — panel ke andar sirf EK size = CUTTING size (CUT/GANG words hataye) + edge dims bhi CUTTING size */
     if (gang && Cl > 60 && Cw > 30) {
       s += '<text x="' + (cx + Cl/2).toFixed(1) + '" y="' + (cy + Cw/2 + 15).toFixed(1) + '" text-anchor="middle" font-size="8.5" font-weight="700" fill="' + stroke + '" font-family="Segoe UI,Arial">' + pcsUnit + ' PCB</text>';
-      if (Cw > 62) s += '<text x="' + (cx + Cl/2).toFixed(1) + '" y="' + (cy + Cw/2 + 26).toFixed(1) + '" text-anchor="middle" font-size="7.5" font-weight="700" fill="#b45309" font-family="Segoe UI,Arial"> ' + fmtNum(Cl/scale) + '\u00d7' + fmtNum(Cw/scale) + ' mm</text>';
+      if (Cw > 62) s += '<text x="' + (cx + Cl/2).toFixed(1) + '" y="' + (cy + Cw/2 + 26).toFixed(1) + '" text-anchor="middle" font-size="7.5" font-weight="700" fill="#5b7484" font-family="Segoe UI,Arial"> ' + fmtNum(Cl/scale) + '\u00d7' + fmtNum(Cw/scale) + ' mm</text>';
       if (Cl > 26 && Cw > 15) lblW(cx + Cl/2, cy + 8.5, Cl / scale);
       if (Cw > 26 && Cl > 15) lblH(cx + 7.5, cy + Cw/2, Cw / scale);
     } else {
@@ -1299,7 +1327,7 @@ function svgGangPanel(pcbL, pcbW, px, py, gapXs, gapYs, bl, br, bt, bb, pL, pW, 
       var oyb = 0;
       for (var bi = 0; bi < b; bi++) oyb += Q + (bi < offYs.length ? offYs[bi] : 0) * scale;
       var xp = x0 + oxa, yp = y0 + oyb;
-      s += '<rect x="' + xp.toFixed(1) + '" y="' + yp.toFixed(1) + '" width="' + P.toFixed(1) + '" height="' + Q.toFixed(1) + '" fill="#dbeafe" stroke="#2563eb" stroke-width="1.6" rx="2"/>';
+      s += '<rect x="' + xp.toFixed(1) + '" y="' + yp.toFixed(1) + '" width="' + P.toFixed(1) + '" height="' + Q.toFixed(1) + '" fill="#e4f2f3" stroke="#2ba7b5" stroke-width="1.6" rx="2"/>';
       if (P > 26 && Q > 15) lblW(xp + P/2, yp + 8.5, pL);
       if (Q > 26 && P > 15) lblH(xp + 7.5, yp + Q/2, pW);
       if (cw > 2.4 && ch > 2.4) {
@@ -1308,8 +1336,8 @@ function svgGangPanel(pcbL, pcbW, px, py, gapXs, gapYs, bl, br, bt, bb, pL, pW, 
           var oy = by;
           for (j = 0; j < py; j++) {
             s += (shape === 'round')
-              ? '<ellipse cx="' + (xp + ox + cw / 2).toFixed(1) + '" cy="' + (yp + oy + ch / 2).toFixed(1) + '" rx="' + (cw / 2).toFixed(1) + '" ry="' + (ch / 2).toFixed(1) + '" fill="#fbbf24" fill-opacity="0.5" stroke="#f59e0b" stroke-width="0.8"/>'
-              : '<rect x="' + (xp + ox).toFixed(1) + '" y="' + (yp + oy).toFixed(1) + '" width="' + cw.toFixed(1) + '" height="' + ch.toFixed(1) + '" fill="#fbbf24" fill-opacity="0.5" stroke="#f59e0b" stroke-width="0.8"/>';
+              ? '<ellipse cx="' + (xp + ox + cw / 2).toFixed(1) + '" cy="' + (yp + oy + ch / 2).toFixed(1) + '" rx="' + (cw / 2).toFixed(1) + '" ry="' + (ch / 2).toFixed(1) + '" fill="#d2e8e9" fill-opacity="0.5" stroke="#16324f" stroke-width="0.8"/>'
+              : '<rect x="' + (xp + ox).toFixed(1) + '" y="' + (yp + oy).toFixed(1) + '" width="' + cw.toFixed(1) + '" height="' + ch.toFixed(1) + '" fill="#d2e8e9" fill-opacity="0.5" stroke="#16324f" stroke-width="0.8"/>';
             s += _pcbDim(xp + ox + cw / 2, yp + oy + ch / 2, cw, ch, pcbL, pcbW);   /* v2.91 PCB DIMENSION */
             oy += ch + ((j < gapYs.length ? gapYs[j] : 0) * scale);
           }
@@ -1324,13 +1352,13 @@ function svgGangPanel(pcbL, pcbW, px, py, gapXs, gapYs, bl, br, bt, bb, pL, pW, 
     if (P <= 40) break;
     var jx = x0; for (i = 0; i <= a; i++) jx += P + offXs[i] * scale;
     jx -= offXs[a] * scale / 2;
-    s += '<text x="' + jx.toFixed(1) + '" y="' + (y0 + T/2).toFixed(1) + '" text-anchor="middle" font-size="8" fill="#b45309" font-family="Segoe UI,Arial" style="paint-order:stroke" stroke="#ffffff" stroke-width="2.5">' + offXs[a] + '</text>';
+    s += '<text x="' + jx.toFixed(1) + '" y="' + (y0 + T/2).toFixed(1) + '" text-anchor="middle" font-size="8" fill="#5b7484" font-family="Segoe UI,Arial" style="paint-order:stroke" stroke="#ffffff" stroke-width="2.5">' + offXs[a] + '</text>';
   }
   for (b = 0; b < gy - 1; b++) {
     if (Q <= 40) break;
     var jy = y0; for (j = 0; j <= b; j++) jy += Q + offYs[j] * scale;
     jy -= offYs[b] * scale / 2;
-    s += '<text x="' + (x0 + S/2).toFixed(1) + '" y="' + (jy + 3).toFixed(1) + '" text-anchor="middle" font-size="8" fill="#b45309" font-family="Segoe UI,Arial" style="paint-order:stroke" stroke="#ffffff" stroke-width="2.5">' + offYs[b] + '</text>';
+    s += '<text x="' + (x0 + S/2).toFixed(1) + '" y="' + (jy + 3).toFixed(1) + '" text-anchor="middle" font-size="8" fill="#5b7484" font-family="Segoe UI,Arial" style="paint-order:stroke" stroke="#ffffff" stroke-width="2.5">' + offYs[b] + '</text>';
   }
   /* total dims — neeche length, right rotated width */
   var _c = '#94a3b8', _yd = y0 + T + 11;
@@ -1493,7 +1521,7 @@ calcClPrice();
     '#prevPrintSheet .pp-draw.pp-withstats svg{max-height:82mm!important}' +
     '#prevPrintSheet .pp-draw .zoomvp{overflow:visible!important;max-height:none!important;border:0!important;padding:0!important}' +
     '#prevPrintSheet .pp-draw .zoombar{display:none!important}' +
-    '#prevPrintSheet .pp-cap{font:700 8.5px Segoe UI,Arial;color:#92400e;text-align:center;margin-bottom:2mm}' +
+    '#prevPrintSheet .pp-cap{font:700 8.5px Segoe UI,Arial;color:#16324f;text-align:center;margin-bottom:2mm}' +
     '#prevPrintSheet .pp-foot{display:flex;justify-content:space-between;gap:8mm;border-top:1.5px solid #192338;padding-top:2.5mm;margin-top:auto;font:700 9.5px Segoe UI,Arial;color:#334155}' +
     '#prevPrintSheet .pp-foot span{flex:1;text-align:center}' +
     '#prevPrintSheet .pp-gen{font:600 7.5px Segoe UI,Arial;color:#94a3b8;text-align:center;margin-top:1.5mm}' +

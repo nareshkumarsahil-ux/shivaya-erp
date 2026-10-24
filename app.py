@@ -1295,43 +1295,91 @@ def compute_layout(p):
 
 
 def svg_panel_preview(r):
-    """PREVIEW #1 — PANEL: sirf EK panel + individual PCB grid (borders, per-boundary gaps).
-    Multiplier copies yahan NAHI — gang unit ka zoom alag GANG PANEL PREVIEW me hai."""
-    W, H, pad = 430, 300, 26
+    """PREVIEW #1 — PANEL (v4.11: navy-teal 'PCB PANELIZATION LAYOUT' theme — user ka exact format):
+    title + teal rule, navy panel outline, teal PCBs ('L x W' labels), top/right dimension arrows,
+    gap dimension neeche, aur 5-box info strip (PANEL SIZE | PCB SIZE | QTY/ARRAY | GAP | BORDER)."""
+    NAVY, TEAL, PCB, MUT = "#16324f", "#2ba7b5", "#d2e8e9", "#5b7484"
+    W, TOP, AVH, BOTG, STR = 470, 48, 316, 58, 96
+    H = TOP + AVH + BOTG + STR + 8
     pl, pw = r["panel_len"], r["panel_w"]
-    scale = min((W - 2 * pad) / pl, (H - 2 * pad) / pw)
+    scale = min((W - 96) / pl, AVH / pw)
     P, Q = pl * scale, pw * scale
-    x0, y0 = pad + (W - 2 * pad - P) / 2, pad + (H - 2 * pad - Q) / 2
+    x0, y0 = (W - 34 - P) / 2, TOP + 18 + (AVH - Q) / 2
     cw, ch = r["pcb_len"] * scale, r["pcb_w"] * scale
     gxs, gys = r["gap_x"] * scale, r["gap_y"] * scale
     bx, by = r["border_l"] * scale, r["border_t"] * scale
     gaps_x_s = r.get("gaps_x") or [r["gap_x"]] * max(0, r["pcbs_x"] - 1)
     gaps_y_s = r.get("gaps_y") or [r["gap_y"]] * max(0, r["pcbs_y"] - 1)
-    s = [f'<svg viewBox="0 0 {W} {H}" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;display:block">']
-    s.append(f'<rect x="{x0:.1f}" y="{y0:.1f}" width="{P:.1f}" height="{Q:.1f}" fill="#dbeafe" stroke="#2563eb" stroke-width="2" rx="3"/>')
+    s = [f'<svg viewBox="0 0 {W} {H}" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;display:block;background:#ffffff">']
+    # Title + teal rule (image format)
+    s.append(f'<text x="{W / 2:.0f}" y="24" text-anchor="middle" font-size="15.5" font-weight="800" fill="{NAVY}" font-family="Segoe UI,Arial" letter-spacing="1">PCB PANELIZATION LAYOUT</text>')
+    s.append(f'<line x1="26" y1="33" x2="{W - 26}" y2="33" stroke="{TEAL}" stroke-width="2"/>')
+    # Panel outline (navy, rounded, white fill)
+    s.append(f'<rect x="{x0:.1f}" y="{y0:.1f}" width="{P:.1f}" height="{Q:.1f}" fill="#ffffff" stroke="{NAVY}" stroke-width="2.4" rx="5"/>')
+    # PCB cells (teal + 'L x W' label)
     if cw > 2.4 and ch > 2.4:
         ox = bx
         for i in range(r["pcbs_x"]):
             oy = by
             for j in range(r["pcbs_y"]):
                 s.append(_pcb_shape_svg(x0 + ox, y0 + oy, cw, ch, r.get("shape") or "rect"))
-                _pcb_dim_text(s, x0 + ox + cw / 2, y0 + oy + ch / 2, cw, ch, r["pcb_len"], r["pcb_w"])   # v2.91
+                if cw >= 26 and ch >= 14:
+                    s.append(f'<text x="{x0 + ox + cw / 2:.1f}" y="{y0 + oy + ch / 2 + 3:.1f}" text-anchor="middle" font-size="9.5" font-weight="700" fill="{NAVY}" font-family="Segoe UI,Arial">{r["pcb_len"]:g} \u00d7 {r["pcb_w"]:g}</text>')
                 oy += ch + (gaps_y_s[j] * scale if j < len(gaps_y_s) else gys)
             if i < r["pcbs_x"] - 1:
                 ox += cw + (gaps_x_s[i] * scale if i < len(gaps_x_s) else gxs)
-        if r["border_l"] or r["border_r"] or r["border_t"] or r["border_b"]:
-            cw2 = r["pcbs_x"] * cw + sum(gaps_x_s) * scale
-            ch2 = r["pcbs_y"] * ch + sum(gaps_y_s) * scale
-            s.append(f'<rect x="{x0 + bx:.1f}" y="{y0 + by:.1f}" width="{cw2:.1f}" height="{ch2:.1f}" fill="none" stroke="#64748b" stroke-width="1" stroke-dasharray="4 3"/>')
-    if (sum(gaps_x_s) > 0.1 or sum(gaps_y_s) > 0.1) and Q > 24:
-        s.append(f'<text x="{x0 + P/2:.0f}" y="{y0 + Q - 10:.1f}" text-anchor="middle" font-size="10" fill="#b45309" font-family="Segoe UI,Arial">gap X: {sum(gaps_x_s):.2f} / Y: {sum(gaps_y_s):.2f} mm</text>')
-    s.append(f'<text x="{W/2:.0f}" y="{H - 6:.0f}" text-anchor="middle" font-size="12.5" fill="#8a8f98" font-family="Segoe UI,Arial">Panel {pl:.2f}\u00d7{pw:.2f} mm \u00b7 {r["pcs_panel"]} PCBs ({r["pcbs_x"]}\u00d7{r["pcbs_y"]}) = {r["pcs_panel"]} PCS</text>')
-    s.append('</svg>')
+    # TOP dimension: panel width (double-arrow + text upar)
+    dy = y0 - 13
+    s.append(f'<line x1="{x0:.1f}" y1="{dy:.1f}" x2="{x0 + P:.1f}" y2="{dy:.1f}" stroke="{NAVY}" stroke-width="1.2"/>')
+    s.append(f'<path d="M {x0:.1f} {dy:.1f} l 7 -3.2 v 6.4 z" fill="{NAVY}"/><path d="M {x0 + P:.1f} {dy:.1f} l -7 -3.2 v 6.4 z" fill="{NAVY}"/>')
+    s.append(f'<line x1="{x0:.1f}" y1="{y0 - 2:.1f}" x2="{x0:.1f}" y2="{dy - 5:.1f}" stroke="{NAVY}" stroke-width="0.8"/>')
+    s.append(f'<line x1="{x0 + P:.1f}" y1="{y0 - 2:.1f}" x2="{x0 + P:.1f}" y2="{dy - 5:.1f}" stroke="{NAVY}" stroke-width="0.8"/>')
+    s.append(f'<text x="{x0 + P / 2:.1f}" y="{dy - 5:.1f}" text-anchor="middle" font-size="11.5" font-weight="700" fill="{NAVY}" font-family="Segoe UI,Arial">{pl:.2f} mm</text>')
+    # RIGHT dimension: panel height (rotated text)
+    dx = x0 + P + 13
+    s.append(f'<line x1="{dx:.1f}" y1="{y0:.1f}" x2="{dx:.1f}" y2="{y0 + Q:.1f}" stroke="{NAVY}" stroke-width="1.2"/>')
+    s.append(f'<path d="M {dx:.1f} {y0:.1f} l -3.2 7 h 6.4 z" fill="{NAVY}"/><path d="M {dx:.1f} {y0 + Q:.1f} l -3.2 -7 h 6.4 z" fill="{NAVY}"/>')
+    s.append(f'<text x="{dx + 10:.1f}" y="{y0 + Q / 2:.1f}" text-anchor="middle" font-size="11.5" font-weight="700" fill="{NAVY}" font-family="Segoe UI,Arial" transform="rotate(90 {dx + 10:.1f} {y0 + Q / 2:.1f})">{pw:.2f} mm</text>')
+    # GAP dimension (neeche, pehle X-gap ke neeche — image jaisa)
+    if (gaps_x_s and gaps_x_s[0] > 0.05) and Q > 40:
+        gcen = x0 + bx + cw + (gaps_x_s[0] * scale) / 2
+        half = max(4.0, gaps_x_s[0] * scale / 2)
+        gy2 = y0 + Q + 11
+        s.append(f'<line x1="{gcen - half:.1f}" y1="{y0 + Q + 2:.1f}" x2="{gcen - half:.1f}" y2="{gy2 + 4:.1f}" stroke="{NAVY}" stroke-width="0.8"/>')
+        s.append(f'<line x1="{gcen + half:.1f}" y1="{y0 + Q + 2:.1f}" x2="{gcen + half:.1f}" y2="{gy2 + 4:.1f}" stroke="{NAVY}" stroke-width="0.8"/>')
+        s.append(f'<line x1="{gcen - half:.1f}" y1="{gy2:.1f}" x2="{gcen + half:.1f}" y2="{gy2:.1f}" stroke="{NAVY}" stroke-width="1"/>')
+        s.append(f'<path d="M {gcen - half:.1f} {gy2:.1f} l 4 -2.6 v 5.2 z" fill="{NAVY}"/><path d="M {gcen + half:.1f} {gy2:.1f} l -4 -2.6 v 5.2 z" fill="{NAVY}"/>')
+        s.append(f'<text x="{gcen:.1f}" y="{gy2 + 14:.1f}" text-anchor="middle" font-size="9.5" font-weight="700" fill="{NAVY}" font-family="Segoe UI,Arial">{gaps_x_s[0]:.2f} mm</text>')
+    # Info strip (5 boxes — teal border, image format)
+    sy, sh_ = TOP + AVH + BOTG, STR
+    sx, sw_ = 8, W - 16
+    s.append(f'<rect x="{sx}" y="{sy}" width="{sw_}" height="{sh_}" fill="#ffffff" stroke="{TEAL}" stroke-width="1.5" rx="9"/>')
+    cols = [0.235, 0.195, 0.175, 0.185, 0.21]
+    labels = ["PANEL SIZE", "PCB SIZE", "QTY / ARRAY", "GAP", "BORDER"]
+    vals = [
+        [f"{pl:.2f} \u00d7 {pw:.2f} mm", ""],
+        [f"{r['pcb_len']:.2f} \u00d7 {r['pcb_w']:.2f} mm", ""],
+        [f'{r["pcs_panel"]} PCBs ({r["pcbs_x"]}\u00d7{r["pcbs_y"]})', ""],
+        [f"X: {r['gap_x']:.2f} mm", f"Y: {r['gap_y']:.2f} mm"],
+        [f"L: {r['border_l']:.2f}  R: {r['border_r']:.2f}", f"T: {r['border_t']:.2f}  B: {r['border_b']:.2f}"],
+    ]
+    cx = sx
+    for k in range(5):
+        cwid = sw_ * cols[k]
+        if k:
+            s.append(f'<line x1="{cx:.1f}" y1="{sy + 14}" x2="{cx:.1f}" y2="{sy + sh_ - 14}" stroke="{TEAL}" stroke-width="0.9"/>')
+        mid = cx + cwid / 2
+        s.append(f'<text x="{mid:.1f}" y="{sy + 22}" text-anchor="middle" font-size="8" font-weight="700" fill="{MUT}" font-family="Segoe UI,Arial" letter-spacing="0.6">{labels[k]}</text>')
+        s.append(f'<text x="{mid:.1f}" y="{sy + 47}" text-anchor="middle" font-size="{10.5 if k < 3 else 9.5}" font-weight="800" fill="{NAVY}" font-family="Segoe UI,Arial">{vals[k][0]}</text>')
+        if vals[k][1]:
+            s.append(f'<text x="{mid:.1f}" y="{sy + 66}" text-anchor="middle" font-size="9.5" font-weight="800" fill="{NAVY}" font-family="Segoe UI,Arial">{vals[k][1]}</text>')
+        cx += cwid
+    s.append("</svg>")
     return "".join(s)
 
 
 def _svg_gang(s, cx, cy, cl, cw, gx, gy, kx, ky, fill, stroke, sw_,
-              in_fill="#bfdbfe", in_stroke="#2563eb"):
+              in_fill="#e4f2f3", in_stroke="#2ba7b5"):
     s.append(f'<rect x="{cx:.1f}" y="{cy:.1f}" width="{cl:.1f}" height="{cw:.1f}" fill="{fill}" stroke="{stroke}" stroke-width="{sw_}" rx="2"/>')
     if gx > 1 or gy > 1:
         p = (cl - kx * (gx - 1)) / gx
@@ -1491,8 +1539,8 @@ def _svg_mix_sheet(sl, sw, placements, use):
     S, T = sl * scale, sw * scale
     x0 = pad + (W - pad - 84 - S) / 2
     y0 = pad + (H - pad - 64 - T) / 2
-    fills = [("#eef2ff", "#6366f1"), ("#fdf4ff", "#c026d3"), ("#dcfce7", "#16a34a"),
-             ("#fef9c3", "#ca8a04"), ("#dbeafe", "#2563eb"), ("#fce7f3", "#db2777")]
+    fills = [("#eef2ff", "#6366f1"), ("#fdf4ff", "#c026d3"), ("#d2e8e9", "#16324f"),
+             ("#fef9c3", "#ca8a04"), ("#e4f2f3", "#2ba7b5"), ("#fce7f3", "#db2777")]
     s = [f'<svg viewBox="0 0 {W} {H}" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;display:block">']
     s.append(f'<rect x="{x0:.1f}" y="{y0:.1f}" width="{S:.1f}" height="{T:.1f}" fill="#fffdf5" stroke="#0f172a" stroke-width="1.6"/>')
     maxW = max((p["x"] + p["bw"]) for p in placements)
@@ -1527,10 +1575,10 @@ def _svg_mix_sheet(sl, sw, placements, use):
             off = (p["y"] + k * ph_) if p.get("v") else (p["x"] + k * pw_)
             if p.get("v"):
                 yy = y0 + off * scale
-                s.append(f'<line x1="{x0 + p["x"] * scale:.1f}" y1="{yy:.1f}" x2="{x0 + (p["x"] + p["bw"]) * scale:.1f}" y2="{yy:.1f}" stroke="#2563eb" stroke-width="1.4"/>')
+                s.append(f'<line x1="{x0 + p["x"] * scale:.1f}" y1="{yy:.1f}" x2="{x0 + (p["x"] + p["bw"]) * scale:.1f}" y2="{yy:.1f}" stroke="#2ba7b5" stroke-width="1.4"/>')
             else:
                 xx = x0 + off * scale
-                s.append(f'<line x1="{xx:.1f}" y1="{y0 + p["y"] * scale:.1f}" x2="{xx:.1f}" y2="{y0 + (p["y"] + p["bh"]) * scale:.1f}" stroke="#2563eb" stroke-width="1.4"/>')
+                s.append(f'<line x1="{xx:.1f}" y1="{y0 + p["y"] * scale:.1f}" x2="{xx:.1f}" y2="{y0 + (p["y"] + p["bh"]) * scale:.1f}" stroke="#2ba7b5" stroke-width="1.4"/>')
         if p.get("v") and p["x"] > 0.01:
             xx = x0 + p["x"] * scale
             s.append(f'<line x1="{xx:.1f}" y1="{y0:.1f}" x2="{xx:.1f}" y2="{y0 + maxH * scale:.1f}" stroke="#dc2626" stroke-width="2"/>')
@@ -1582,12 +1630,12 @@ def svg_sheet_preview(r):
         for _row in range(r["mixed_n"]):
             cl, cw = r["cutting_len"] * scale, r["cutting_w"] * scale
             for i in range(r["per_normal"]):
-                _svg_gang(s, x0 + i * cl, y, cl, cw, gx, gy, kx, ky, "#dcfce7", "#16a34a", 1.4)
+                _svg_gang(s, x0 + i * cl, y, cl, cw, gx, gy, kx, ky, "#d2e8e9", "#16324f", 1.4)
             y += cw
         for _row in range(r["mixed_m"]):
             cl2p, cw2p = r["cutting_w"] * scale, r["cutting_len"] * scale
             for i in range(r["per_rot"]):
-                _svg_gang(s, x0 + i * cl2p, y, cl2p, cw2p, gx, gy, kx, ky, "#bfdbfe", "#2563eb", 1.4)
+                _svg_gang(s, x0 + i * cl2p, y, cl2p, cw2p, gx, gy, kx, ky, "#e4f2f3", "#2ba7b5", 1.4)
             y += cw2p
         cap = (f"Sheet {sl:.2f}\u00d7{sw:.2f} mm \u00b7 {r['mixed_n']}\u00d7 row of {r['per_normal']} + "
                f"{r['mixed_m']}\u00d7 row of {r['per_rot']} = {r['panels_per_sheet']} panels \u00b7 "
@@ -1597,7 +1645,7 @@ def svg_sheet_preview(r):
         for i in range(r["grid_x"]):
             for j in range(r["grid_y"]):
                 cx, cy = x0 + i * cl, y0 + j * cw
-                _svg_gang(s, cx, cy, cl, cw, gx, gy, kx, ky, "#dcfce7", "#16a34a", 1.4)
+                _svg_gang(s, cx, cy, cl, cw, gx, gy, kx, ky, "#d2e8e9", "#16324f", 1.4)
         gang_cap = ""
         if gx > 1 or gy > 1:
             gang_cap = (f"{r['grid_x']}\u00d7{r['grid_y']} GANG \u00d7 {r['pcs_unit']} PCS = "
@@ -1627,9 +1675,9 @@ def _pcb_shape_svg(x, y, w, h, shape):
     """v3.20 — PCB drawing by shape: round -> ellipse, square/rect -> rect."""
     if shape == "round":
         return (f'<ellipse cx="{x + w / 2:.1f}" cy="{y + h / 2:.1f}" rx="{w / 2:.1f}" ry="{h / 2:.1f}" '
-                f'fill="#fbbf24" fill-opacity="0.5" stroke="#f59e0b" stroke-width="0.8"/>')
+                f'fill="#d2e8e9" stroke="#16324f" stroke-width="1"/>')
     return (f'<rect x="{x:.1f}" y="{y:.1f}" width="{w:.1f}" height="{h:.1f}" '
-            f'fill="#fbbf24" fill-opacity="0.5" stroke="#f59e0b" stroke-width="0.8"/>')
+            f'fill="#d2e8e9" stroke="#16324f" stroke-width="1"/>')
 
 
 def _pcb_dim_text(s, cx, cy, w, h, dl, dw):
@@ -1638,7 +1686,7 @@ def _pcb_dim_text(s, cx, cy, w, h, dl, dw):
     fs = min(8.0, h * 0.3, w * 0.18)
     if fs < 5.5:
         return
-    base = (f'text-anchor="middle" font-size="{fs:.1f}" font-weight="700" fill="#92400e" '
+    base = (f'text-anchor="middle" font-size="{fs:.1f}" font-weight="700" fill="#16324f" '
             f'font-family="Segoe UI,Arial" style="paint-order:stroke" stroke="#ffffff" stroke-width="1.6"')
     if len(lt) * fs * 0.6 <= w - 6 and h >= 13:
         s.append(f'<text x="{cx:.1f}" y="{cy - h / 2 + fs + 2:.1f}" {base}>{lt}</text>')
@@ -1698,7 +1746,7 @@ def svg_gang_panel_preview(r):
             _oxa = sum(P + off_xs[i] * scale for i in range(a))
             _oyb = sum(Q + off_ys[i] * scale for i in range(b))
             xp, yp = x0 + _oxa, y0 + _oyb
-            s.append(f'<rect x="{xp:.1f}" y="{yp:.1f}" width="{P:.1f}" height="{Q:.1f}" fill="#dbeafe" stroke="#2563eb" stroke-width="1.6" rx="2"/>')
+            s.append(f'<rect x="{xp:.1f}" y="{yp:.1f}" width="{P:.1f}" height="{Q:.1f}" fill="#e4f2f3" stroke="#2ba7b5" stroke-width="1.6" rx="2"/>')
             if P > 26 and Q > 15:
                 _svg_dim_w(s, xp + P / 2, yp + 8.5, pl)
             if Q > 26 and P > 15:
@@ -1721,11 +1769,11 @@ def svg_gang_panel_preview(r):
     for a in range(gx - 1):
         if P > 40:
             jx = x0 + sum(P + off_xs[i] * scale for i in range(a + 1)) - off_xs[a] * scale / 2
-            s.append(f'<text x="{jx:.1f}" y="{y0 + T / 2:.1f}" text-anchor="middle" font-size="8" fill="#b45309" font-family="Segoe UI,Arial" style="paint-order:stroke" stroke="#ffffff" stroke-width="2.5">{off_xs[a]:g}</text>')
+            s.append(f'<text x="{jx:.1f}" y="{y0 + T / 2:.1f}" text-anchor="middle" font-size="8" fill="#5b7484" font-family="Segoe UI,Arial" style="paint-order:stroke" stroke="#ffffff" stroke-width="2.5">{off_xs[a]:g}</text>')
     for b in range(gy - 1):
         if Q > 40:
             jy = y0 + sum(Q + off_ys[i] * scale for i in range(b + 1)) - off_ys[b] * scale / 2
-            s.append(f'<text x="{x0 + S / 2:.1f}" y="{jy + 3:.1f}" text-anchor="middle" font-size="8" fill="#b45309" font-family="Segoe UI,Arial" style="paint-order:stroke" stroke="#ffffff" stroke-width="2.5">{off_ys[b]:g}</text>')
+            s.append(f'<text x="{x0 + S / 2:.1f}" y="{jy + 3:.1f}" text-anchor="middle" font-size="8" fill="#5b7484" font-family="Segoe UI,Arial" style="paint-order:stroke" stroke="#ffffff" stroke-width="2.5">{off_ys[b]:g}</text>')
     _svg_sheet_dims(s, x0, y0, S, T, gl, gw, 0)
     pcs_gang = r["pcs_unit"]
     cap = (f'GANG PANEL {gx}\u00d7{gy} \u2192 {gl:.2f}\u00d7{gw:.2f} mm \u00b7 {gx * gy} PANELS \u00d7 {pcs_panel} PCS = '
@@ -1780,10 +1828,10 @@ def svg_sheet_layout_preview(r):
         def _pcb_out(x, y, wd, ht):
             if _sh == "round":
                 s.append(f'<ellipse cx="{x + wd / 2:.1f}" cy="{y + ht / 2:.1f}" rx="{wd / 2:.1f}" ry="{ht / 2:.1f}" '
-                         f'fill="#fbbf24" fill-opacity="0.35" stroke="#f59e0b" stroke-width="0.6"/>')
+                         f'fill="#d2e8e9" stroke="#16324f" stroke-width="0.6"/>')
             else:
                 s.append(f'<rect x="{x:.1f}" y="{y:.1f}" width="{wd:.1f}" height="{ht:.1f}" '
-                         f'fill="#fbbf24" fill-opacity="0.35" stroke="#f59e0b" stroke-width="0.6"/>')
+                         f'fill="#d2e8e9" stroke="#16324f" stroke-width="0.6"/>')
 
         def _pcb_grid(x, y, wd, ht, _rot=False):
             """v3.21 — panel ke andar PCB grid (shape-aware) — sab previews me same shape."""
@@ -1817,7 +1865,7 @@ def svg_sheet_layout_preview(r):
             # v3.61 — GANG PCB count + CUTTING PANEL SIZE (margin ke baad) + GANG size, naam ke saath
             s.append(f'<text x="{cx + cl / 2:.1f}" y="{cy + cw / 2 + 15:.1f}" text-anchor="middle" font-size="8.5" font-weight="700" fill="{stroke}" font-family="Segoe UI,Arial">{r["pcs_unit"]} PCB</text>')
             if cw > 62:
-                s.append(f'<text x="{cx + cl / 2:.1f}" y="{cy + cw / 2 + 26:.1f}" text-anchor="middle" font-size="7.5" font-weight="700" fill="#b45309" font-family="Segoe UI,Arial">CUT {cl / scale:g}\u00d7{cw / scale:g} mm</text>')
+                s.append(f'<text x="{cx + cl / 2:.1f}" y="{cy + cw / 2 + 26:.1f}" text-anchor="middle" font-size="7.5" font-weight="700" fill="#5b7484" font-family="Segoe UI,Arial">CUT {cl / scale:g}\u00d7{cw / scale:g} mm</text>')
             if cw > 78:
                 _gl1, _gl2 = (r["gang_w"], r["gang_len"]) if rot else (r["gang_len"], r["gang_w"])
                 s.append(f'<text x="{cx + cl / 2:.1f}" y="{cy + cw / 2 + 37:.1f}" text-anchor="middle" font-size="7.5" font-weight="600" fill="#64748b" font-family="Segoe UI,Arial">GANG {_gl1:g}\u00d7{_gl2:g} mm</text>')
@@ -4472,6 +4520,31 @@ def po_reprocess(fid):
     return jsonify(ok=True, file_id=fid, po_no=po_no, filename=fn, mime=r["mime"], lines=lines,
                    needs_ocr=needs_ocr, text=text[:30000], dups=dups, dup=bool(dups), imgs=imgs64[:2],
                    purged=purged)
+
+
+@app.route("/api/po/reread/<int:fid>")
+@login_required
+def po_reread(fid):
+    """v4.10: EDITOR ka RE-READ — PO file ka text SIRF dobara nikalta hai (kuch purge/save nahi).
+    Editor ke khaali PO NO/DATE/MODEL isse khud bhar jaate hain."""
+    _po_ensure()
+    r = db.query("SELECT * FROM po_files WHERE id=?", (fid,), one=True)
+    if not r:
+        return jsonify(ok=False, error="PO file nahi mili.")
+    try:
+        blob = base64.b64decode(r["data64"])
+    except Exception:
+        blob = b""
+    if not blob:
+        return jsonify(ok=False, error="File data khali hai.")
+    fn = r["filename"] or "po"
+    ext = (fn.rsplit(".", 1)[-1] if "." in fn else "pdf").lower()
+    if ext not in ("pdf", "jpg", "jpeg", "png", "webp"):
+        ext = "pdf"
+    text, needs_ocr, imgs64 = _po_extract(blob, ext)
+    g = _po_guess_no(text) if text.strip() else ""
+    return jsonify(ok=True, file_id=fid, po_no=g or r["po_no"] or "", filename=fn, mime=r["mime"],
+                   needs_ocr=needs_ocr, text=text[:30000])
 
 
 # v3.97: SHEET inline edit (Excel-jaisi sheet se direct save)
