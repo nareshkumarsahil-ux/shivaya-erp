@@ -127,6 +127,7 @@
     <button type="button" class="shAl btn btn-outline btn-sm" data-a="right" title="Right align">R</button>
     <button type="button" id="shAddRow" class="btn btn-sm" title="Nayi khaali row add karo" style="background:#dcfce7;color:#15803d;border:1px solid #86efac">&#43; Row</button>
     <button type="button" id="shAddCol" class="btn btn-sm" title="Apna naya column add karo" style="background:#dbeafe;color:#1d4ed8;border:1px solid #93c5fd">&#43; Column</button>
+    <button type="button" id="shCalc27" class="btn btn-sm" title="SAB models ka CUTTING SIZE (4A/N/4B/N) + UPS Gang-engine se recalc karo (DB me fix)" style="background:#fef9c3;color:#a16207;border:1px solid #fde047">&#8635; Cut Calc</button>
     <button type="button" id="shCols" class="btn btn-outline btn-sm" title="Column add/remove (show/hide)">&#9636; Columns</button>
     <button type="button" id="shDelMany" class="btn btn-sm" disabled title="Tick ki hui rows delete karo" style="background:#fee2e2;color:#b91c1c;border:1px solid #fca5a5">&#128465; Delete (0)</button>
     <div id="shColPanel" style="display:none;position:absolute;top:38px;left:0;z-index:60;background:#fff;border:1px solid #cbd5e1;border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.15);padding:10px 12px;min-width:190px;max-height:330px;overflow:auto"></div>
@@ -197,8 +198,8 @@
         {% for m in models %}<tr data-id="{{ m.id }}"><td class="sel" data-f="__sel"><input type="checkbox" class="selCK" data-id="{{ m.id }}" style="cursor:pointer"></td><td class="sn" data-f="sn">{{ loop.index }}</td>{% for f, val in [('party_name', m.party_name or m.party or ''), ('model_code', m.model_code or ''), ('party_code', m.party_code or ''),
                             ('pcb_len', m.pcb_len or ''), ('pcb_w', m.pcb_w or ''),
                             ('panel_len', m.panel_len or ''), ('panel_w', m.panel_w or ''), ('pcs_panel', m.pcs_panel or ''),
-                            ('cutting_len', m.cutting_len or ''), ('x_qty', m.x_qty or ''), ('cutting_w', m.cutting_w or ''), ('y_qty', m.y_qty or ''),
-                            ('panels_sheet', m.panels_sheet or ''), ('cnc_tool', m.cnc_tool or ''),
+                            ('cutting_len', m._c4a if m._c4a is not none else (m.cutting_len or '')), ('x_qty', m._cn4a if m._cn4a is not none else (m.x_qty or '')), ('cutting_w', m._c4b if m._c4b is not none else (m.cutting_w or '')), ('y_qty', m._cn4b if m._cn4b is not none else (m.y_qty or '')),
+                            ('panels_sheet', m._cups if m._cups is not none else (m.panels_sheet or '')), ('cnc_tool', m.cnc_tool or ''),
                             ('per_sq_inch', m.per_sq_inch or ''), ('sheet_thickness', m.sheet_thickness or ''), ('pcb_price', m.pcb_price or '')] %}<td class="sc" data-f="{{ f }}">{{ '' if val is none else (val|numfmt if f in NF18 else val) }}</td>{% endfor %}{% for cc in custom_cols %}<td class="sc" data-f="cc_{{ cc.id }}">{{ m['cc_' ~ cc.id] }}</td>{% endfor %}<td class="fs{{ ' z' if (m.fg_stock or 0) > 0 else '' }}" data-f="fg_stock">{{ m.fg_stock or 0 }}</td><td class="del" data-f="__del"><button type="button" class="mdel97" data-id="{{ m.id }}" title="Is model ko SHEET se hatao">&#128465;</button></td></tr>
         {% endfor %}
         {% if not models %}
@@ -664,6 +665,19 @@
         if (d.ok){ toast18('Nayi khaali row add ho gayi — MODEL NO. me naam likho'); setTimeout(function(){ location.reload(); }, 900); }
         else toast18(d.error || 'Row add fail', true);
       }).catch(function(){ btn.disabled = false; toast18('Row add fail', true); });
+  });
+  /* v4.27: CUT CALC — sab models ka cutting size GANG engine (GANG preview wala hi math) se */
+  document.getElementById('shCalc27').addEventListener('click', function(){
+    var btn = this;
+    if (!confirm('SAB models ka CUTTING SIZE (4a/N/4b/N) + UPS Gang-engine se recalc hoga. Purani values overwrite hongi — chalega?')) return;
+    btn.disabled = true;
+    fetch('/api/products/sheet/calc_cut?token=' + tok(), {method: 'POST'})
+      .then(function(r){ return r.json(); })
+      .then(function(d){
+        btn.disabled = false;
+        if (d.ok){ toast18(d.updated + ' models recalc ho gaye' + (d.skipped ? ' (' + d.skipped + ' skip — panel/sheet data kam)' : '')); setTimeout(function(){ location.reload(); }, 900); }
+        else toast18(d.error || 'Cut Calc fail', true);
+      }).catch(function(){ btn.disabled = false; toast18('Cut Calc fail', true); });
   });
   document.getElementById('shAddCol').addEventListener('click', function(){
     var nm = prompt('Naye column ka naam? (jaise: GST / REMARK / BATCH)');

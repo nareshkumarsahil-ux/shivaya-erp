@@ -532,7 +532,8 @@
     if (f === '__sel' || f === '__del' || f === 'sn' || th.classList.contains('grp')) return;
     var b = document.createElement('span');
     b.className = 'fB23'; b.title = 'Filter: ' + (LBL18[f] || f) + ' \u2014 click karo';
-    b.style.cssText = 'position:absolute;left:2px;top:50%;transform:translateY(-50%);cursor:pointer;display:inline-flex;align-items:center;padding:3px 5px;border-radius:6px;border:1px solid #64748b;background:#f1f5f9;color:#334155;line-height:1;box-shadow:0 1px 3px rgba(0,0,0,.25)';
+    th.style.paddingRight = '16px';   /* v4.26: text funnel ke niche na chale */
+    b.style.cssText = 'position:absolute;right:2px;top:50%;transform:translateY(-50%);cursor:pointer;display:inline-flex;align-items:center;padding:3px 5px;border-radius:6px;border:1px solid #64748b;background:#f1f5f9;color:#334155;line-height:1;box-shadow:0 1px 3px rgba(0,0,0,.25)';
     b.innerHTML = '<svg width="11" height="11" viewBox="0 0 16 16" aria-hidden="true"><path d="M1 2h14l-5.4 6.3V14l-3.2 1V8.3z" fill="currentColor"/></svg>';
     th.appendChild(b);
     b.addEventListener('click', function(e){

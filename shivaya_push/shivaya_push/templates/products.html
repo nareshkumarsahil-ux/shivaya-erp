@@ -513,7 +513,7 @@
     }).catch(function(){ toast18('Delete fail — dobara try karo', true); });
   });
 
-  /* ===== v4.23: per-column FILTER (Excel AutoFilter) + ROW/COLUMN add ===== */
+  /* ===== v4.23+v4.25: per-column FILTER (Excel AutoFilter — FUNNEL button + LIVE type-search) + ROW/COLUMN add ===== */
   var FILTERS23 = {};
   var CC23 = {{ custom_cols|tojson }} || [];
   function shOK23(tr){
@@ -531,8 +531,9 @@
     var f = th.getAttribute('data-f');
     if (f === '__sel' || f === '__del' || f === 'sn' || th.classList.contains('grp')) return;
     var b = document.createElement('span');
-    b.className = 'fB23'; b.textContent = '\u25be'; b.title = 'Filter: ' + (LBL18[f] || f);
-    b.style.cssText = 'position:absolute;left:2px;top:50%;transform:translateY(-50%);cursor:pointer;font-size:9px;color:#64748b;padding:1px 3px;border-radius:4px;line-height:1';
+    b.className = 'fB23'; b.title = 'Filter: ' + (LBL18[f] || f) + ' \u2014 click karo';
+    b.style.cssText = 'position:absolute;left:2px;top:50%;transform:translateY(-50%);cursor:pointer;display:inline-flex;align-items:center;padding:3px 5px;border-radius:6px;border:1px solid #64748b;background:#f1f5f9;color:#334155;line-height:1;box-shadow:0 1px 3px rgba(0,0,0,.25)';
+    b.innerHTML = '<svg width="11" height="11" viewBox="0 0 16 16" aria-hidden="true"><path d="M1 2h14l-5.4 6.3V14l-3.2 1V8.3z" fill="currentColor"/></svg>';
     th.appendChild(b);
     b.addEventListener('click', function(e){
       e.stopPropagation();
@@ -545,7 +546,6 @@
     var vals = [], seen = {};
     var rows = document.querySelectorAll('#sheet97 tbody tr[data-id]');
     rows.forEach(function(tr){
-      if (tr.style.display === 'none') return;
       if (!shOK23except(tr, f)) return;
       var v = fVal23(tr, f) || '(khaali)';
       if (!seen[v]){ seen[v] = 1; vals.push(v); }
@@ -562,6 +562,12 @@
     h.style.cssText = 'font-weight:800;color:#334155;margin-bottom:5px;font-size:11.5px';
     h.textContent = 'Filter: ' + (LBL18[f] || f);
     pan.appendChild(h);
+    /* v4.25: TYPE-karo LIVE filter box */
+    var sIn = document.createElement('input');
+    sIn.type = 'text'; sIn.placeholder = 'Type karo\u2026 (live filter)';
+    sIn.setAttribute('autocomplete', 'off');
+    sIn.style.cssText = 'width:100%;box-sizing:border-box;padding:5px 8px;border:1px solid #cbd5e1;border-radius:8px;font-size:12px;margin-bottom:6px;outline:none';
+    pan.appendChild(sIn);
     var list = document.createElement('div');
     list.style.cssText = 'max-height:210px;overflow:auto;border:1px solid #e2e8f0;border-radius:8px;padding:4px 6px';
     var cks = [];
@@ -580,6 +586,29 @@
     });
     if (!vals.length) list.innerHTML = '<span class="muted small">koi value nahi</span>';
     pan.appendChild(list);
+    var st = document.createElement('div');
+    st.style.cssText = 'font-size:10.5px;color:#64748b;margin:5px 0 0';
+    st.textContent = vals.length + ' values';
+    pan.appendChild(st);
+    var tmr25 = null;
+    function applyLive25(){
+      var sel = cks.filter(function(c){ return c.checked; }).map(function(c){ return c.value; });
+      if (sIn.value.trim() && !sel.length) FILTERS23[f] = ['\u0000~nomatch~'];
+      else if (!sel.length || sel.length === vals.length) delete FILTERS23[f];
+      else FILTERS23[f] = sel;
+      styleF23(btn, f); shFilter18();
+      var vis = 0; rows.forEach(function(tr){ if (tr.style.display !== 'none' && shOK23(tr)) vis++; });
+      st.textContent = FILTERS23[f] ? (vis + ' / ' + rows.length + ' rows dikh rahi') : (vals.length + ' values \u2014 sab dikh rahi');
+    }
+    sIn.addEventListener('input', function(){
+      var q = sIn.value.trim().toLowerCase();
+      cks.forEach(function(c){
+        var hit = !q || c.value.toLowerCase().indexOf(q) >= 0;
+        c.checked = hit; c.parentNode.style.display = hit ? '' : 'none';
+      });
+      clearTimeout(tmr25); tmr25 = setTimeout(applyLive25, 140);
+    });
+    sIn.addEventListener('keydown', function(e){ if (e.key === 'Enter'){ e.preventDefault(); applyLive25(); pan.remove(); } });
     var row = document.createElement('div');
     row.style.cssText = 'display:flex;gap:6px;margin-top:7px';
     function mkBtn(t, bg, fg){

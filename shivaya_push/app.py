@@ -1294,6 +1294,38 @@ def compute_layout(p):
     }
 
 
+def _model_cut_calc(m):
+    """v4.27 — SHEET CUTTING SIZE (4A/N/4B/N) + UPS ko GANG engine (compute_layout) se nikaalo.
+    Model ka apna panel+gang+kerf+sheet use hota hai — GANG preview jaisa hi jawab.
+    Data kam (panel/sheet missing) -> None (stored value chalega)."""
+    try:
+        if not m or not (m.get("panel_len") or 0) > 0 or not (m.get("panel_w") or 0) > 0 \
+           or not (m.get("sheet_len") or 0) > 0 or not (m.get("sheet_w") or 0) > 0:
+            return None
+        _p = {"pcb_len": m.get("pcb_len") or 0, "pcb_w": m.get("pcb_w") or 0,
+              "pcbs_x": m.get("pcbs_x") or 0, "pcbs_y": m.get("pcbs_y") or 0,
+              "gap_x": 0, "gap_y": 0, "gaps_x": "", "gaps_y": "",
+              "border_l": 0, "border_r": 0, "border_t": 0, "border_b": 0,
+              "panel_len": m.get("panel_len"), "panel_w": m.get("panel_w"),
+              "gang_x": m.get("gang_x") or 1, "gang_y": m.get("gang_y") or 1,
+              "sheet_len": m.get("sheet_len"), "sheet_w": m.get("sheet_w"),
+              "kerf_x": m.get("kerf_x") or 0, "kerf_y": m.get("kerf_y") or 0,
+              "sheets": 1, "use": "0"}
+        r = compute_layout(_p)
+    except Exception:
+        return None
+    if not r:
+        return None
+    _gp = max(1, int(m.get("gang_x") or 1))
+    _gq = max(1, int(m.get("gang_y") or 1))
+    _pp = int(m.get("pcs_panel") or 0)
+    _unit = _pp * _gp * _gq if _pp else int(r.get("pcs_unit") or 0)
+    return {"cutting_len": float(r.get("cutting_len") or 0),
+            "cutting_w": float(r.get("cutting_w") or 0),
+            "x_qty": int(r.get("grid_x") or 0), "y_qty": int(r.get("grid_y") or 0),
+            "ups": _unit, "pps": int(r.get("panels_per_sheet") or 0)}
+
+
 def svg_panel_preview(r):
     """PREVIEW #1 — PANEL (v4.11: navy-teal 'PCB PANELIZATION LAYOUT' theme — user ka exact format):
     title + teal rule, navy panel outline, teal PCBs ('L x W' labels), top/right dimension arrows,
@@ -2685,7 +2717,15 @@ def products():
     # Upar wala Saved-Models table apne 400-cap par hi rahega (SHEET hi main list hai).
     models_total = len(rows)
     models_top = rows[:400]
-    models = rows
+    models = [dict(_r) for _r in rows]   # v4.27: dict — cut-calc attach hoga
+    for _m in models:
+        _c27 = _model_cut_calc(_m)
+        _m["_c4a"] = _c27["cutting_len"] if _c27 else None
+        _m["_cn4a"] = _c27["x_qty"] if _c27 else None
+        _m["_c4b"] = _c27["cutting_w"] if _c27 else None
+        _m["_cn4b"] = _c27["y_qty"] if _c27 else None
+        _m["_cups"] = _c27["ups"] if _c27 else None
+        _m["_cpps"] = _c27["pps"] if _c27 else None
     party_opts = [r["party_name"] for r in
                   db.query("SELECT DISTINCT party_name FROM product_models WHERE IFNULL(party_name,'')!='' ORDER BY party_name")]
     # v3.18 HSN sweep — koi bhi naya model (apply-order/import) bina HSN na rahe (PCB default 85340000)
@@ -4903,6 +4943,24 @@ def sheet_delete_many():
     if blocked:
         msg += f" | {len(blocked)} USE-ME (PDF/BOM/PRODUCTION) block: " + ", ".join(b["name"] for b in blocked[:6])
     return jsonify(ok=True, deleted=len(deleted), blocked=blocked, msg=msg)
+
+
+@app.route("/api/products/sheet/calc_cut", methods=["POST"])
+@login_required
+@admin_required
+def sheet_calc_cut97():
+    """v4.27 — SAB models ka CUTTING SIZE (4A/N/4B/N) + UPS GANG engine se recalc,
+    DB write-back (PO/jobcard bhi sahi panels_sheet uthayenge). Data kam wale skip."""
+    upd, skip = 0, 0
+    for m in db.query("SELECT * FROM product_models"):
+        c = _model_cut_calc(dict(m))
+        if not c or not c["x_qty"] or not c["y_qty"] or not c["ups"]:
+            skip += 1
+            continue
+        db.execute("UPDATE product_models SET cutting_len=?, cutting_w=?, x_qty=?, y_qty=?, panels_sheet=? WHERE id=?",
+                   (c["cutting_len"], c["cutting_w"], c["x_qty"], c["y_qty"], c["pps"], m["id"]))
+        upd += 1
+    return jsonify(ok=True, updated=upd, skipped=skip)
 
 
 @app.route("/api/products/sheet/custom_col", methods=["POST"])
