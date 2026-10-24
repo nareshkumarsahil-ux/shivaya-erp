@@ -2795,9 +2795,9 @@ FIELD_ALIASES = {
     "cnc_tool": ["cnc/tool", "cnc tool", "cnc", "tool", "machining", "tool no"],
     "note": ["machine note", "cutting note", "remark", "remarks", "notes", "note"],
     "pcb_len": ["pcb length", "pcb l", "pcb x", "actual pcb x", "actual pcb size x",
-                "pcb size x", "pcb length (mm)", "pcb size l", "pcb x size"],
+                "pcb size x", "pcb length (mm)", "pcb size l", "pcb x size", "x"],
     "pcb_w": ["pcb width", "pcb w", "pcb y", "actual pcb y", "actual pcb size y",
-              "pcb size y", "pcb width (mm)", "pcb size w", "pcb y size"],
+              "pcb size y", "pcb width (mm)", "pcb size w", "pcb y size", "y"],
     "pcbs_x": ["pcbs x", "pcbs in x", "pcb across x", "pcbs across x", "x pcs",
                "pcs x", "pcb qty x", "pcbs along x", "pcb in x"],
     "pcbs_y": ["pcbs y", "pcbs in y", "pcb across y", "pcbs across y", "y pcs",
@@ -2830,18 +2830,18 @@ FIELD_ALIASES = {
     "cnc_margin_y": ["cnc margin y", "margin y", "cnc y", "cnc margin y (mm)"],
     "pcs_panel": ["pcs/panel", "pcs per panel", "pcs panel", "pcb in one panel",
                   "pcbs/panel", "pcbs per panel", "pcs in panel", "pcs", "pcb/panel",
-                  "up", "ups", "u.p.", "u.p", "units per panel", "units/panel",
+                  "up", "u.p.", "u.p", "units per panel", "units/panel",
                   "unit per panel", "pcs up", "up pcs", "pcb up", "panel up"],
     "panels_sheet": ["panels/sheet", "panels per sheet", "panels sheet", "panel per sheet",
-                     "panels in sheet", "panel/sheet"],
+                     "panels in sheet", "panel/sheet", "ups"],
     "sheets": ["no of sheets", "no. of sheet", "sheets", "sheet qty", "number of sheets",
                "no of sheet", "no. of sheets", "sheets qty", "total sheets"],
     "x_qty": ["x qty", "x cutting qty", "x panels", "sheet length panels", "qty x",
               "panels along length", "x layout", "sheet length (panels)", "x cutting qty (panels)",
-              "x#", "x #", "cut x#", "cutting x#"],
+              "x#", "x #", "cut x#", "cutting x#", "n"],
     "y_qty": ["y qty", "y cutting qty", "y panels", "sheet width panels", "qty y",
               "panels along width", "y layout", "sheet width (panels)", "y cutting qty (panels)",
-              "y#", "y #", "cut y#", "cutting y#"],
+              "y#", "y #", "cut y#", "cutting y#", "n"],
     "orientation": ["orientation", "layout", "layout type", "layout orientation", "best layout"],
     # v3.99: SIZE SHEET ke naye columns (PARTY CODE / PER SQ.INCH / MATERIAL / CNC/TOOL)
     "party_code": ["party code", "party code.", "party code no", "p code"],
@@ -2961,7 +2961,7 @@ def _map_headers(headers):
         matches = [f for f, aliases in FIELD_ALIASES.items() if key in aliases]
         if matches:
             # pehle naye (unused) field ko do; sab used hon to same field par remap
-            # (last column jeetta hai: PCS ke BAAD UPS aata hai -> UPS = production UP sahi)
+            # (v4.17: do N columns -> pehla x_qty, doosra y_qty; UPS ab panels_sheet)
             mapping[idx] = next((f for f in matches if f not in taken), matches[0])
     # pass 1.5: pure numeric headers -> panel length / width (order se)
     num_seen = 0
@@ -3284,8 +3284,8 @@ def products_import_confirm():
             (str(fields.get("party_code") or "")).strip(),
             (str(fields.get("cnc_tool") or "")).strip(),
             (str(fields.get("sheet_thickness") or "")).strip(),
-            float(fields.get("per_sq_inch") or 0),
-            float(fields.get("pcb_price") or 0),
+            (float(fields.get("per_sq_inch")) if fields.get("per_sq_inch") is not None else None),
+            (float(fields.get("pcb_price")) if fields.get("pcb_price") is not None else None),
             fields.get("pcb_len"), fields.get("pcb_w"),          # v4.14: blank -> NULL (blank hi rahe)
             int(fields.get("pcbs_x") or 0), int(fields.get("pcbs_y") or 0),
             float(fields.get("gap_x") or 0), float(fields.get("gap_y") or 0),
@@ -3293,8 +3293,10 @@ def products_import_confirm():
             float(fields.get("border_t") or 0), float(fields.get("border_b") or 0),
             gang_x, gang_y,
             float(fields.get("sheet_len") or 0), float(fields.get("sheet_w") or 0),
-            float(fields.get("panel_len") or 0), float(fields.get("panel_w") or 0),
-            float(fields.get("cutting_len") or 0), float(fields.get("cutting_w") or 0),
+            (float(fields.get("panel_len")) if fields.get("panel_len") is not None else None),
+            (float(fields.get("panel_w")) if fields.get("panel_w") is not None else None),
+            (float(fields.get("cutting_len")) if fields.get("cutting_len") is not None else None),
+            (float(fields.get("cutting_w")) if fields.get("cutting_w") is not None else None),
             float(fields.get("kerf_x") or 2), float(fields.get("kerf_y") or 2),
             float(fields.get("cnc_margin_x") or 0), float(fields.get("cnc_margin_y") or 0),
             (str(fields.get("orientation") or "normal")).strip() or "normal",
@@ -4604,41 +4606,38 @@ _SHEET_FIELDS = {"model_code": str, "name": str, "party_code": str, "party_name"
 @login_required
 @admin_required
 def products_sheet_download():
-    """v4.03: SHEET ko wapas aapki Excel ke EXACT format me download (2-row group header:
-    SINGLE PCB SIZE / SINGLE PANEL (L,W,PCS) / CUTTING SIZE (4a,X#,4b,Y#) / UPS / CNC-TOOL /
-    PER SQ.INCH / MATERIAL / PER SQ.INCH=RATE). Re-upload isi tarah round-trip hota hai."""
+    """v4.17: SHEET download — user ki Excel ka EXACT naya format (2-row group header:
+    SINGLE PCB SIZE (X,Y) / SINGLE PANEL (L,W,PCS) / CUTTING SIZE (4a,N,4b,N) / UPS /
+    CNC/TOOL / PER SQ INCH / MATERIAL / PRICE). Re-upload isi tarah round-trip hota hai."""
     from openpyxl import Workbook
     from io import BytesIO as _BIO
     rows = db.query("SELECT * FROM product_models ORDER BY id")
     wb = Workbook()
     ws = wb.active
     ws.title = "SIZE SHEET"
-    grp = ["", "", "", "", "SINGLE PCB SIZE", "SINGLE PANEL", "", "", "CUTTING SIZE", "", "", "", "", "", "", "", ""]
-    sub = ["S.N.", "PARTY", "MODEL NO.", "PARTY CODE", "", "L", "W", "PCS", "4a", "X#", "4b", "Y#",
+    grp = ["", "", "", "", "SINGLE PCB SIZE", "", "SINGLE PANEL", "", "", "CUTTING SIZE", "", "", "", "", "", "", "", ""]
+    sub = ["S.N.", "PARTY", "MODEL NO.", "PARTY CODE", "X", "Y", "L", "W", "PCS", "4a", "N", "4b", "N",
            "UPS", "CNC/TOOL", "PER SQ INCH", "MATERIAL", "PRICE"]
     ws.append(grp)
     ws.append(sub)
     from openpyxl.styles import Font, Alignment
-    for c in ("E1", "F1", "I1"):
+    for c in ("E1", "G1", "J1"):
         ws[c].font = Font(bold=True)
         ws[c].alignment = Alignment(horizontal="center")
-    ws.merge_cells("F1:H1")
-    ws.merge_cells("I1:L1")
-    i = 0
-    def _fnum(v):
-        try:
-            return float(v)
-        except (TypeError, ValueError):
-            return 0.0
-    for m in rows:
-        i += 1
-        _pl, _pw = _fnum(m["pcb_len"]), _fnum(m["pcb_w"])
-        pcb = ("%g X %g" % (_pl, _pw)) if (_pl and _pw) else ((f"{_pl:g}") if _pl else ((f"{_pw:g}") if _pw else ""))
-        ws.append([i, m["party_name"] or m["party"] or "", m["model_code"] or m["name"] or "", m["party_code"] or "",
-                   pcb, m["panel_len"] or "", m["panel_w"] or "", "",
-                   m["cutting_len"] or "", m["x_qty"] or "", m["cutting_w"] or "", m["y_qty"] or "",
-                   m["pcs_panel"] or "", m["cnc_tool"] or m["note"] or "",
-                   m["per_sq_inch"] or "", m["sheet_thickness"] or "", m["pcb_price"] or ""])
+    ws.merge_cells("E1:F1")
+    ws.merge_cells("G1:I1")
+    ws.merge_cells("J1:M1")
+    for _i, m in enumerate(rows, 1):
+        ws.append([_i, m["party_name"] or m["party"] or "", m["model_code"] or m["name"] or "", m["party_code"] or "",
+                   m["pcb_len"] if m["pcb_len"] is not None else "", m["pcb_w"] if m["pcb_w"] is not None else "",
+                   m["panel_len"] if m["panel_len"] is not None else "", m["panel_w"] if m["panel_w"] is not None else "",
+                   m["pcs_panel"] if m["pcs_panel"] is not None else "",
+                   m["cutting_len"] if m["cutting_len"] is not None else "", m["x_qty"] if m["x_qty"] is not None else "",
+                   m["cutting_w"] if m["cutting_w"] is not None else "", m["y_qty"] if m["y_qty"] is not None else "",
+                   m["panels_sheet"] if m["panels_sheet"] is not None else "",
+                   m["cnc_tool"] or m["note"] or "",
+                   m["per_sq_inch"] if m["per_sq_inch"] is not None else "",
+                   m["sheet_thickness"] or "", m["pcb_price"] if m["pcb_price"] is not None else ""])
     out = _BIO()
     wb.save(out)
     return Response(out.getvalue(), mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

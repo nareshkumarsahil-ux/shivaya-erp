@@ -119,30 +119,36 @@
     #sheet97 td.fs.z{color:#15803d}
     #sheet97 td.del{text-align:center}
     #sheet97 button.mdel97{background:#fef2f2;color:#b91c1c;padding:2px 7px}
+    #sheet97 th.grp{text-align:center;background:#e0e7ff}
     </style>
     <table class="stable" id="sheet97" style="border-collapse:collapse;width:100%;font-size:11.5px;background:#fff">
       <thead>
         <tr style="background:#eef2ff;position:sticky;top:0;z-index:2">
-          <th>S.N</th>
-          <th>PARTY</th>
-          <th>MODEL NO.</th>
-          <th>PARTY CODE</th>
-          <th>PCB SIZE</th>
-          <th>PANEL L</th>
-          <th>PANEL W</th>
-          <th>PCS/PANEL</th>
-          <th>CUT L</th>
-          <th>X#</th>
-          <th>CUT W</th>
-          <th>Y#</th>
-          <th>PANELS/SHEET</th>
-          <th>SHEETS</th>
-          <th>CNC/TOOL</th>
-          <th>PER SQ INCH</th>
-          <th>MATERIAL</th>
-          <th>RATE ₹</th>
-          <th>FIN. STOCK</th>
-          <th>DEL</th>
+          <th rowspan="2">S.N</th>
+          <th rowspan="2">PARTY</th>
+          <th rowspan="2">MODEL NO.</th>
+          <th rowspan="2">PARTY CODE</th>
+          <th class="grp" colspan="2">SINGLE PCB SIZE</th>
+          <th class="grp" colspan="3">SINGLE PANEL</th>
+          <th class="grp" colspan="4">CUTTING SIZE</th>
+          <th rowspan="2">UPS</th>
+          <th rowspan="2">CNC/TOOL</th>
+          <th rowspan="2">PER SQ INCH</th>
+          <th rowspan="2">MATERIAL</th>
+          <th rowspan="2">PRICE</th>
+          <th rowspan="2">FIN. STOCK</th>
+          <th rowspan="2">DEL</th>
+        </tr>
+        <tr style="background:#eef2ff;position:sticky;top:28px;z-index:2">
+          <th>X</th>
+          <th>Y</th>
+          <th>L</th>
+          <th>W</th>
+          <th>PCS</th>
+          <th>4a</th>
+          <th>N</th>
+          <th>4b</th>
+          <th>N</th>
         </tr>
       </thead>
       <tbody>
@@ -150,8 +156,8 @@
                             ('pcb_len', m.pcb_len or ''), ('pcb_w', m.pcb_w or ''),
                             ('panel_len', m.panel_len or ''), ('panel_w', m.panel_w or ''), ('pcs_panel', m.pcs_panel or ''),
                             ('cutting_len', m.cutting_len or ''), ('x_qty', m.x_qty or ''), ('cutting_w', m.cutting_w or ''), ('y_qty', m.y_qty or ''),
-                            ('panels_sheet', m.panels_sheet or ''), ('sheets', m.sheets or ''), ('cnc_tool', m.cnc_tool or ''),
-                            ('per_sq_inch', m.per_sq_inch or ''), ('sheet_thickness', m.sheet_thickness or ''), ('pcb_price', m.pcb_price or '')] %}<td class="sc" data-f="{{ f }}">{{ '' if val is none else val }}</td>{% endfor %}<td class="fs{{ ' z' if (m.fg_stock or 0) > 0 else '' }}">{{ m.fg_stock or 0 }}</td><td class="del"><button type="button" class="mdel97" data-id="{{ m.id }}" title="Is model ko SHEET se hatao">&#128465;</button></td></tr>
+                            ('panels_sheet', m.panels_sheet or ''), ('cnc_tool', m.cnc_tool or ''),
+                            ('per_sq_inch', m.per_sq_inch or ''), ('sheet_thickness', m.sheet_thickness or ''), ('pcb_price', m.pcb_price or '')] %}<td class="sc" data-f="{{ f }}">{{ '' if val is none else ('%g'|format(val) if val is number and val is not string else val) }}</td>{% endfor %}<td class="fs{{ ' z' if (m.fg_stock or 0) > 0 else '' }}">{{ m.fg_stock or 0 }}</td><td class="del"><button type="button" class="mdel97" data-id="{{ m.id }}" title="Is model ko SHEET se hatao">&#128465;</button></td></tr>
         {% endfor %}
         {% if not models %}
         <tr><td colspan="20" style="border:1px solid #e2e8f0;padding:12px;text-align:center;color:#94a3b8">Abhi koi model nahi — Cut List Optimizer se save karo ya Add Manually.</td></tr>
