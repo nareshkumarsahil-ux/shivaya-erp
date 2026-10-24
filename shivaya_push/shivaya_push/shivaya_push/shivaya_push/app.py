@@ -4366,7 +4366,8 @@ def po_entry():
     parties = [p["name"] for p in db.query("SELECT name FROM parties ORDER BY name")]
     models = [dict(m) for m in db.query(
         "SELECT id, name, model_code, pcb_len, pcb_w, panel_len, panel_w, pcs_panel, "
-        "cutting_len, cutting_w, sheet_len, sheet_w, sheet_thickness, party_name "
+        "cutting_len, cutting_w, sheet_len, sheet_w, sheet_thickness, party_name, "
+        "party_code, pcb_price "
         "FROM product_models ORDER BY name")]
     inv = [{"id": i["id"], "name": i["name"], "unit": i["unit"]} for i in db.query(
         "SELECT id, name, unit FROM inventory ORDER BY name")]
@@ -5013,8 +5014,17 @@ def po_save_line():
     if not pm and not tmodel and not auto:
         return jsonify(ok=False, error="MODEL NO chuno ya likho (Size Master se aayega)."), 400
     model_code = pm["model_code"] if pm and pm["model_code"] else (pm["name"] if pm else tmodel)
+    if pm and party.startswith("PO-") and not (f.get("party") or "").strip():   # v4.26: party name master se
+        _mp = (pm["party_name"] or pm["party"] or "").strip()
+        if _mp:
+            party = _mp
     party_model = (f.get("party_model") or "").strip()
     party_code = (f.get("party_code") or "").strip()
+    if pm:   # v4.26: PARTY MODEL/PARTY CODE SHEET MASTER se auto-fetch (khali hone par)
+        if not party_model and pm["party_code"]:
+            party_model = (pm["party_code"] or "").strip()
+        if not party_code and pm["party_code"]:
+            party_code = (pm["party_code"] or "").strip()
     prod = (f"{model_code}{(' · ' + party_model) if party_model else ''}"
             if model_code else f"(S.No. {po_sno} — khud bharo)")
     x_size = float(f.get("x_size") or 0) or (float(pm["cutting_len"] or pm["panel_len"] or 0) if pm else 0)
@@ -5025,6 +5035,8 @@ def po_save_line():
     if qty_panel:
         qty_panel += extra
     rate = f.get("rate") or ""
+    if not rate and pm and pm["pcb_price"]:   # v4.26: PRICE master se
+        rate = str(pm["pcb_price"])
     count = db.query("SELECT COUNT(*) c FROM orders", one=True)["c"]
     oid = db.execute(
         "INSERT INTO orders (order_no, party, board, product, qty, value, current_process, status, progress, "
@@ -5047,7 +5059,7 @@ def po_save_line():
          (int(pm["sheets"] or 0) if pm else 0),
          ups, float(pm["sheet_len"] or 0) if pm else 0, float(pm["sheet_w"] or 0) if pm else 0,
          (f.get("material") or ""), (pm["sheet_thickness"] if pm else ""), po_no,
-         (f.get("party_code") or "")))
+         party_code))
     db.execute("INSERT INTO jobcard_log (order_id, process, action, operator, details, ts) VALUES (?,?,?,?,?,?)",
                (oid, "PO", "created", session.get("user_name") or "admin",
                 f"PO S.No. {po_sno} · {po_no}", _now_dt()))
@@ -5140,7 +5152,8 @@ def po_verify(oid):
               "url": (f"/api/model/design/{pm['id']}") if pm else ""}
     models = [dict(m) for m in db.query(
         "SELECT id, name, model_code, pcb_len, pcb_w, panel_len, panel_w, pcs_panel, "
-        "cutting_len, cutting_w, sheet_len, sheet_w, sheet_thickness, party_name "
+        "cutting_len, cutting_w, sheet_len, sheet_w, sheet_thickness, party_name, "
+        "party_code, pcb_price "
         "FROM product_models ORDER BY name")]
     in_process = (order["status"] == "running") or bool(order["current_process"])
     return render_template("po_verify.html", active="orders", order=order, jc=jc, mix79=mix85,
@@ -5199,6 +5212,11 @@ def po_update_card(oid):
     for fk, col in _jmap.items():
         if fk in f:
             db.execute(f"UPDATE jobcard SET {col}=? WHERE id=?", (gv(fk), jc["id"]))
+    if pm and pm["party_code"]:   # v4.26: PARTY MODEL/PARTY CODE master se (form me khali ho to)
+        if not gv("party_model"):
+            db.execute("UPDATE jobcard SET party_model=? WHERE id=?", (pm["party_code"], jc["id"]))
+        if not gv("party_code"):
+            db.execute("UPDATE jobcard SET party_code=? WHERE id=?", (pm["party_code"], jc["id"]))
     for fk, col in (("rs_pcb", "rs_pcb"), ("total_qty", "total_qty"), ("qty_panel", "qty_panel"),
                     ("pcs_panel", "pcs_panel"), ("sheets", "sheets"), ("short_qty", "short_qty")):
         if fk in f and gv(fk):
