@@ -1041,86 +1041,149 @@ function computeLive(){
 
 function svgPanel(pcbL, pcbW, px, py, gapXs, gapYs, bl, br, bt, bb, pL, pW, pcsPanel, gx, gy, kx, ky, pgXs, pgYs, shape){
   shape = shape || 'rect';
-  /* v4.11 — navy-teal 'PCB PANELIZATION LAYOUT' theme (user ka exact format):
-     title + teal rule, navy panel, teal PCBs ('L x W'), top/right dim arrows, gap dim, 5-box info strip. */
-  var NAVY = '#16324f', TEAL = '#2ba7b5', PCBF = '#d2e8e9', MUT = '#5b7484';
-  var W = 470, TOP = 48, AVH = 316, BOTG = 58, STR = 96, H = TOP + AVH + BOTG + STR + 8;
+  /* v4.35 — DARK BLUEPRINT 'PCB PANELIZATION LAYOUT' (user reference jaisa):
+     dark canvas, white panel + corner mounting holes, teal PCB cells + cyan L/W arrows
+     (plain numbers), top/left SEGMENT chains (border|cell|gap), overall dims, legend, strip. */
+  var BG = '#0d1b28', PANELB = '#e8eef4', CELLF = '#17384a', CELLB = '#4a7c93', CYAN = '#56ccf2';
+  var TXT = '#eaf4f8', CHAIN = '#7f9db0', MUT = '#8fb0bf', TEAL = '#2ba7b5', NAVY = '#eef6fa';
+  var W = 470, TOP = 48, AVH = 330, BOTG = 58, STR = 96, H = TOP + AVH + BOTG + STR + 8;
   var effL = pcbL, effW = pcbW;
   if ((!effL || effL <= 0) && px > 0) effL = (pL - bl - br - _sumArr(pgXs || gapXs)) / px;
   if ((!effW || effW <= 0) && py > 0) effW = (pW - bt - bb - _sumArr(pgYs || gapYs)) / py;
   if (effL > 0 && effL < 200) effL = Math.round(effL * 100) / 100;
   if (effW > 0 && effW < 200) effW = Math.round(effW * 100) / 100;
-  var scale = Math.min((W - 96) / pL, (AVH - 34) / pW);
+  var scale = Math.min((W - 128) / pL, (AVH - 44) / pW);
   var P = pL * scale, Q = pW * scale;
-  var x0 = (W - 34 - P) / 2, y0 = TOP + 34 + (AVH - 34 - Q) / 2;
+  var x0 = (W - P) / 2, y0 = TOP + 44 + (AVH - 44 - Q) / 2;
   var cw = (effL > 0 ? effL : 0) * scale, ch = (effW > 0 ? effW : 0) * scale;
   var bx = bl * scale, by = bt * scale;
   var f2 = function(n){ return (Math.round(n * 100) / 100).toFixed(2); };
-  var s = '<svg viewBox="0 0 ' + W + ' ' + H + '" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;display:block;background:#ffffff">';
+  var g35 = function(n){ return String(Math.round(n * 100) / 100); };
+  var s = '<svg viewBox="0 0 ' + W + ' ' + H + '" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;display:block;background:' + BG + '">';
   var i, j;
   /* Title + teal rule */
-  s += '<text x="' + (W / 2) + '" y="24" text-anchor="middle" font-size="15.5" font-weight="800" fill="' + NAVY + '" font-family="Segoe UI,Arial" letter-spacing="1">PCB PANELIZATION LAYOUT</text>';
+  s += '<text x="' + (W / 2) + '" y="24" text-anchor="middle" font-size="15.5" font-weight="800" fill="#f2f8fb" font-family="Segoe UI,Arial" letter-spacing="1">PCB PANELIZATION LAYOUT</text>';
   s += '<line x1="26" y1="33" x2="' + (W - 26) + '" y2="33" stroke="' + TEAL + '" stroke-width="2"/>';
-  /* Panel outline */
-  s += '<rect x="' + x0.toFixed(1) + '" y="' + y0.toFixed(1) + '" width="' + P.toFixed(1) + '" height="' + Q.toFixed(1) + '" fill="#ffffff" stroke="' + NAVY + '" stroke-width="2.4" rx="5"/>';
-  /* v4.15: hatch border strips (L/R/T/B) — image jaisa */
-  s += '<defs><pattern id="hatchPL" patternUnits="userSpaceOnUse" width="4" height="4" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="4" stroke="#9db6c9" stroke-width="1"/></pattern></defs>';
-  if (bl > 0.05) s += '<rect x="' + x0.toFixed(1) + '" y="' + y0.toFixed(1) + '" width="' + (bl * scale).toFixed(1) + '" height="' + Q.toFixed(1) + '" fill="url(#hatchPL)"/>';
+  /* hatch — rail/waste (dark subtle diagonal) */
+  s += '<defs><pattern id="hatchPL" patternUnits="userSpaceOnUse" width="5" height="5" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="5" stroke="#24425a" stroke-width="1.4"/></pattern></defs>';
+  /* RAIL / WASTE — border strips + gaps hatch me */
+  if (bl > 0.05) s += '<rect x="' + x0.toFixed(1) + '" y="' + y0.toFixed(1) + '" width="' + bx.toFixed(1) + '" height="' + Q.toFixed(1) + '" fill="url(#hatchPL)"/>';
   if (br > 0.05) s += '<rect x="' + (x0 + P - br * scale).toFixed(1) + '" y="' + y0.toFixed(1) + '" width="' + (br * scale).toFixed(1) + '" height="' + Q.toFixed(1) + '" fill="url(#hatchPL)"/>';
-  if (bt > 0.05) s += '<rect x="' + x0.toFixed(1) + '" y="' + y0.toFixed(1) + '" width="' + P.toFixed(1) + '" height="' + (bt * scale).toFixed(1) + '" fill="url(#hatchPL)"/>';
+  if (bt > 0.05) s += '<rect x="' + x0.toFixed(1) + '" y="' + y0.toFixed(1) + '" width="' + P.toFixed(1) + '" height="' + by.toFixed(1) + '" fill="url(#hatchPL)"/>';
   if (bb > 0.05) s += '<rect x="' + x0.toFixed(1) + '" y="' + (y0 + Q - bb * scale).toFixed(1) + '" width="' + P.toFixed(1) + '" height="' + (bb * scale).toFixed(1) + '" fill="url(#hatchPL)"/>';
-  /* PCB cells (teal + label) */
-  if (cw > 2.4 && ch > 2.4 && effL > 0 && effW > 0) {
+  var gapsXpx = [], gapsYpx = [];
+  for (i = 0; i < px - 1; i++) gapsXpx.push((i < gapXs.length ? gapXs[i] : 0) * scale);
+  for (j = 0; j < py - 1; j++) gapsYpx.push((j < gapYs.length ? gapYs[j] : 0) * scale);
+  var innerW = px * cw, innerH = py * ch, gi;
+  for (gi = 0; gi < gapsXpx.length; gi++) {
+    if (gapsXpx[gi] > 0.05) {
+      var gxoff = bx;
+      for (var gi2 = 0; gi2 < gi; gi2++) gxoff += cw + gapsXpx[gi2];
+      gxoff += cw;
+      s += '<rect x="' + (x0 + gxoff).toFixed(1) + '" y="' + (y0 + by).toFixed(1) + '" width="' + gapsXpx[gi].toFixed(1) + '" height="' + innerH.toFixed(1) + '" fill="url(#hatchPL)"/>';
+    }
+  }
+  for (gi = 0; gi < gapsYpx.length; gi++) {
+    if (gapsYpx[gi] > 0.05) {
+      var gyoff = by;
+      for (var gj2 = 0; gj2 < gi; gj2++) gyoff += ch + gapsYpx[gj2];
+      gyoff += ch;
+      s += '<rect x="' + (x0 + bx).toFixed(1) + '" y="' + (y0 + gyoff).toFixed(1) + '" width="' + innerW.toFixed(1) + '" height="' + gapsYpx[gi].toFixed(1) + '" fill="url(#hatchPL)"/>';
+    }
+  }
+  /* Panel outline (white rounded) + 4 corner mounting holes */
+  s += '<rect x="' + x0.toFixed(1) + '" y="' + y0.toFixed(1) + '" width="' + P.toFixed(1) + '" height="' + Q.toFixed(1) + '" fill="none" stroke="' + PANELB + '" stroke-width="1.8" rx="7"/>';
+  var holes = [[x0 + 5.5, y0 + 5.5], [x0 + P - 5.5, y0 + 5.5], [x0 + 5.5, y0 + Q - 5.5], [x0 + P - 5.5, y0 + Q - 5.5]];
+  for (i = 0; i < 4; i++) s += '<circle cx="' + holes[i][0].toFixed(1) + '" cy="' + holes[i][1].toFixed(1) + '" r="2.4" fill="' + BG + '" stroke="' + PANELB + '" stroke-width="1"/>';
+  /* PCB cells — teal fill + cyan L/W arrows (plain numbers) */
+  if (cw > 2.4 && ch > 2.4) {
+    var L35 = g35(effL > 0 ? effL : 0), W35 = g35(effW > 0 ? effW : 0);
     var ox = bx;
     for (i = 0; i < px; i++) {
       var oy = by;
       for (j = 0; j < py; j++) {
+        var cx_ = x0 + ox, cy_ = y0 + oy;
         s += (shape === 'round')
-          ? '<ellipse cx="' + (x0 + ox + cw / 2).toFixed(1) + '" cy="' + (y0 + oy + ch / 2).toFixed(1) + '" rx="' + (cw / 2).toFixed(1) + '" ry="' + (ch / 2).toFixed(1) + '" fill="' + PCBF + '" stroke="' + NAVY + '" stroke-width="1"/>'
-          : '<rect x="' + (x0 + ox).toFixed(1) + '" y="' + (y0 + oy).toFixed(1) + '" width="' + cw.toFixed(1) + '" height="' + ch.toFixed(1) + '" fill="' + PCBF + '" stroke="' + NAVY + '" stroke-width="1"/>';
-        /* v4.34 PRO CLEAN: koi arrow nahi, koi rotated text nahi — EK horizontal label per cell */
-        var lab34 = (Math.round(effL * 100) / 100) + ' \u00d7 ' + (Math.round(effW * 100) / 100);
-        var fsz34 = (cw >= 52 && ch >= 24) ? 9.0 : 7.6;
-        if (cw >= 34 && ch >= 15 && ((cw >= 52 && ch >= 24) || (i === 0 && j === 0))) {
-          s += '<text x="' + (x0 + ox + cw / 2).toFixed(1) + '" y="' + (y0 + oy + ch / 2 + 2.8).toFixed(1) + '" text-anchor="middle" font-size="' + fsz34 + '" font-weight="700" fill="#0f6b78" font-family="Segoe UI,Arial">' + lab34 + '</text>';
+          ? '<ellipse cx="' + (cx_ + cw / 2).toFixed(1) + '" cy="' + (cy_ + ch / 2).toFixed(1) + '" rx="' + (cw / 2).toFixed(1) + '" ry="' + (ch / 2).toFixed(1) + '" fill="' + CELLF + '" stroke="' + CELLB + '" stroke-width="1"/>'
+          : '<rect x="' + cx_.toFixed(1) + '" y="' + cy_.toFixed(1) + '" width="' + cw.toFixed(1) + '" height="' + ch.toFixed(1) + '" fill="' + CELLF + '" stroke="' + CELLB + '" stroke-width="1"/>';
+        if (cw >= 26 && ch >= 24) {
+          var ay = cy_ + ch * 0.30, ax1 = cx_ + 6, ax2 = cx_ + cw - 6;
+          s += '<line x1="' + ax1.toFixed(1) + '" y1="' + ay.toFixed(1) + '" x2="' + ax2.toFixed(1) + '" y2="' + ay.toFixed(1) + '" stroke="' + CYAN + '" stroke-width="0.9"/>';
+          s += '<path d="M ' + ax1.toFixed(1) + ' ' + ay.toFixed(1) + ' l 3.4 -2 v 4 z" fill="' + CYAN + '"/><path d="M ' + ax2.toFixed(1) + ' ' + ay.toFixed(1) + ' l -3.4 -2 v 4 z" fill="' + CYAN + '"/>';
+          s += '<text x="' + (cx_ + cw / 2).toFixed(1) + '" y="' + (ay - 2.6).toFixed(1) + '" text-anchor="middle" font-size="7.4" font-weight="700" fill="' + TXT + '" font-family="Segoe UI,Arial">' + L35 + '</text>';
+          var xa = cx_ + cw * 0.26, ay1 = cy_ + ch * 0.44, ay2 = cy_ + ch - 4;
+          s += '<line x1="' + xa.toFixed(1) + '" y1="' + ay1.toFixed(1) + '" x2="' + xa.toFixed(1) + '" y2="' + ay2.toFixed(1) + '" stroke="' + CYAN + '" stroke-width="0.9"/>';
+          s += '<path d="M ' + xa.toFixed(1) + ' ' + ay1.toFixed(1) + ' l -2 3.4 h 4 z" fill="' + CYAN + '"/><path d="M ' + xa.toFixed(1) + ' ' + ay2.toFixed(1) + ' l -2 -3.4 h 4 z" fill="' + CYAN + '"/>';
+          s += '<text x="' + (xa + 4.5).toFixed(1) + '" y="' + ((ay1 + ay2) / 2 + 2.6).toFixed(1) + '" font-size="7.4" font-weight="700" fill="' + TXT + '" font-family="Segoe UI,Arial">' + W35 + '</text>';
+        } else if (cw >= 20 && ch >= 13) {
+          s += '<text x="' + (cx_ + cw / 2).toFixed(1) + '" y="' + (cy_ + ch / 2 + 2.6).toFixed(1) + '" text-anchor="middle" font-size="7.2" font-weight="700" fill="' + CYAN + '" font-family="Segoe UI,Arial">' + L35 + ' \u00d7 ' + W35 + '</text>';
         }
         oy += ch + ((j < gapYs.length ? gapYs[j] : 0) * scale);
       }
       if (i < px - 1) ox += cw + ((i < gapXs.length ? gapXs[i] : 0) * scale);
     }
   }
-  /* TOP dimension — v4.34: NO arrows, end-ticks only */
-  var dy = y0 - 20;
-  function _tick34(x, y, vertical, ln) {
-    ln = ln || 4.2;
-    if (vertical) s += '<line x1="' + x.toFixed(1) + '" y1="' + (y - ln).toFixed(1) + '" x2="' + x.toFixed(1) + '" y2="' + (y + ln).toFixed(1) + '" stroke="' + NAVY + '" stroke-width="1"/>';
-    else s += '<line x1="' + (x - ln).toFixed(1) + '" y1="' + y.toFixed(1) + '" x2="' + (x + ln).toFixed(1) + '" y2="' + y.toFixed(1) + '" stroke="' + NAVY + '" stroke-width="1"/>';
+  /* ---- dimensions: overall + segment chains (v4.35) ---- */
+  function _arrH35(x, y, left) { s += '<path d="M ' + x.toFixed(1) + ' ' + y.toFixed(1) + ' l ' + (left ? 3.4 : -3.4) + ' -2 v 4 z" fill="' + CHAIN + '"/>'; }
+  function _arrV35(x, y, up) { s += '<path d="M ' + x.toFixed(1) + ' ' + y.toFixed(1) + ' l -2 ' + (up ? 3.4 : -3.4) + ' h 4 z" fill="' + CHAIN + '"/>'; }
+  /* TOP overall */
+  var dy1 = y0 - 36;
+  s += '<line x1="' + x0.toFixed(1) + '" y1="' + dy1.toFixed(1) + '" x2="' + (x0 + P).toFixed(1) + '" y2="' + dy1.toFixed(1) + '" stroke="' + CHAIN + '" stroke-width="1"/>';
+  _arrH35(x0, dy1, true); _arrH35(x0 + P, dy1, false);
+  s += '<line x1="' + x0.toFixed(1) + '" y1="' + (y0 - 2).toFixed(1) + '" x2="' + x0.toFixed(1) + '" y2="' + (dy1 - 4).toFixed(1) + '" stroke="' + CHAIN + '" stroke-width="0.6"/>';
+  s += '<line x1="' + (x0 + P).toFixed(1) + '" y1="' + (y0 - 2).toFixed(1) + '" x2="' + (x0 + P).toFixed(1) + '" y2="' + (dy1 - 4).toFixed(1) + '" stroke="' + CHAIN + '" stroke-width="0.6"/>';
+  s += '<text x="' + (x0 + P / 2).toFixed(1) + '" y="' + (dy1 - 5).toFixed(1) + '" text-anchor="middle" font-size="11.5" font-weight="700" fill="' + TXT + '" font-family="Segoe UI,Arial">' + g35(pL) + ' mm</text>';
+  /* TOP segment chain */
+  var dy2 = y0 - 16;
+  s += '<line x1="' + x0.toFixed(1) + '" y1="' + dy2.toFixed(1) + '" x2="' + (x0 + P).toFixed(1) + '" y2="' + dy2.toFixed(1) + '" stroke="' + CHAIN + '" stroke-width="0.8"/>';
+  var pts = [x0], segs = [], cur = x0;
+  if (bl > 0.05) { segs.push([cur, cur + bx, g35(bl)]); cur += bx; pts.push(cur); }
+  for (i = 0; i < px; i++) {
+    segs.push([cur, cur + cw, L35]); cur += cw; pts.push(cur);
+    if (i < px - 1 && gapsXpx[i] > 0.05) { segs.push([cur, cur + gapsXpx[i], g35(i < gapXs.length ? gapXs[i] : 0)]); cur += gapsXpx[i]; pts.push(cur); }
   }
-  function _dimH34(x1, x2, y, label, fs) {
-    s += '<line x1="' + x1.toFixed(1) + '" y1="' + y.toFixed(1) + '" x2="' + x2.toFixed(1) + '" y2="' + y.toFixed(1) + '" stroke="' + NAVY + '" stroke-width="1.1"/>';
-    _tick34(x1, y, false); _tick34(x2, y, false);
-    s += '<text x="' + ((x1 + x2) / 2).toFixed(1) + '" y="' + (y - 4).toFixed(1) + '" text-anchor="middle" font-size="' + (fs || 10.5) + '" font-weight="700" fill="' + NAVY + '" font-family="Segoe UI,Arial" style="paint-order:stroke" stroke="#ffffff" stroke-width="2.2">' + label + '</text>';
+  if (br > 0.05) { segs.push([cur, cur + br * scale, g35(br)]); cur += br * scale; pts.push(cur); }
+  for (i = 0; i < pts.length; i++) s += '<line x1="' + pts[i].toFixed(1) + '" y1="' + (dy2 - 3.5).toFixed(1) + '" x2="' + pts[i].toFixed(1) + '" y2="' + (dy2 + 3.5).toFixed(1) + '" stroke="' + CHAIN + '" stroke-width="0.8"/>';
+  for (i = 0; i < segs.length; i++) {
+    var wpx = segs[i][1] - segs[i][0], lab_ = segs[i][2];
+    if (wpx >= 3 && lab_.length * 3.9 <= wpx + 8)
+      s += '<text x="' + ((segs[i][0] + segs[i][1]) / 2).toFixed(1) + '" y="' + (dy2 - 3.5).toFixed(1) + '" text-anchor="middle" font-size="' + (wpx < 12 ? '6.0' : '7.2') + '" font-weight="600" fill="' + TXT + '" font-family="Segoe UI,Arial">' + lab_ + '</text>';
   }
-  s += '<line x1="' + x0.toFixed(1) + '" y1="' + (y0 - 2).toFixed(1) + '" x2="' + x0.toFixed(1) + '" y2="' + (dy - 4).toFixed(1) + '" stroke="' + NAVY + '" stroke-width="0.7"/>';
-  s += '<line x1="' + (x0 + P).toFixed(1) + '" y1="' + (y0 - 2).toFixed(1) + '" x2="' + (x0 + P).toFixed(1) + '" y2="' + (dy - 4).toFixed(1) + '" stroke="' + NAVY + '" stroke-width="0.7"/>';
-  _dimH34(x0, x0 + P, dy, f2(pL) + ' mm', 11);
-  function _miniDim(m1, m2, mlabel) { _dimH34(m1, m2, y0 - 6, mlabel, 7.8); }
-  if (bl > 0.05) _miniDim(x0, x0 + bl * scale, String(Math.round(bl * 100) / 100) + ' mm');
-  if (gapXs.length && gapXs[0] > 0.05 && cw > 2) {
-    var _gc = x0 + bl * scale + cw + (gapXs[0] * scale) / 2, _hf = Math.max(4, gapXs[0] * scale / 2);
-    _miniDim(_gc - _hf, _gc + _hf, f2(gapXs[0]) + ' mm');
+  /* LEFT segment chain */
+  var lx = x0 - 13;
+  s += '<line x1="' + lx.toFixed(1) + '" y1="' + y0.toFixed(1) + '" x2="' + lx.toFixed(1) + '" y2="' + (y0 + Q).toFixed(1) + '" stroke="' + CHAIN + '" stroke-width="0.8"/>';
+  var ypts = [y0], ysegs = [], cur = y0;
+  if (bt > 0.05) { ysegs.push([cur, cur + by, g35(bt)]); cur += by; ypts.push(cur); }
+  for (j = 0; j < py; j++) {
+    ysegs.push([cur, cur + ch, W35]); cur += ch; ypts.push(cur);
+    if (j < py - 1 && gapsYpx[j] > 0.05) { ysegs.push([cur, cur + gapsYpx[j], g35(j < gapYs.length ? gapYs[j] : 0)]); cur += gapsYpx[j]; ypts.push(cur); }
   }
-  if (br > 0.05) _miniDim(x0 + P - br * scale, x0 + P, String(Math.round(br * 100) / 100) + ' mm');
-  /* RIGHT dimension — v4.34: line + ticks, text HORIZONTAL niche (rotation nahi) */
-  var dx = x0 + P + 13;
-  s += '<line x1="' + dx.toFixed(1) + '" y1="' + y0.toFixed(1) + '" x2="' + dx.toFixed(1) + '" y2="' + (y0 + Q).toFixed(1) + '" stroke="' + NAVY + '" stroke-width="1.1"/>';
-  _tick34(dx, y0, true); _tick34(dx, y0 + Q, true);
-  s += '<line x1="' + (dx + 2).toFixed(1) + '" y1="' + (y0 + Q).toFixed(1) + '" x2="' + (dx + 12).toFixed(1) + '" y2="' + (y0 + Q).toFixed(1) + '" stroke="' + NAVY + '" stroke-width="0.7"/>';
-  var _xt34 = Math.min(dx + 14, W - 62);
-  s += '<text x="' + _xt34.toFixed(1) + '" y="' + (y0 + Q + 3).toFixed(1) + '" font-size="10.5" font-weight="700" fill="' + NAVY + '" font-family="Segoe UI,Arial">' + f2(pW) + ' mm</text>';
+  if (bb > 0.05) { ysegs.push([cur, cur + bb * scale, g35(bb)]); cur += bb * scale; ypts.push(cur); }
+  for (j = 0; j < ypts.length; j++) s += '<line x1="' + (lx - 3.5).toFixed(1) + '" y1="' + ypts[j].toFixed(1) + '" x2="' + (lx + 3.5).toFixed(1) + '" y2="' + ypts[j].toFixed(1) + '" stroke="' + CHAIN + '" stroke-width="0.8"/>';
+  for (j = 0; j < ysegs.length; j++) {
+    var wpy = ysegs[j][1] - ysegs[j][0], ylab = ysegs[j][2];
+    if (wpy >= 3 && ylab.length * 3.9 <= wpy + 8)
+      s += '<text x="' + (lx - 5).toFixed(1) + '" y="' + ((ysegs[j][0] + ysegs[j][1]) / 2 + 2.5).toFixed(1) + '" text-anchor="end" font-size="' + (wpy < 12 ? '6.0' : '7.2') + '" font-weight="600" fill="' + TXT + '" font-family="Segoe UI,Arial">' + ylab + '</text>';
+  }
+  s += '<line x1="' + (lx - 4).toFixed(1) + '" y1="' + y0.toFixed(1) + '" x2="' + (x0 - 2).toFixed(1) + '" y2="' + y0.toFixed(1) + '" stroke="' + CHAIN + '" stroke-width="0.6"/>';
+  s += '<line x1="' + (lx - 4).toFixed(1) + '" y1="' + (y0 + Q).toFixed(1) + '" x2="' + (x0 - 2).toFixed(1) + '" y2="' + (y0 + Q).toFixed(1) + '" stroke="' + CHAIN + '" stroke-width="0.6"/>';
+  /* RIGHT overall height */
+  var dx = x0 + P + 15;
+  s += '<line x1="' + dx.toFixed(1) + '" y1="' + y0.toFixed(1) + '" x2="' + dx.toFixed(1) + '" y2="' + (y0 + Q).toFixed(1) + '" stroke="' + CHAIN + '" stroke-width="1"/>';
+  _arrV35(dx, y0, true); _arrV35(dx, y0 + Q, false);
+  s += '<line x1="' + (x0 + P + 2).toFixed(1) + '" y1="' + y0.toFixed(1) + '" x2="' + (dx + 4).toFixed(1) + '" y2="' + y0.toFixed(1) + '" stroke="' + CHAIN + '" stroke-width="0.6"/>';
+  s += '<line x1="' + (x0 + P + 2).toFixed(1) + '" y1="' + (y0 + Q).toFixed(1) + '" x2="' + (dx + 4).toFixed(1) + '" y2="' + (y0 + Q).toFixed(1) + '" stroke="' + CHAIN + '" stroke-width="0.6"/>';
+  s += '<text x="' + (dx + 8).toFixed(1) + '" y="' + (y0 + Q / 2 + 3.5).toFixed(1) + '" font-size="10.5" font-weight="700" fill="' + TXT + '" font-family="Segoe UI,Arial">' + g35(pW) + ' mm</text>';
+  /* Legend — fixed page positions */
+  var ly = y0 + Q + 17;
+  s += '<rect x="16" y="' + (ly - 7.5).toFixed(1) + '" width="9" height="9" fill="' + CELLF + '" stroke="' + CELLB + '" stroke-width="0.9"/>';
+  s += '<text x="29" y="' + ly.toFixed(1) + '" font-size="7.8" font-weight="600" fill="' + MUT + '" font-family="Segoe UI,Arial">PCB board</text>';
+  s += '<rect x="92" y="' + (ly - 7.5).toFixed(1) + '" width="9" height="9" fill="url(#hatchPL)" stroke="' + CHAIN + '" stroke-width="0.7"/>';
+  s += '<text x="105" y="' + ly.toFixed(1) + '" font-size="7.8" font-weight="600" fill="' + MUT + '" font-family="Segoe UI,Arial">Rail and waste</text>';
+  s += '<text x="' + (W - 16) + '" y="' + ly.toFixed(1) + '" text-anchor="end" font-size="7.8" font-weight="600" fill="' + MUT + '" font-family="Segoe UI,Arial">All dimensions in mm</text>';
   /* Info strip — 5 boxes */
   var sy = TOP + AVH + BOTG, sx = 8, sw_ = W - 16;
-  s += '<rect x="' + sx + '" y="' + sy + '" width="' + sw_ + '" height="' + STR + '" fill="#ffffff" stroke="' + TEAL + '" stroke-width="1.5" rx="9"/>';
+  s += '<rect x="' + sx + '" y="' + sy + '" width="' + sw_ + '" height="' + STR + '" fill="#0f2230" stroke="' + TEAL + '" stroke-width="1.5" rx="9"/>';
   var cols = [0.245, 0.205, 0.15, 0.175, 0.225];
   function fs19(t, big) { return t.length > 21 ? 8.2 : (t.length > 17 ? 9.2 : (big ? 10.2 : 9.3)); }
   var labels = ['PANEL SIZE', 'PCB SIZE', 'QTY / ARRAY', 'GAP', 'BORDER'];
@@ -1134,7 +1197,7 @@ function svgPanel(pcbL, pcbW, px, py, gapXs, gapYs, bl, br, bt, bb, pL, pW, pcsP
   var cx = sx;
   for (var k = 0; k < 5; k++) {
     var cwid = sw_ * cols[k];
-    if (k) s += '<line x1="' + cx.toFixed(1) + '" y1="' + (sy + 14) + '" x2="' + cx.toFixed(1) + '" y2="' + (sy + STR - 14) + '" stroke="' + TEAL + '" stroke-width="0.9"/>';
+    if (k) s += '<line x1="' + cx.toFixed(1) + '" y1="' + (sy + 14) + '" x2="' + cx.toFixed(1) + '" y2="' + (sy + STR - 14) + '" stroke="#23485c" stroke-width="0.9"/>';
     var mid = cx + cwid / 2;
     s += '<text x="' + mid.toFixed(1) + '" y="' + (sy + 22) + '" text-anchor="middle" font-size="7.6" font-weight="700" fill="' + MUT + '" font-family="Segoe UI,Arial" letter-spacing="0.5">' + labels[k] + '</text>';
     s += '<text x="' + mid.toFixed(1) + '" y="' + (sy + 47) + '" text-anchor="middle" font-size="' + fs19(vals[k][0], k < 3) + '" font-weight="800" fill="' + NAVY + '" font-family="Segoe UI,Arial">' + vals[k][0] + '</text>';

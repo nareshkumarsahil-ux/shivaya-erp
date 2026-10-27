@@ -1327,92 +1327,191 @@ def _model_cut_calc(m):
 
 
 def svg_panel_preview(r):
-    """PREVIEW #1 — PANEL (v4.11: navy-teal 'PCB PANELIZATION LAYOUT' theme — user ka exact format):
-    title + teal rule, navy panel outline, teal PCBs ('L x W' labels), top/right dimension arrows,
-    gap dimension neeche, aur 5-box info strip (PANEL SIZE | PCB SIZE | QTY/ARRAY | GAP | BORDER)."""
-    NAVY, TEAL, PCB, MUT = "#16324f", "#2ba7b5", "#d2e8e9", "#5b7484"
-    W, TOP, AVH, BOTG, STR = 470, 48, 316, 58, 96
+    """PREVIEW #1 — PANEL (v4.35: DARK BLUEPRINT — user reference jaisa):
+    dark navy canvas, white panel outline + corner mounting holes, teal PCB cells with
+    cyan L/W arrows (plain numbers), top/left SEGMENT chains (border|cell|gap), overall
+    dims (top = width, right = height), legend (PCB board / Rail and waste) + 5-box strip."""
+    BG, PANELB = "#0d1b28", "#e8eef4"
+    CELLF, CELLB, CYAN = "#17384a", "#4a7c93", "#56ccf2"
+    TXT, CHAIN, MUT, TEAL, NAVY = "#eaf4f8", "#7f9db0", "#8fb0bf", "#2ba7b5", "#eef6fa"
+    W, TOP, AVH, BOTG, STR = 470, 48, 330, 58, 96
     H = TOP + AVH + BOTG + STR + 8
     pl, pw = r["panel_len"], r["panel_w"]
-    scale = min((W - 96) / pl, (AVH - 34) / pw)
+    scale = min((W - 128) / pl, (AVH - 44) / pw)
     P, Q = pl * scale, pw * scale
-    x0, y0 = (W - 34 - P) / 2, TOP + 34 + (AVH - 34 - Q) / 2
+    x0, y0 = (W - P) / 2, TOP + 44 + (AVH - 44 - Q) / 2
     cw, ch = r["pcb_len"] * scale, r["pcb_w"] * scale
     gxs, gys = r["gap_x"] * scale, r["gap_y"] * scale
     bx, by = r["border_l"] * scale, r["border_t"] * scale
     gaps_x_s = r.get("gaps_x") or [r["gap_x"]] * max(0, r["pcbs_x"] - 1)
     gaps_y_s = r.get("gaps_y") or [r["gap_y"]] * max(0, r["pcbs_y"] - 1)
-    s = [f'<svg viewBox="0 0 {W} {H}" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;display:block;background:#ffffff">']
-    # Title + teal rule (image format)
-    s.append(f'<text x="{W / 2:.0f}" y="24" text-anchor="middle" font-size="15.5" font-weight="800" fill="{NAVY}" font-family="Segoe UI,Arial" letter-spacing="1">PCB PANELIZATION LAYOUT</text>')
+    s = [f'<svg viewBox="0 0 {W} {H}" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;display:block;background:{BG}">']
+
+    def _g35(n):
+        return f"{n:g}"
+
+    # Title + teal rule
+    s.append(f'<text x="{W / 2:.0f}" y="24" text-anchor="middle" font-size="15.5" font-weight="800" fill="#f2f8fb" font-family="Segoe UI,Arial" letter-spacing="1">PCB PANELIZATION LAYOUT</text>')
     s.append(f'<line x1="26" y1="33" x2="{W - 26}" y2="33" stroke="{TEAL}" stroke-width="2"/>')
-    # v4.15: hatch pattern (border strips) — image jaisa diagonal-shade
-    s.append('<defs><pattern id="hatchPL" patternUnits="userSpaceOnUse" width="4" height="4" '
-             'patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="4" stroke="#9db6c9" stroke-width="1"/></pattern></defs>')
-    # Panel outline (navy, rounded, white fill)
-    s.append(f'<rect x="{x0:.1f}" y="{y0:.1f}" width="{P:.1f}" height="{Q:.1f}" fill="#ffffff" stroke="{NAVY}" stroke-width="2.4" rx="5"/>')
-    # v4.15: BORDER strips hatched (L/R vertical, T/B horizontal)
+    # hatch pattern — rail/waste (dark subtle diagonal)
+    s.append('<defs><pattern id="hatchPL" patternUnits="userSpaceOnUse" width="5" height="5" '
+             'patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="5" stroke="#24425a" stroke-width="1.4"/></pattern></defs>')
+    # RAIL / WASTE — border strips + gaps hatch me
     if r["border_l"] > 0.05:
-        s.append(f'<rect x="{x0:.1f}" y="{y0:.1f}" width="{r["border_l"] * scale:.1f}" height="{Q:.1f}" fill="url(#hatchPL)"/>')
+        s.append(f'<rect x="{x0:.1f}" y="{y0:.1f}" width="{bx:.1f}" height="{Q:.1f}" fill="url(#hatchPL)"/>')
     if r["border_r"] > 0.05:
-        s.append(f'<rect x="{x0 + P - r["border_r"] * scale:.1f}" y="{y0:.1f}" width="{r["border_r"] * scale:.1f}" height="{Q:.1f}" fill="url(#hatchPL)"/>')
+        s.append(f'<rect x="{x0 + P - r['border_r'] * scale:.1f}" y="{y0:.1f}" width="{r['border_r'] * scale:.1f}" height="{Q:.1f}" fill="url(#hatchPL)"/>')
     if r["border_t"] > 0.05:
-        s.append(f'<rect x="{x0:.1f}" y="{y0:.1f}" width="{P:.1f}" height="{r["border_t"] * scale:.1f}" fill="url(#hatchPL)"/>')
+        s.append(f'<rect x="{x0:.1f}" y="{y0:.1f}" width="{P:.1f}" height="{by:.1f}" fill="url(#hatchPL)"/>')
     if r["border_b"] > 0.05:
-        s.append(f'<rect x="{x0:.1f}" y="{y0 + Q - r["border_b"] * scale:.1f}" width="{P:.1f}" height="{r["border_b"] * scale:.1f}" fill="url(#hatchPL)"/>')
-    # PCB cells — v4.34 PRO CLEAN: koi arrow nahi, koi ROTATED text nahi (user: overlay hota tha).
-    # Har cell me EK horizontal label 'L x W' (center) — bade cells par sab, chhote par sirf pehla.
+        s.append(f'<rect x="{x0:.1f}" y="{y0 + Q - r['border_b'] * scale:.1f}" width="{P:.1f}" height="{r['border_b'] * scale:.1f}" fill="url(#hatchPL)"/>')
+    inner_w = r["pcbs_x"] * cw + sum(gaps_x_s) * scale
+    inner_h = r["pcbs_y"] * ch + sum(gaps_y_s) * scale
+    gox = bx
+    for i in range(r["pcbs_x"]):
+        if i:
+            gw_ = (gaps_x_s[i - 1] if i - 1 < len(gaps_x_s) else r["gap_x"]) * scale
+            if gw_ > 0.05:
+                s.append(f'<rect x="{x0 + gox - gw_:.1f}" y="{y0 + by:.1f}" width="{gw_:.1f}" height="{inner_h:.1f}" fill="url(#hatchPL)"/>')
+        if i < r["pcbs_x"] - 1:
+            gox += cw + (gaps_x_s[i] * scale if i < len(gaps_x_s) else gxs)
+    goy = by
+    for j in range(r["pcbs_y"]):
+        if j:
+            gh_ = (gaps_y_s[j - 1] if j - 1 < len(gaps_y_s) else r["gap_y"]) * scale
+            if gh_ > 0.05:
+                s.append(f'<rect x="{x0 + bx:.1f}" y="{y0 + goy - gh_:.1f}" width="{inner_w:.1f}" height="{gh_:.1f}" fill="url(#hatchPL)"/>')
+        if j < r["pcbs_y"] - 1:
+            goy += ch + (gaps_y_s[j] * scale if j < len(gaps_y_s) else gys)
+    # Panel outline (white rounded) + 4 corner mounting holes
+    s.append(f'<rect x="{x0:.1f}" y="{y0:.1f}" width="{P:.1f}" height="{Q:.1f}" fill="none" stroke="{PANELB}" stroke-width="1.8" rx="7"/>')
+    for hx, hy in ((x0 + 5.5, y0 + 5.5), (x0 + P - 5.5, y0 + 5.5), (x0 + 5.5, y0 + Q - 5.5), (x0 + P - 5.5, y0 + Q - 5.5)):
+        s.append(f'<circle cx="{hx:.1f}" cy="{hy:.1f}" r="2.4" fill="{BG}" stroke="{PANELB}" stroke-width="1"/>')
+    # PCB cells — v4.35: teal fill + cyan L/W arrows (plain numbers — reference jaisa)
     if cw > 2.4 and ch > 2.4:
-        lab34 = f"{r['pcb_len']:g} \u00d7 {r['pcb_w']:g}"
-        fsz34 = 9.0 if (cw >= 52 and ch >= 24) else 7.6
+        cl35, cwd35 = _g35(r["pcb_len"]), _g35(r["pcb_w"])
+        shp = r.get("shape") or "rect"
         ox = bx
         for i in range(r["pcbs_x"]):
             oy = by
             for j in range(r["pcbs_y"]):
-                s.append(_pcb_shape_svg(x0 + ox, y0 + oy, cw, ch, r.get("shape") or "rect"))
-                if cw >= 34 and ch >= 15 and ((cw >= 52 and ch >= 24) or (i == 0 and j == 0)):
-                    s.append(f'<text x="{x0 + ox + cw / 2:.1f}" y="{y0 + oy + ch / 2 + 2.8:.1f}" text-anchor="middle" font-size="{fsz34}" font-weight="700" fill="#0f6b78" font-family="Segoe UI,Arial">{lab34}</text>')
+                cx_, cy_ = x0 + ox, y0 + oy
+                if shp == "round":
+                    s.append(f'<ellipse cx="{cx_ + cw / 2:.1f}" cy="{cy_ + ch / 2:.1f}" rx="{cw / 2:.1f}" ry="{ch / 2:.1f}" fill="{CELLF}" stroke="{CELLB}" stroke-width="1"/>')
+                else:
+                    s.append(f'<rect x="{cx_:.1f}" y="{cy_:.1f}" width="{cw:.1f}" height="{ch:.1f}" fill="{CELLF}" stroke="{CELLB}" stroke-width="1"/>')
+                if cw >= 26 and ch >= 24:
+                    ay = cy_ + ch * 0.30
+                    ax1, ax2 = cx_ + 6, cx_ + cw - 6
+                    s.append(f'<line x1="{ax1:.1f}" y1="{ay:.1f}" x2="{ax2:.1f}" y2="{ay:.1f}" stroke="{CYAN}" stroke-width="0.9"/>')
+                    s.append(f'<path d="M {ax1:.1f} {ay:.1f} l 3.4 -2 v 4 z" fill="{CYAN}"/><path d="M {ax2:.1f} {ay:.1f} l -3.4 -2 v 4 z" fill="{CYAN}"/>')
+                    s.append(f'<text x="{cx_ + cw / 2:.1f}" y="{ay - 2.6:.1f}" text-anchor="middle" font-size="7.4" font-weight="700" fill="{TXT}" font-family="Segoe UI,Arial">{cl35}</text>')
+                    xa = cx_ + cw * 0.26
+                    ay1, ay2 = cy_ + ch * 0.44, cy_ + ch - 4
+                    s.append(f'<line x1="{xa:.1f}" y1="{ay1:.1f}" x2="{xa:.1f}" y2="{ay2:.1f}" stroke="{CYAN}" stroke-width="0.9"/>')
+                    s.append(f'<path d="M {xa:.1f} {ay1:.1f} l -2 3.4 h 4 z" fill="{CYAN}"/><path d="M {xa:.1f} {ay2:.1f} l -2 -3.4 h 4 z" fill="{CYAN}"/>')
+                    s.append(f'<text x="{xa + 4.5:.1f}" y="{(ay1 + ay2) / 2 + 2.6:.1f}" font-size="7.4" font-weight="700" fill="{TXT}" font-family="Segoe UI,Arial">{cwd35}</text>')
+                elif cw >= 20 and ch >= 13:
+                    s.append(f'<text x="{cx_ + cw / 2:.1f}" y="{cy_ + ch / 2 + 2.6:.1f}" text-anchor="middle" font-size="7.2" font-weight="700" fill="{CYAN}" font-family="Segoe UI,Arial">{cl35} \u00d7 {cwd35}</text>')
                 oy += ch + (gaps_y_s[j] * scale if j < len(gaps_y_s) else gys)
             if i < r["pcbs_x"] - 1:
                 ox += cw + (gaps_x_s[i] * scale if i < len(gaps_x_s) else gxs)
-    # dimensions — v4.34: NO arrows — thin line + end-TICKS (architectural), text hamesha horizontal
-    def _tick34(x, y, vertical, ln=4.2):
-        if vertical:
-            s.append(f'<line x1="{x:.1f}" y1="{y - ln:.1f}" x2="{x:.1f}" y2="{y + ln:.1f}" stroke="{NAVY}" stroke-width="1"/>')
-        else:
-            s.append(f'<line x1="{x - ln:.1f}" y1="{y:.1f}" x2="{x + ln:.1f}" y2="{y:.1f}" stroke="{NAVY}" stroke-width="1"/>')
-    def _dim_h34(x1, x2, y, label, fs=10.5):
-        s.append(f'<line x1="{x1:.1f}" y1="{y:.1f}" x2="{x2:.1f}" y2="{y:.1f}" stroke="{NAVY}" stroke-width="1.1"/>')
-        _tick34(x1, y, False)
-        _tick34(x2, y, False)
-        s.append(f'<text x="{(x1 + x2) / 2:.1f}" y="{y - 4:.1f}" text-anchor="middle" font-size="{fs}" font-weight="700" fill="{NAVY}" font-family="Segoe UI,Arial" style="paint-order:stroke" stroke="#ffffff" stroke-width="2.2">{label}</text>')
-    dy = y0 - 20
-    s.append(f'<line x1="{x0:.1f}" y1="{y0 - 2:.1f}" x2="{x0:.1f}" y2="{dy - 4:.1f}" stroke="{NAVY}" stroke-width="0.7"/>')
-    s.append(f'<line x1="{x0 + P:.1f}" y1="{y0 - 2:.1f}" x2="{x0 + P:.1f}" y2="{dy - 4:.1f}" stroke="{NAVY}" stroke-width="0.7"/>')
-    _dim_h34(x0, x0 + P, dy, f"{pl:.2f} mm", 11)
-    # chhote dims (border/gap) — same tick style
-    def _mini_dim(m1, m2, mlabel):
-        _dim_h34(m1, m2, y0 - 6, mlabel, 7.8)
+    # ---- dimensions: overall arrows + SEGMENT chains (v4.35 reference style) ----
+    def _arr_h(x, y, left):
+        s.append(f'<path d="M {x:.1f} {y:.1f} l {3.4 if left else -3.4} -2 v 4 z" fill="{CHAIN}"/>')
+
+    def _arr_v(x, y, up):
+        s.append(f'<path d="M {x:.1f} {y:.1f} l -2 {3.4 if up else -3.4} h 4 z" fill="{CHAIN}"/>')
+
+    # TOP overall (line + outward arrows, text upar)
+    dy1 = y0 - 36
+    s.append(f'<line x1="{x0:.1f}" y1="{dy1:.1f}" x2="{x0 + P:.1f}" y2="{dy1:.1f}" stroke="{CHAIN}" stroke-width="1"/>')
+    _arr_h(x0, dy1, True)
+    _arr_h(x0 + P, dy1, False)
+    s.append(f'<line x1="{x0:.1f}" y1="{y0 - 2:.1f}" x2="{x0:.1f}" y2="{dy1 - 4:.1f}" stroke="{CHAIN}" stroke-width="0.6"/>')
+    s.append(f'<line x1="{x0 + P:.1f}" y1="{y0 - 2:.1f}" x2="{x0 + P:.1f}" y2="{dy1 - 4:.1f}" stroke="{CHAIN}" stroke-width="0.6"/>')
+    s.append(f'<text x="{x0 + P / 2:.1f}" y="{dy1 - 5:.1f}" text-anchor="middle" font-size="11.5" font-weight="700" fill="{TXT}" font-family="Segoe UI,Arial">{_g35(pl)} mm</text>')
+    # TOP segment chain: border | cell | gap | cell | border (ticks + plain numbers)
+    dy2 = y0 - 16
+    s.append(f'<line x1="{x0:.1f}" y1="{dy2:.1f}" x2="{x0 + P:.1f}" y2="{dy2:.1f}" stroke="{CHAIN}" stroke-width="0.8"/>')
+    pts = [x0]
+    segs = []
+    cur = x0
     if r["border_l"] > 0.05:
-        _mini_dim(x0, x0 + r["border_l"] * scale, f"{r['border_l']:g} mm")
-    if gaps_x_s and gaps_x_s[0] > 0.05 and cw > 2:
-        _gcen = x0 + r["border_l"] * scale + cw + (gaps_x_s[0] * scale) / 2
-        _half = max(4.0, gaps_x_s[0] * scale / 2)
-        _mini_dim(_gcen - _half, _gcen + _half, f"{gaps_x_s[0]:.2f} mm")
+        segs.append((cur, cur + bx, _g35(r["border_l"])))
+        cur += bx
+        pts.append(cur)
+    for i in range(r["pcbs_x"]):
+        segs.append((cur, cur + cw, cl35))
+        cur += cw
+        pts.append(cur)
+        if i < r["pcbs_x"] - 1:
+            g_ = (gaps_x_s[i] * scale if i < len(gaps_x_s) else gxs)
+            if g_ > 0.05:
+                segs.append((cur, cur + g_, _g35(gaps_x_s[i] if i < len(gaps_x_s) else r["gap_x"])))
+                cur += g_
+                pts.append(cur)
     if r["border_r"] > 0.05:
-        _mini_dim(x0 + P - r["border_r"] * scale, x0 + P, f"{r['border_r']:g} mm")
-    # RIGHT dimension: vertical line + ticks; text HORIZONTAL niche-right (koi rotation nahi)
-    dx = x0 + P + 13
-    s.append(f'<line x1="{dx:.1f}" y1="{y0:.1f}" x2="{dx:.1f}" y2="{y0 + Q:.1f}" stroke="{NAVY}" stroke-width="1.1"/>')
-    _tick34(dx, y0, True)
-    _tick34(dx, y0 + Q, True)
-    s.append(f'<line x1="{dx + 2:.1f}" y1="{y0 + Q:.1f}" x2="{dx + 12:.1f}" y2="{y0 + Q:.1f}" stroke="{NAVY}" stroke-width="0.7"/>')
-    _xt34 = min(dx + 14, W - 62)
-    s.append(f'<text x="{_xt34:.1f}" y="{y0 + Q + 3:.1f}" font-size="10.5" font-weight="700" fill="{NAVY}" font-family="Segoe UI,Arial">{pw:.2f} mm</text>')
-    # Info strip (5 boxes — teal border, image format)
+        segs.append((cur, cur + r["border_r"] * scale, _g35(r["border_r"])))
+        cur += r["border_r"] * scale
+        pts.append(cur)
+    for pt in pts:
+        s.append(f'<line x1="{pt:.1f}" y1="{dy2 - 3.5:.1f}" x2="{pt:.1f}" y2="{dy2 + 3.5:.1f}" stroke="{CHAIN}" stroke-width="0.8"/>')
+    for a_, b_, lab_ in segs:
+        wpx = b_ - a_
+        if wpx >= 3 and len(lab_) * 3.9 <= wpx + 8:
+            s.append(f'<text x="{(a_ + b_) / 2:.1f}" y="{dy2 - 3.5:.1f}" text-anchor="middle" font-size="{"6.0" if wpx < 12 else "7.2"}" font-weight="600" fill="{TXT}" font-family="Segoe UI,Arial">{lab_}</text>')
+    # LEFT segment chain: border | row | gap | row | border
+    lx = x0 - 13
+    s.append(f'<line x1="{lx:.1f}" y1="{y0:.1f}" x2="{lx:.1f}" y2="{y0 + Q:.1f}" stroke="{CHAIN}" stroke-width="0.8"/>')
+    ypts = [y0]
+    ysegs = []
+    cur = y0
+    if r["border_t"] > 0.05:
+        ysegs.append((cur, cur + by, _g35(r["border_t"])))
+        cur += by
+        ypts.append(cur)
+    for j in range(r["pcbs_y"]):
+        ysegs.append((cur, cur + ch, cwd35))
+        cur += ch
+        ypts.append(cur)
+        if j < r["pcbs_y"] - 1:
+            g_ = (gaps_y_s[j] * scale if j < len(gaps_y_s) else gys)
+            if g_ > 0.05:
+                ysegs.append((cur, cur + g_, _g35(gaps_y_s[j] if j < len(gaps_y_s) else r["gap_y"])))
+                cur += g_
+                ypts.append(cur)
+    if r["border_b"] > 0.05:
+        ysegs.append((cur, cur + r["border_b"] * scale, _g35(r["border_b"])))
+        cur += r["border_b"] * scale
+        ypts.append(cur)
+    for pt in ypts:
+        s.append(f'<line x1="{lx - 3.5:.1f}" y1="{pt:.1f}" x2="{lx + 3.5:.1f}" y2="{pt:.1f}" stroke="{CHAIN}" stroke-width="0.8"/>')
+    for a_, b_, lab_ in ysegs:
+        wpx = b_ - a_
+        if wpx >= 3 and len(lab_) * 3.9 <= wpx + 8:
+            s.append(f'<text x="{lx - 5:.1f}" y="{(a_ + b_) / 2 + 2.5:.1f}" text-anchor="end" font-size="{"6.0" if wpx < 12 else "7.2"}" font-weight="600" fill="{TXT}" font-family="Segoe UI,Arial">{lab_}</text>')
+    s.append(f'<line x1="{lx - 4:.1f}" y1="{y0:.1f}" x2="{x0 - 2:.1f}" y2="{y0:.1f}" stroke="{CHAIN}" stroke-width="0.6"/>')
+    s.append(f'<line x1="{lx - 4:.1f}" y1="{y0 + Q:.1f}" x2="{x0 - 2:.1f}" y2="{y0 + Q:.1f}" stroke="{CHAIN}" stroke-width="0.6"/>')
+    # RIGHT overall height (line + outward arrows, text horizontal right)
+    dx = x0 + P + 15
+    s.append(f'<line x1="{dx:.1f}" y1="{y0:.1f}" x2="{dx:.1f}" y2="{y0 + Q:.1f}" stroke="{CHAIN}" stroke-width="1"/>')
+    _arr_v(dx, y0, True)
+    _arr_v(dx, y0 + Q, False)
+    s.append(f'<line x1="{x0 + P + 2:.1f}" y1="{y0:.1f}" x2="{dx + 4:.1f}" y2="{y0:.1f}" stroke="{CHAIN}" stroke-width="0.6"/>')
+    s.append(f'<line x1="{x0 + P + 2:.1f}" y1="{y0 + Q:.1f}" x2="{dx + 4:.1f}" y2="{y0 + Q:.1f}" stroke="{CHAIN}" stroke-width="0.6"/>')
+    s.append(f'<text x="{dx + 8:.1f}" y="{y0 + Q / 2 + 3.5:.1f}" font-size="10.5" font-weight="700" fill="{TXT}" font-family="Segoe UI,Arial">{_g35(pw)} mm</text>')
+    # Legend — PCB board | Rail and waste | All dimensions in mm
+    ly = y0 + Q + 17
+    s.append(f'<rect x="16" y="{ly - 7.5:.1f}" width="9" height="9" fill="{CELLF}" stroke="{CELLB}" stroke-width="0.9"/>')
+    s.append(f'<text x="29" y="{ly:.1f}" font-size="7.8" font-weight="600" fill="{MUT}" font-family="Segoe UI,Arial">PCB board</text>')
+    s.append(f'<rect x="92" y="{ly - 7.5:.1f}" width="9" height="9" fill="url(#hatchPL)" stroke="{CHAIN}" stroke-width="0.7"/>')
+    s.append(f'<text x="105" y="{ly:.1f}" font-size="7.8" font-weight="600" fill="{MUT}" font-family="Segoe UI,Arial">Rail and waste</text>')
+    s.append(f'<text x="{W - 16}" y="{ly:.1f}" text-anchor="end" font-size="7.8" font-weight="600" fill="{MUT}" font-family="Segoe UI,Arial">All dimensions in mm</text>')
+    # Info strip (5 boxes — dark, teal border)
     sy, sh_ = TOP + AVH + BOTG, STR
     sx, sw_ = 8, W - 16
-    s.append(f'<rect x="{sx}" y="{sy}" width="{sw_}" height="{sh_}" fill="#ffffff" stroke="{TEAL}" stroke-width="1.5" rx="9"/>')
+    s.append(f'<rect x="{sx}" y="{sy}" width="{sw_}" height="{sh_}" fill="#0f2230" stroke="{TEAL}" stroke-width="1.5" rx="9"/>')
     cols = [0.245, 0.205, 0.15, 0.175, 0.225]
     labels = ["PANEL SIZE", "PCB SIZE", "QTY / ARRAY", "GAP", "BORDER"]
     vals = [
@@ -1430,7 +1529,7 @@ def svg_panel_preview(r):
     for k in range(5):
         cwid = sw_ * cols[k]
         if k:
-            s.append(f'<line x1="{cx:.1f}" y1="{sy + 14}" x2="{cx:.1f}" y2="{sy + sh_ - 14}" stroke="{TEAL}" stroke-width="0.9"/>')
+            s.append(f'<line x1="{cx:.1f}" y1="{sy + 14}" x2="{cx:.1f}" y2="{sy + sh_ - 14}" stroke="#23485c" stroke-width="0.9"/>')
         mid = cx + cwid / 2
         s.append(f'<text x="{mid:.1f}" y="{sy + 22}" text-anchor="middle" font-size="7.6" font-weight="700" fill="{MUT}" font-family="Segoe UI,Arial" letter-spacing="0.5">{labels[k]}</text>')
         s.append(f'<text x="{mid:.1f}" y="{sy + 47}" text-anchor="middle" font-size="{_fs19(vals[k][0], k < 3)}" font-weight="800" fill="{NAVY}" font-family="Segoe UI,Arial">{vals[k][0]}</text>')
