@@ -2250,6 +2250,7 @@ def cutlist():
         result = compute_layout(fields)
 
         if action == "save_model" and result:
+            _ensure_actual37()   # v4.38: ACTUAL PANEL SIZE columns guaranteed (self-heal)
             # PCB PRICE + PER SQ.INCH — AREA = PANEL (cutting) size ÷ PCS/panel (PCB size nahi)
             pm_price = pm_rs = None
             cl_price = (f.get("pcb_price") or "").strip()
@@ -2296,7 +2297,8 @@ def cutlist():
                         "UPDATE product_models SET name=?, pcb_len=?, pcb_w=?, pcbs_x=?, pcbs_y=?, gap_x=?, gap_y=?, "
                         "border_l=?, border_r=?, border_t=?, border_b=?, gang_x=?, gang_y=?, sheet_len=?, sheet_w=?, "
                         "panel_len=?, panel_w=?, cutting_len=?, cutting_w=?, kerf_x=?, kerf_y=?, orientation=?, "
-                        "pcs_panel=?, panels_sheet=?, sheets=?, x_qty=?, y_qty=?, cnc_margin_x=?, cnc_margin_y=?, "
+                        "pcs_panel=?, panels_sheet=?, actual_len=?, actual_w=?, actual_ups=?, sheets=?, "
+                        "x_qty=?, y_qty=?, cnc_margin_x=?, cnc_margin_y=?, "
                         "pcb_price=?, per_sq_inch=?, gaps_x=?, gaps_y=?, sheet_thickness=?, note=?, "
                         "pcb_code=COALESCE(NULLIF(?, ''), pcb_code), party_code=COALESCE(NULLIF(?, ''), party_code), "
                         "party_name=COALESCE(NULLIF(?, ''), party_name), "
@@ -2307,7 +2309,9 @@ def cutlist():
                          result["gang_x"], result["gang_y"], result["sheet_len"], result["sheet_w"],
                          result["panel_len"], result["panel_w"], cutting_len, cutting_w,
                          result["kerf_x"], result["kerf_y"],
-                         result["best"], result["pcs_panel"], result["panels_per_sheet"], result["sheets"],
+                         result["best"], result["pcs_panel"], result["pcs_unit"],
+                         float(result["gang_len"] or 0), float(result["gang_w"] or 0), int(result["pcs_unit"] or 0),
+                         result["sheets"],
                          result["grid_x"], result["grid_y"],
                          result["border_l"], result["border_t"],
                          up_price, up_rs,
@@ -2317,7 +2321,11 @@ def cutlist():
                          (f.get("pcb_code") or "").strip(), (f.get("party_code") or "").strip(),
                          (f.get("party_name") or "").strip(),
                          (f.get("model_code") or "").strip(), result.get("shape") or "rect", model["id"]))
-                    flash(f"Model '{name}' updated — saari cut list details + price save ho gayi.", "success")
+                    flash(f"Model '{name}' save — SINGLE PCB {result['pcb_len']:g}x{result['pcb_w']:g} | "
+                          f"PANEL {result['panel_len']:g}x{result['panel_w']:g} ({result['pcs_panel']} UPS) | "
+                          f"ACTUAL (GANG) {result['gang_len']:g}x{result['gang_w']:g} ({result['pcs_unit']} pcs) | "
+                          f"CUTTING {cutting_len:g}x{result['grid_x']} + {cutting_w:g}x{result['grid_y']} "
+                          f"(48/P1/40/P2) | UPS {result['pcs_unit']}", "success")
                 else:
                     flash("Select a valid finished product.", "error")
             else:
@@ -2337,17 +2345,20 @@ def cutlist():
                 db.execute(
                     "INSERT INTO product_models (name, pcb_len, pcb_w, pcbs_x, pcbs_y, gap_x, gap_y, border_l, "
                     "border_r, border_t, border_b, gang_x, gang_y, sheet_len, sheet_w, panel_len, panel_w, "
-                    "cutting_len, cutting_w, kerf_x, kerf_y, orientation, pcs_panel, panels_sheet, sheets, "
+                    "cutting_len, cutting_w, kerf_x, kerf_y, orientation, pcs_panel, panels_sheet, "
+                    "actual_len, actual_w, actual_ups, sheets, "
                     "x_qty, y_qty, cnc_margin_x, cnc_margin_y, pcb_price, per_sq_inch, gaps_x, gaps_y, "
                     "sheet_thickness, note, pcb_code, party_code, party_name, model_code, shape, created_on) "
-                    "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                     (name, result["pcb_len"], result["pcb_w"], result["pcbs_x"], result["pcbs_y"],
                      result["gap_x"], result["gap_y"],
                      result["border_l"], result["border_r"], result["border_t"], result["border_b"],
                      result["gang_x"], result["gang_y"], result["sheet_len"], result["sheet_w"],
                      result["panel_len"], result["panel_w"], cutting_len, cutting_w,
                      result["kerf_x"], result["kerf_y"],
-                     result["best"], result["pcs_panel"], result["panels_per_sheet"], result["sheets"],
+                     result["best"], result["pcs_panel"], result["pcs_unit"],
+                     float(result["gang_len"] or 0), float(result["gang_w"] or 0), int(result["pcs_unit"] or 0),
+                     result["sheets"],
                      result["grid_x"], result["grid_y"],
                      result["border_l"], result["border_t"],
                      pm_price or 0, pm_rs or 0,
@@ -2358,7 +2369,12 @@ def cutlist():
                      (f.get("party_name") or "").strip(), _mc,
                      result.get("shape") or "rect",
                      _today_ist().isoformat()))
-                flash("Naya model '" + name + "' FINISHED PRODUCTS me save ho gaya — Products page par PCB/PARTY codes ke saath dikh raha hai.", "success")
+                flash("Naya model '" + name + "' save — PANEL " + format(result["panel_len"], "g") + "x" +
+                      format(result["panel_w"], "g") + " (" + str(result["pcs_panel"]) + " UPS) | ACTUAL (GANG) " +
+                      format(result["gang_len"], "g") + "x" + format(result["gang_w"], "g") + " (" +
+                      str(result["pcs_unit"]) + " pcs) | CUTTING " + format(cutting_len, "g") + "x" +
+                      str(result["grid_x"]) + " + " + format(cutting_w, "g") + "x" + str(result["grid_y"]) +
+                      " | UPS " + str(result["pcs_unit"]) + " — Products page par dikh raha hai.", "success")
 
         if action == "save_model" and not result:
             flash("Save nahi hua — layout invalid hai. Sheet L/W + PCB size bhar ke Calculate karo, phir Save dabao.", "error")
