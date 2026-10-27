@@ -2251,6 +2251,10 @@ def cutlist():
 
         if action == "save_model" and result:
             _ensure_actual37()   # v4.38: ACTUAL PANEL SIZE columns guaranteed (self-heal)
+            # v4.40: P1 hamesha CUTTING-LEN (48) wali side ka count, P2 CUTTING-W (40) wali —
+            # rotated fit me engine grid_x ko sheet-len par cutting_w footprint ke saath ginta hai, isliye swap
+            _xq40 = (result["grid_y"] if (result.get("best") == "rotated") else result["grid_x"])
+            _yq40 = (result["grid_x"] if (result.get("best") == "rotated") else result["grid_y"])
             # PCB PRICE + PER SQ.INCH — AREA = PANEL (cutting) size ÷ PCS/panel (PCB size nahi)
             pm_price = pm_rs = None
             cl_price = (f.get("pcb_price") or "").strip()
@@ -2312,7 +2316,7 @@ def cutlist():
                          result["best"], result["pcs_panel"], result["pcs_unit"],
                          float(result["gang_len"] or 0), float(result["gang_w"] or 0), int(result["pcs_unit"] or 0),
                          result["sheets"],
-                         result["grid_x"], result["grid_y"],
+                         _xq40, _yq40,
                          result["border_l"], result["border_t"],
                          up_price, up_rs,
                          ",".join(f"{g:g}" for g in result["gaps_x"]),
@@ -2324,7 +2328,7 @@ def cutlist():
                     flash(f"Model '{name}' save — SINGLE PCB {result['pcb_len']:g}x{result['pcb_w']:g} | "
                           f"PANEL {result['panel_len']:g}x{result['panel_w']:g} ({result['pcs_panel']} UPS) | "
                           f"ACTUAL (GANG) {result['gang_len']:g}x{result['gang_w']:g} ({result['pcs_unit']} pcs) | "
-                          f"CUTTING {cutting_len:g}x{result['grid_x']} + {cutting_w:g}x{result['grid_y']} "
+                          f"CUTTING {cutting_len:g}x{_xq40} + {cutting_w:g}x{_yq40} "
                           f"(48/P1/40/P2) | UPS {result['pcs_unit']}", "success")
                 else:
                     flash("Select a valid finished product.", "error")
@@ -2359,7 +2363,7 @@ def cutlist():
                      result["best"], result["pcs_panel"], result["pcs_unit"],
                      float(result["gang_len"] or 0), float(result["gang_w"] or 0), int(result["pcs_unit"] or 0),
                      result["sheets"],
-                     result["grid_x"], result["grid_y"],
+                     _xq40, _yq40,
                      result["border_l"], result["border_t"],
                      pm_price or 0, pm_rs or 0,
                      ",".join(f"{g:g}" for g in result["gaps_x"]),
@@ -2373,7 +2377,7 @@ def cutlist():
                       format(result["panel_w"], "g") + " (" + str(result["pcs_panel"]) + " UPS) | ACTUAL (GANG) " +
                       format(result["gang_len"], "g") + "x" + format(result["gang_w"], "g") + " (" +
                       str(result["pcs_unit"]) + " pcs) | CUTTING " + format(cutting_len, "g") + "x" +
-                      str(result["grid_x"]) + " + " + format(cutting_w, "g") + "x" + str(result["grid_y"]) +
+                      str(_xq40) + " + " + format(cutting_w, "g") + "x" + str(_yq40) +
                       " | UPS " + str(result["pcs_unit"]) + " — Products page par dikh raha hai.", "success")
 
         if action == "save_model" and not result:
