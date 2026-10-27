@@ -1360,49 +1360,39 @@ def svg_panel_preview(r):
         s.append(f'<rect x="{x0:.1f}" y="{y0:.1f}" width="{P:.1f}" height="{r["border_t"] * scale:.1f}" fill="url(#hatchPL)"/>')
     if r["border_b"] > 0.05:
         s.append(f'<rect x="{x0:.1f}" y="{y0 + Q - r["border_b"] * scale:.1f}" width="{P:.1f}" height="{r["border_b"] * scale:.1f}" fill="url(#hatchPL)"/>')
-    # PCB cells — v4.19 PRO density: bade cells par har-cell arrows; medium par EDGE labels
-    # (sirf top-row green L + left-col red W — overlap ZERO, X/Y dono dims poori dikhengi)
+    # PCB cells — v4.34 PRO CLEAN: koi arrow nahi, koi ROTATED text nahi (user: overlay hota tha).
+    # Har cell me EK horizontal label 'L x W' (center) — bade cells par sab, chhote par sirf pehla.
     if cw > 2.4 and ch > 2.4:
-        full19 = cw >= 66 and ch >= 50
-        edge19 = (not full19) and cw >= 22 and ch >= 22
-        gl19 = (f"{r['pcb_len']:g} mm", 7.5) if cw >= 44 else (f"{r['pcb_len']:g}", 6.5)
-        gw19 = (f"{r['pcb_w']:g} mm", 7.5) if ch >= 44 else (f"{r['pcb_w']:g}", 6.5)
+        lab34 = f"{r['pcb_len']:g} \u00d7 {r['pcb_w']:g}"
+        fsz34 = 9.0 if (cw >= 52 and ch >= 24) else 7.6
         ox = bx
         for i in range(r["pcbs_x"]):
             oy = by
             for j in range(r["pcbs_y"]):
                 s.append(_pcb_shape_svg(x0 + ox, y0 + oy, cw, ch, r.get("shape") or "rect"))
-                if full19 or edge19:
-                    if (full19 or j == 0) and cw >= 20:
-                        ax1, ax2, ay = x0 + ox + 2.5, x0 + ox + cw - 2.5, y0 + oy + 7
-                        s.append(f'<line x1="{ax1:.1f}" y1="{ay:.1f}" x2="{ax2:.1f}" y2="{ay:.1f}" stroke="#0a8f4c" stroke-width="0.9"/>')
-                        s.append(f'<path d="M {ax1:.1f} {ay:.1f} l 3.4 -1.9 v 3.8 z" fill="#0a8f4c"/><path d="M {ax2:.1f} {ay:.1f} l -3.4 -1.9 v 3.8 z" fill="#0a8f4c"/>')
-                        s.append(f'<text x="{(ax1 + ax2) / 2:.1f}" y="{ay - 2:.1f}" text-anchor="middle" font-size="{gl19[1]}" font-weight="700" fill="#0a8f4c" font-family="Segoe UI,Arial">{gl19[0]}</text>')
-                    if (full19 or i == 0) and ch >= 20:
-                        rx_, ry1, ry2 = x0 + ox + 5.5, y0 + oy + 11, y0 + oy + ch - 1.5
-                        s.append(f'<line x1="{rx_:.1f}" y1="{ry1:.1f}" x2="{rx_:.1f}" y2="{ry2:.1f}" stroke="#d92b2b" stroke-width="0.9"/>')
-                        s.append(f'<path d="M {rx_:.1f} {ry1:.1f} l -1.9 3.4 h 3.8 z" fill="#d92b2b"/><path d="M {rx_:.1f} {ry2:.1f} l -1.9 -3.4 h 3.8 z" fill="#d92b2b"/>')
-                        s.append(f'<text x="{rx_ - 2.5:.1f}" y="{(ry1 + ry2) / 2:.1f}" text-anchor="middle" font-size="{gw19[1]}" font-weight="700" fill="#d92b2b" font-family="Segoe UI,Arial" transform="rotate(-90 {rx_ - 2.5:.1f} {(ry1 + ry2) / 2:.1f})">{gw19[0]}</text>')
-                elif cw >= 26 and ch >= 14:
-                    s.append(f'<text x="{x0 + ox + cw / 2:.1f}" y="{y0 + oy + ch / 2 + 3:.1f}" text-anchor="middle" font-size="9.5" font-weight="700" fill="{NAVY}" font-family="Segoe UI,Arial">{r["pcb_len"]:g} \u00d7 {r["pcb_w"]:g}</text>')
+                if cw >= 34 and ch >= 15 and ((cw >= 52 and ch >= 24) or (i == 0 and j == 0)):
+                    s.append(f'<text x="{x0 + ox + cw / 2:.1f}" y="{y0 + oy + ch / 2 + 2.8:.1f}" text-anchor="middle" font-size="{fsz34}" font-weight="700" fill="#0f6b78" font-family="Segoe UI,Arial">{lab34}</text>')
                 oy += ch + (gaps_y_s[j] * scale if j < len(gaps_y_s) else gys)
             if i < r["pcbs_x"] - 1:
                 ox += cw + (gaps_x_s[i] * scale if i < len(gaps_x_s) else gxs)
-    # TOP dimension: panel width (double-arrow + text upar) — v4.15: 2-tier (main upar, chhote neeche)
-    dy = y0 - 22
-    s.append(f'<line x1="{x0:.1f}" y1="{dy:.1f}" x2="{x0 + P:.1f}" y2="{dy:.1f}" stroke="{NAVY}" stroke-width="1.2"/>')
-    s.append(f'<path d="M {x0:.1f} {dy:.1f} l 7 -3.2 v 6.4 z" fill="{NAVY}"/><path d="M {x0 + P:.1f} {dy:.1f} l -7 -3.2 v 6.4 z" fill="{NAVY}"/>')
-    s.append(f'<line x1="{x0:.1f}" y1="{y0 - 2:.1f}" x2="{x0:.1f}" y2="{dy - 4:.1f}" stroke="{NAVY}" stroke-width="0.8"/>')
-    s.append(f'<line x1="{x0 + P:.1f}" y1="{y0 - 2:.1f}" x2="{x0 + P:.1f}" y2="{dy - 4:.1f}" stroke="{NAVY}" stroke-width="0.8"/>')
-    s.append(f'<text x="{x0 + P / 2:.1f}" y="{dy - 5:.1f}" text-anchor="middle" font-size="11.5" font-weight="700" fill="{NAVY}" font-family="Segoe UI,Arial">{pl:.2f} mm</text>')
-    # v4.15: chhote dims (5mm | 2.40mm | 5mm) — border strips + pehla gap
+    # dimensions — v4.34: NO arrows — thin line + end-TICKS (architectural), text hamesha horizontal
+    def _tick34(x, y, vertical, ln=4.2):
+        if vertical:
+            s.append(f'<line x1="{x:.1f}" y1="{y - ln:.1f}" x2="{x:.1f}" y2="{y + ln:.1f}" stroke="{NAVY}" stroke-width="1"/>')
+        else:
+            s.append(f'<line x1="{x - ln:.1f}" y1="{y:.1f}" x2="{x + ln:.1f}" y2="{y:.1f}" stroke="{NAVY}" stroke-width="1"/>')
+    def _dim_h34(x1, x2, y, label, fs=10.5):
+        s.append(f'<line x1="{x1:.1f}" y1="{y:.1f}" x2="{x2:.1f}" y2="{y:.1f}" stroke="{NAVY}" stroke-width="1.1"/>')
+        _tick34(x1, y, False)
+        _tick34(x2, y, False)
+        s.append(f'<text x="{(x1 + x2) / 2:.1f}" y="{y - 4:.1f}" text-anchor="middle" font-size="{fs}" font-weight="700" fill="{NAVY}" font-family="Segoe UI,Arial" style="paint-order:stroke" stroke="#ffffff" stroke-width="2.2">{label}</text>')
+    dy = y0 - 20
+    s.append(f'<line x1="{x0:.1f}" y1="{y0 - 2:.1f}" x2="{x0:.1f}" y2="{dy - 4:.1f}" stroke="{NAVY}" stroke-width="0.7"/>')
+    s.append(f'<line x1="{x0 + P:.1f}" y1="{y0 - 2:.1f}" x2="{x0 + P:.1f}" y2="{dy - 4:.1f}" stroke="{NAVY}" stroke-width="0.7"/>')
+    _dim_h34(x0, x0 + P, dy, f"{pl:.2f} mm", 11)
+    # chhote dims (border/gap) — same tick style
     def _mini_dim(m1, m2, mlabel):
-        my = y0 - 7
-        s.append(f'<line x1="{m1:.1f}" y1="{my:.1f}" x2="{m2:.1f}" y2="{my:.1f}" stroke="{NAVY}" stroke-width="0.8"/>')
-        s.append(f'<path d="M {m1:.1f} {my:.1f} l 3.4 -1.7 v 3.4 z" fill="{NAVY}"/><path d="M {m2:.1f} {my:.1f} l -3.4 -1.7 v 3.4 z" fill="{NAVY}"/>')
-        s.append(f'<line x1="{m1:.1f}" y1="{my - 2:.1f}" x2="{m1:.1f}" y2="{y0 - 1:.1f}" stroke="{NAVY}" stroke-width="0.6"/>')
-        s.append(f'<line x1="{m2:.1f}" y1="{my - 2:.1f}" x2="{m2:.1f}" y2="{y0 - 1:.1f}" stroke="{NAVY}" stroke-width="0.6"/>')
-        s.append(f'<text x="{(m1 + m2) / 2:.1f}" y="{my - 3:.1f}" text-anchor="middle" font-size="8" font-weight="700" fill="{NAVY}" font-family="Segoe UI,Arial">{mlabel}</text>')
+        _dim_h34(m1, m2, y0 - 6, mlabel, 7.8)
     if r["border_l"] > 0.05:
         _mini_dim(x0, x0 + r["border_l"] * scale, f"{r['border_l']:g} mm")
     if gaps_x_s and gaps_x_s[0] > 0.05 and cw > 2:
@@ -1411,11 +1401,14 @@ def svg_panel_preview(r):
         _mini_dim(_gcen - _half, _gcen + _half, f"{gaps_x_s[0]:.2f} mm")
     if r["border_r"] > 0.05:
         _mini_dim(x0 + P - r["border_r"] * scale, x0 + P, f"{r['border_r']:g} mm")
-    # RIGHT dimension: panel height (rotated text)
+    # RIGHT dimension: vertical line + ticks; text HORIZONTAL niche-right (koi rotation nahi)
     dx = x0 + P + 13
-    s.append(f'<line x1="{dx:.1f}" y1="{y0:.1f}" x2="{dx:.1f}" y2="{y0 + Q:.1f}" stroke="{NAVY}" stroke-width="1.2"/>')
-    s.append(f'<path d="M {dx:.1f} {y0:.1f} l -3.2 7 h 6.4 z" fill="{NAVY}"/><path d="M {dx:.1f} {y0 + Q:.1f} l -3.2 -7 h 6.4 z" fill="{NAVY}"/>')
-    s.append(f'<text x="{dx + 10:.1f}" y="{y0 + Q / 2:.1f}" text-anchor="middle" font-size="11.5" font-weight="700" fill="{NAVY}" font-family="Segoe UI,Arial" transform="rotate(90 {dx + 10:.1f} {y0 + Q / 2:.1f})">{pw:.2f} mm</text>')
+    s.append(f'<line x1="{dx:.1f}" y1="{y0:.1f}" x2="{dx:.1f}" y2="{y0 + Q:.1f}" stroke="{NAVY}" stroke-width="1.1"/>')
+    _tick34(dx, y0, True)
+    _tick34(dx, y0 + Q, True)
+    s.append(f'<line x1="{dx + 2:.1f}" y1="{y0 + Q:.1f}" x2="{dx + 12:.1f}" y2="{y0 + Q:.1f}" stroke="{NAVY}" stroke-width="0.7"/>')
+    _xt34 = min(dx + 14, W - 62)
+    s.append(f'<text x="{_xt34:.1f}" y="{y0 + Q + 3:.1f}" font-size="10.5" font-weight="700" fill="{NAVY}" font-family="Segoe UI,Arial">{pw:.2f} mm</text>')
     # Info strip (5 boxes — teal border, image format)
     sy, sh_ = TOP + AVH + BOTG, STR
     sx, sw_ = 8, W - 16
