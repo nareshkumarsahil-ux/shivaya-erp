@@ -2664,7 +2664,7 @@ def cutlist():
                            models=models, orders=orders, SHEET_PRESETS=SHEET_PRESETS,
                            svg_panel=svg_panel, svg_sheet=svg_sheet, gang_info=gang_info,
                            svg_gang_panel=svg_gang_panel, svg_sheet_layout=svg_sheet_layout,
-                           disp_pl=disp_pl, disp_pw=disp_pw, load_model_name=load_model_name,
+                           disp_pl=disp_pl, disp_pw=disp_pw, load_model_name=load_model_name, load_model_id=load_model_id,
                            cl_pdfs=_cl_pdfs, mix_result=mix_result, mix_inputs=mix_inputs)
 
 
