@@ -2,7 +2,8 @@
 {% block title %}Finished Products{% endblock %}
 {% block page_title %}Finished Products{% endblock %}
 {% block content %}
-<div class="toolbar">
+<div id="sheetTabs32" style="display:flex;gap:3px;align-items:center;margin:0 0 6px;flex-wrap:wrap"></div>
+    <div class="toolbar">
   <span class="muted small">💡 Cut List Optimizer se save kiye gaye layouts — yahan se load karke direct job order par apply kar sakte hain. Jab product <b>ready</b> ho jaye to <b>🏭 Produce</b> dabao — BOM ke hisaab se raw material inventory se cut hoga aur finished stock badhega.</span>
   <div style="display:flex;gap:8px;flex-wrap:wrap">
     <a class="btn btn-outline" href="/products?import=1#imp97" title="Excel/CSV upload karke saare models ek saath SHEET me add karo">📥 Import Excel/CSV</a>
@@ -202,7 +203,7 @@
                             ('panel_len', m.panel_len or ''), ('panel_w', m.panel_w or ''), ('pcs_panel', m.pcs_panel or ''),
                             ('cutting_len', m._c4a if m._c4a is not none else (m.cutting_len or '')), ('x_qty', m._cn4a if m._cn4a is not none else (m.x_qty or '')), ('cutting_w', m._c4b if m._c4b is not none else (m.cutting_w or '')), ('y_qty', m._cn4b if m._cn4b is not none else (m.y_qty or '')),
                             ('panels_sheet', m._cups if m._cups is not none else (m.panels_sheet or '')), ('cnc_tool', m.cnc_tool or ''),
-                            ('per_sq_inch', m.per_sq_inch or m._crate or ''), ('sheet_thickness', m.sheet_thickness or ''), ('pcb_price', m.pcb_price or m._cprice or '')] %}<td class="sc" data-f="{{ f }}"{% if f in ('per_sq_inch', 'pcb_price') and m._csq %} data-sq="{{ m._csq }}"{% endif %}>{{ '' if val is none else (val|numfmt if f in NF18 else val) }}</td>{% endfor %}{% for cc in custom_cols %}<td class="sc" data-f="cc_{{ cc.id }}">{{ m['cc_' ~ cc.id] }}</td>{% endfor %}<td class="fs{{ ' z' if (m.fg_stock or 0) > 0 else '' }}" data-f="fg_stock">{{ m.fg_stock or 0 }}</td><td class="del" data-f="__del"><button type="button" class="mdel97" data-id="{{ m.id }}" title="Is model ko SHEET se hatao">&#128465;</button></td></tr>
+                            ('per_sq_inch', m.per_sq_inch or m._crate or ''), ('sheet_thickness', m.sheet_thickness or ''), ('pcb_price', m.pcb_price or m._cprice or '')] %}<td class="sc" data-f="{{ f }}"{% if f in ('per_sq_inch', 'pcb_price') and m._csq %} data-sq="{{ m._csq }}"{% endif %}>{{ '' if val is none else (val|numfmt if f in NF18 else val) }}</td>{% endfor %}{% for c in m._ccr %}<td class="sc" data-f="cc_{{ c.id }}"{% if c.span > 1 %} colspan="{{ c.span }}" style="text-align:center;font-weight:800;background:#fefce8" title="MERGED — double-click = alag karo"{% endif %}>{{ m['cc_' ~ c.id] }}</td>{% endfor %}<td class="fs{{ ' z' if (m.fg_stock or 0) > 0 else '' }}" data-f="fg_stock">{{ m.fg_stock or 0 }}</td><td class="del" data-f="__del"><button type="button" class="mdel97" data-id="{{ m.id }}" title="Is model ko SHEET se hatao">&#128465;</button></td></tr>
         {% endfor %}
         {% if not models %}
         <tr><td colspan="{{ 21 + custom_cols|length }}" style="border:1px solid #e2e8f0;padding:12px;text-align:center;color:#94a3b8">Abhi koi model nahi — Cut List Optimizer se save karo ya Add Manually.</td></tr>
@@ -679,7 +680,7 @@
   /* + ROW / + COLUMN */
   document.getElementById('shAddRow').addEventListener('click', function(){
     var btn = this; btn.disabled = true;
-    fetch('/api/products/sheet/add_row?token=' + tok(), {method: 'POST'})
+    fetch('/api/products/sheet/add_row?token=' + tok(), {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({sheet: SID32})})
       .then(function(r){ return r.json(); })
       .then(function(d){
         btn.disabled = false;
@@ -883,6 +884,94 @@
   });
   document.addEventListener('click', function(e){
     if (ordPan31.style.display === 'block' && !ordPan31.contains(e.target) && e.target.id !== 'shOrd31') ordPan31.style.display = 'none';
+  });
+
+  /* ===== v4.32: EXCEL JAISI SHEETS (tabs) + MERGE & CENTER (apne columns) ===== */
+  var SHEETS32 = {{ sheets31|tojson }} || [];
+  var SID32 = {{ sid32|tojson }};
+  var SCNT32 = {{ scnt32|tojson }} || {};
+  function tok32(){ return (document.cookie.match(/(?:^|; )token=([^;]*)/) || [])[1] || (window.T ? window.T() : ''); }
+  function goSheet32(id){
+    var p = new URLSearchParams(location.search);
+    p.set('sheet', id);
+    location.search = p.toString();
+  }
+  function op32(body){
+    return fetch('/api/products/sheet/sheet_ops?token=' + encodeURIComponent(tok32()), {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)}).then(function(r){ return r.json(); });
+  }
+  (function(){
+    var box = document.getElementById('sheetTabs32'); if (!box) return;
+    SHEETS32.forEach(function(s){
+      var act = String(s.id) === String(SID32);
+      var t = document.createElement('button');
+      t.type = 'button';
+      t.style.cssText = 'cursor:pointer;padding:5px 12px;border-radius:8px 8px 0 0;font-size:12px;font-weight:800;border:1px solid #cbd5e1;' + (act ? 'background:#4338ca;color:#fff;border-bottom-color:#4338ca' : 'background:#eef2ff;color:#3730a3');
+      t.textContent = s.name + ' (' + (SCNT32[s.id] || 0) + ')';
+      t.title = 'Click = ye sheet kholo \u00b7 DOUBLE-CLICK = naam badlo';
+      t.addEventListener('click', function(){ if (!act) goSheet32(s.id); });
+      t.addEventListener('dblclick', function(){
+        var v = prompt('Sheet ka naya naam?', s.name);
+        if (v === null) return;
+        op32({action: 'rename', id: s.id, name: v.trim()}).then(function(d){ if (d.ok) location.reload(); else toast18(d.error || 'Rename fail', true); });
+      });
+      box.appendChild(t);
+      if (SHEETS32.length > 1){
+        var x = document.createElement('span');
+        x.textContent = '\u2715'; x.title = 'Sheet hatao — iske models PEHLI sheet me chali jayengi';
+        x.style.cssText = 'cursor:pointer;color:#b91c1c;font-weight:800;margin:0 6px 0 -1px;font-size:11px';
+        x.addEventListener('click', function(){
+          if (!confirm('Sheet "' + s.name + '" hatani hai? Iske ' + (SCNT32[s.id] || 0) + ' models pehli sheet me chale jayenge.')) return;
+          op32({action: 'del', id: s.id}).then(function(d){
+            if (d.ok){ if (String(SID32) === String(s.id)) goSheet32(d.sheets[0].id); else location.reload(); }
+            else toast18(d.error || 'Delete fail', true);
+          });
+        });
+        box.appendChild(x);
+      }
+    });
+    var add = document.createElement('button');
+    add.type = 'button'; add.textContent = '+ Sheet';
+    add.style.cssText = 'cursor:pointer;padding:5px 10px;border-radius:8px 8px 0 0;font-size:12px;font-weight:800;border:1px dashed #86efac;background:#f0fdf4;color:#15803d';
+    add.title = 'NAYI SHEET banao (Excel jaisa)';
+    add.addEventListener('click', function(){
+      var v = prompt('Nayi sheet ka naam?', 'SHEET ' + (SHEETS32.length + 1));
+      if (v === null) return;
+      op32({action: 'add', name: v.trim()}).then(function(d){
+        if (d.ok) goSheet32(d.sheets[d.sheets.length - 1].id);
+        else toast18(d.error || 'Sheet add fail', true);
+      });
+    });
+    box.appendChild(add);
+  })();
+  /* MERGE & CENTER — apne (cc_) columns: DOUBLE-CLICK cell par = merge, merged par = alag */
+  var CM32 = (typeof P31.colMerge === 'object' && P31.colMerge) || {};
+  document.getElementById('sheet97').addEventListener('dblclick', function(e){
+    var td = e.target.closest ? e.target.closest('td.sc') : null;
+    if (!td) return;
+    var tr = td.closest('tr');
+    if (!tr || !tr.dataset.id) return;
+    var f = td.dataset.f || '';
+    if (f.indexOf('cc_') !== 0) return;
+    e.preventDefault();
+    var mid = tr.dataset.id, cid = f.slice(3);
+    CM32[mid] = CM32[mid] || {};
+    if (parseInt(td.colSpan || 1, 10) > 1){
+      delete CM32[mid][cid];
+      if (!Object.keys(CM32[mid]).length) delete CM32[mid];
+      toast18('Merge alag ho gaya');
+    } else {
+      var sibs = 0, nx = td.nextElementSibling;
+      while (nx && (nx.dataset.f || '').indexOf('cc_') === 0){ sibs++; nx = nx.nextElementSibling; }
+      if (!sibs){ toast18('Aage koi apna column nahi — pehle + Column se jodo', true); return; }
+      var v = prompt('Kitne columns merge? (2-' + (sibs + 1) + ')', '2');
+      if (v === null) return;
+      var n = parseInt(v, 10);
+      if (!(n >= 2 && n <= sibs + 1)){ toast18('Number 2 se ' + (sibs + 1) + ' tak likho', true); return; }
+      CM32[mid][cid] = n;
+      toast18(n + ' columns MERGE & CENTER');
+    }
+    fetch('/api/products/sheet/prefs?token=' + tok32(), {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({colMerge: CM32})})
+      .then(function(){ setTimeout(function(){ location.reload(); }, 350); });
   });
   document.getElementById('shAddCol').addEventListener('click', function(){
     var nm = prompt('Naye column ka naam? (jaise: GST / REMARK / BATCH)');

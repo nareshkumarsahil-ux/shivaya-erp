@@ -2691,6 +2691,31 @@ def products():
     flt_from = (request.args.get("from") or "").strip()
     flt_to = (request.args.get("to") or "").strip()
     _w, _prm = [], []
+    # v4.32: EXCEL JAISI SHEETS — sheet_id par filter + tabs ka data
+    _ensure_sheet31()
+    db.execute("CREATE TABLE IF NOT EXISTS sheet_prefs (k TEXT PRIMARY KEY, v TEXT DEFAULT '')")
+    _doc32 = {}
+    _r32 = db.query("SELECT v FROM sheet_prefs WHERE k='align'", one=True)
+    if _r32 and _r32["v"]:
+        try:
+            _doc32 = json.loads(_r32["v"])
+        except Exception:
+            _doc32 = {}
+    if not isinstance(_doc32, dict):
+        _doc32 = {}
+    _sheets32 = _doc32.get("sheets") if isinstance(_doc32.get("sheets"), list) and _doc32.get("sheets") else [{"id": 1, "name": "SHEET 1"}]
+    _sheets32 = [{"id": int(s["id"]), "name": str(s.get("name") or ("SHEET " + str(s["id"])))} for s in _sheets32]
+    _cmap32 = {}
+    for _rc in db.query("SELECT IFNULL(sheet_id,1) sid, COUNT(*) c FROM product_models GROUP BY sid"):
+        _cmap32[int(_rc["sid"])] = _rc["c"]
+    try:
+        _sid32 = int(request.args.get("sheet") or 0)
+    except (TypeError, ValueError):
+        _sid32 = 0
+    if _sid32 not in [s["id"] for s in _sheets32]:
+        _sid32 = _sheets32[0]["id"]
+    _w.append("IFNULL(m.sheet_id,1) = ?")
+    _prm.append(_sid32)
     if flt_q:
         _lk = "%" + flt_q + "%"
         _w.append("(m.name LIKE ? OR IFNULL(m.model_code,'') LIKE ? OR IFNULL(o.order_no,'') LIKE ? "
@@ -2817,7 +2842,24 @@ def products():
                     pass
     except Exception:
         pass
+    # v4.32: MERGE & CENTER — cc_ columns ke spans render ke liye
+    _mgd32 = _doc32.get("colMerge") if isinstance(_doc32.get("colMerge"), dict) else {}
+    for _m in models:
+        _mg32 = _mgd32.get(str(_m["id"])) or {}
+        _ccr32, _sk32 = [], 0
+        for _cc in _cust23:
+            if _sk32 > 0:
+                _sk32 -= 1
+                continue
+            try:
+                _sp32 = max(1, min(6, int(_mg32.get(_cc["id"]) or 1)))
+            except (TypeError, ValueError):
+                _sp32 = 1
+            _ccr32.append({"id": _cc["id"], "span": _sp32})
+            _sk32 = _sp32 - 1
+        _m["_ccr"] = _ccr32
     return render_template("products.html", active="products", models=models, models_top=models_top, pdf_counts=pdf_counts,
+                           sheets31=_sheets32, sid32=_sid32, scnt32=_cmap32,
                            models_total=models_total, align_prefs=_align18, prefs21=_prefs21, custom_cols=_cust23,
                            bom_map=bom_map, history=history,
                            show_add=request.args.get("add"),
@@ -4910,7 +4952,7 @@ def sheet_prefs():
     if not isinstance(doc, dict) or "align" not in doc:
         doc = {"align": doc if isinstance(doc, dict) else {}}   # v4.18 purana flat-align doc
     # v4.21: align + colw + rowh + rowh_def — ek hi prefs doc (top-level keys merge)
-    for k in ("align", "colw", "rowh", "colhide", "colLabels", "colOrder"):   # v4.31: header rename + column order
+    for k in ("align", "colw", "rowh", "colhide", "colLabels", "colOrder", "colMerge"):   # v4.32: merge-spans   # v4.31: header rename + column order
         if k in j and isinstance(j[k], dict):
             if not j[k]:
                 doc[k] = {}   # v4.21: khaali dict = CLEAR (merge-nop nahi — Reset kaam kare)
@@ -4976,6 +5018,16 @@ def _ensure_cut_manual30():
         pass
 
 
+def _ensure_sheet31():
+    """v4.32: sheet_id column (PRAGMA self-heal) — Excel-jaisi sheets (tabs)."""
+    try:
+        _h32 = {r["name"] for r in db.query("PRAGMA table_info(product_models)")}
+        if "sheet_id" not in _h32:
+            db.execute("ALTER TABLE product_models ADD COLUMN sheet_id INTEGER DEFAULT 1")
+    except Exception:
+        pass
+
+
 _CUT_GROUP30 = ("cutting_len", "cutting_w", "x_qty", "y_qty", "panels_sheet")
 
 
@@ -4995,6 +5047,52 @@ def sheet_calc_cut97():
                    (c["cutting_len"], c["cutting_w"], c["x_qty"], c["y_qty"], c["pps"], m["id"]))
         upd += 1
     return jsonify(ok=True, updated=upd, skipped=skip)
+
+
+@app.route("/api/products/sheet/sheet_ops", methods=["POST"])
+@login_required
+@admin_required
+def sheet_ops32():
+    """v4.32: EXCEL JAISI SHEETS — add / rename / del (del par models pehli sheet me chale)."""
+    j = request.get_json(silent=True) or {}
+    act = (j.get("action") or "").strip()
+    db.execute("CREATE TABLE IF NOT EXISTS sheet_prefs (k TEXT PRIMARY KEY, v TEXT DEFAULT '')")
+    doc = {}
+    r = db.query("SELECT v FROM sheet_prefs WHERE k='align'", one=True)
+    if r and r["v"]:
+        try:
+            doc = json.loads(r["v"])
+        except Exception:
+            doc = {}
+    if not isinstance(doc, dict):
+        doc = {}
+    sheets = doc.get("sheets") if isinstance(doc.get("sheets"), list) and doc.get("sheets") else [{"id": 1, "name": "SHEET 1"}]
+    sheets = [{"id": int(s["id"]), "name": str(s.get("name") or ("SHEET " + str(s["id"])))} for s in sheets]
+    if act == "add":
+        nm = (j.get("name") or "").strip()[:24] or ("SHEET " + str(len(sheets) + 1))
+        sheets.append({"id": max(s["id"] for s in sheets) + 1, "name": nm})
+        doc["sheets"] = sheets
+    elif act == "rename":
+        sid = int(j.get("id") or 0)
+        nm = (j.get("name") or "").strip()[:24]
+        if not nm:
+            return jsonify(ok=False, error="Naam likho.")
+        for s in sheets:
+            if s["id"] == sid:
+                s["name"] = nm
+        doc["sheets"] = sheets
+    elif act == "del":
+        sid = int(j.get("id") or 0)
+        if len(sheets) <= 1:
+            return jsonify(ok=False, error="Aakhri sheet delete nahi hoti.")
+        sheets = [s for s in sheets if s["id"] != sid]
+        db.execute("UPDATE product_models SET sheet_id=? WHERE IFNULL(sheet_id,1)=?", (sheets[0]["id"], sid))
+        doc["sheets"] = sheets
+    else:
+        return jsonify(ok=False, error="Kya karna hai? (add/rename/del)")
+    db.execute("INSERT INTO sheet_prefs (k, v) VALUES ('align', ?) ON CONFLICT(k) DO UPDATE SET v=excluded.v",
+               (json.dumps(doc),))
+    return jsonify(ok=True, sheets=sheets)
 
 
 @app.route("/api/products/sheet/custom_col", methods=["POST"])
@@ -5042,10 +5140,17 @@ def sheet_custom_col():
 def sheet_add_row():
     """v4.23: SHEET me khaali ROW add (Excel jaisa) — ROW- placeholder; MODEL NO. bharte hi naam ban jata hai."""
     db.ensure_product_models()
+    _ensure_sheet31()
+    _jb32 = request.get_json(silent=True) or {}
+    try:
+        _sid32 = int(_jb32.get("sheet") or 1)
+    except (TypeError, ValueError):
+        _sid32 = 1
     nm = "ROW-" + _now_ist().strftime("%Y%m%d%H%M%S")
     while db.query("SELECT id FROM product_models WHERE name=?", (nm,), one=True):
         nm += "x"
-    db.execute("INSERT INTO product_models (name, created_on) VALUES (?,?)", (nm, _today_ist().isoformat()))
+    db.execute("INSERT INTO product_models (name, created_on, sheet_id) VALUES (?,?,?)",
+               (nm, _today_ist().isoformat(), _sid32))
     r = db.query("SELECT id FROM product_models WHERE name=?", (nm,), one=True)
     return jsonify(ok=True, id=r["id"], name=nm)
 
