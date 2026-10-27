@@ -2850,6 +2850,12 @@ def products():
             _sq28 = round(((float(_m["panel_len"]) / 25.4) * (float(_m["panel_w"]) / 25.4)) / float(_m["pcs_panel"]), 3)
         elif _c27 and _c27["ups"] and (_c27["cutting_len"] or 0) > 0 and (_c27["cutting_w"] or 0) > 0:
             _sq28 = round(((float(_c27["cutting_len"]) / 25.4) * (float(_c27["cutting_w"]) / 25.4)) / float(_c27["ups"]), 3)
+        elif (_m.get("cutting_len") or 0) > 0 and (_m.get("cutting_w") or 0) > 0 and \
+                ((int(_m.get("panels_sheet") or 0)) or (int(_m.get("x_qty") or 0) * int(_m.get("y_qty") or 0))) > 0:
+            _u36 = int(_m.get("panels_sheet") or 0) or int(_m.get("x_qty") or 0) * int(_m.get("y_qty") or 0)
+            _sq28 = round(((float(_m["cutting_len"]) / 25.4) * (float(_m["cutting_w"]) / 25.4)) / _u36, 3)
+        elif float(_m.get("pcb_len") or 0) > 0 and float(_m.get("pcb_w") or 0) > 0:
+            _sq28 = round((float(_m["pcb_len"]) / 25.4) * (float(_m["pcb_w"]) / 25.4), 3)  # SINGLE PCB = 1 piece
         else:
             _sq28 = 0
         _m["_csq"] = _sq28
@@ -5211,6 +5217,56 @@ def sheet_calc_update33():
         return jsonify(ok=False, error="RATE ya PRICE me se koi ek bharo.")
     db.execute("UPDATE product_models SET per_sq_inch=?, pcb_price=? WHERE id=?", (rate, price, mid))
     return jsonify(ok=True, model=m["name"], rate=round(rate, 3), price=round(price, 2))
+
+
+@app.route("/api/products/sheet/price_fill", methods=["POST"])
+@login_required
+@admin_required
+def sheet_price_fill36():
+    """v4.36: PRICE SABHI ROWS — jitne models ka sq.inch + RATE ban sakta hai unke khaali PRICE
+    DB me bhar do. sq 4-tier: SINGLE PANEL (L*W/PCS) -> GANG CUTTING (4a*4b/UPS) ->
+    stored CUTTING (4a*4b/UPS ya x*y) -> SINGLE PCB (X*Y, 1 piece). RATE khaali ho to usi
+    PARTY ke kisi model ka rate inherit. Jo PRICE pehle se bhara hai wo nahi badalta."""
+    models = [dict(_r) for _r in db.query("SELECT * FROM product_models")]
+    party_rate = {}
+    for _m in models:
+        _r36 = float(_m.get("per_sq_inch") or 0)
+        _pn36 = (_m.get("party_name") or "").strip()
+        if _r36 > 0 and _pn36:
+            party_rate.setdefault(_pn36, _r36)
+    filled, skip_sq, skip_rate = 0, 0, 0
+    for _m in models:
+        try:
+            if float(_m.get("pcb_price") or 0) > 0:
+                continue  # pehle se bhara — MODEL UPDATE / manual value nahi chhedte
+        except (TypeError, ValueError):
+            pass
+        _c36 = None if _m.get("cut_manual") else _model_cut_calc(_m)
+        pl, pw, pcs = float(_m.get("panel_len") or 0), float(_m.get("panel_w") or 0), int(_m.get("pcs_panel") or 0)
+        if pl > 0 and pw > 0 and pcs > 0:
+            sq = round(((pl / 25.4) * (pw / 25.4)) / pcs, 3)
+        elif _c36 and _c36["ups"] and (_c36["cutting_len"] or 0) > 0 and (_c36["cutting_w"] or 0) > 0:
+            sq = round(((float(_c36["cutting_len"]) / 25.4) * (float(_c36["cutting_w"]) / 25.4)) / float(_c36["ups"]), 3)
+        elif (_m.get("cutting_len") or 0) > 0 and (_m.get("cutting_w") or 0) > 0 and \
+                ((int(_m.get("panels_sheet") or 0)) or (int(_m.get("x_qty") or 0) * int(_m.get("y_qty") or 0))) > 0:
+            _u36 = int(_m.get("panels_sheet") or 0) or int(_m.get("x_qty") or 0) * int(_m.get("y_qty") or 0)
+            sq = round(((float(_m["cutting_len"]) / 25.4) * (float(_m["cutting_w"]) / 25.4)) / _u36, 3)
+        elif float(_m.get("pcb_len") or 0) > 0 and float(_m.get("pcb_w") or 0) > 0:
+            sq = round((float(_m["pcb_len"]) / 25.4) * (float(_m["pcb_w"]) / 25.4), 3)  # SINGLE PCB = 1 piece
+        else:
+            sq = 0
+        rate = float(_m.get("per_sq_inch") or 0)
+        if rate <= 0:
+            rate = float(party_rate.get((_m.get("party_name") or "").strip()) or 0)
+        if sq <= 0:
+            skip_sq += 1
+            continue
+        if rate <= 0:
+            skip_rate += 1
+            continue
+        db.execute("UPDATE product_models SET pcb_price=? WHERE id=?", (round(rate * sq, 2), _m["id"]))
+        filled += 1
+    return jsonify(ok=True, filled=filled, skip_sq=skip_sq, skip_rate=skip_rate)
 
 
 @app.route("/api/products/sheet/custom_col", methods=["POST"])

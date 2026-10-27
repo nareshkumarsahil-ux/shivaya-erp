@@ -129,6 +129,7 @@
     <button type="button" id="shAddRow" class="btn btn-sm" title="Nayi khaali row add karo" style="background:#dcfce7;color:#15803d;border:1px solid #86efac">&#43; Row</button>
     <button type="button" id="shAddCol" class="btn btn-sm" title="Apna naya column add karo" style="background:#dbeafe;color:#1d4ed8;border:1px solid #93c5fd">&#43; Column</button>
     <button type="button" id="shCalc27" class="btn btn-sm" title="SAB models ka CUTTING SIZE (4A/N/4B/N) + UPS Gang-engine se recalc karo (DB me fix)" style="background:#fef9c3;color:#a16207;border:1px solid #fde047">&#8635; Cut Calc</button>
+    <button type="button" id="shPrice36" class="btn btn-sm" title="SABHI rows me PRICE auto-bharo (RATE × sq.inch — RATE khaali ho to usi PARTY ka rate; DB me fix)" style="background:#e0e7ff;color:#3730a3;border:1px solid #c7d2fe">&#128176; Price Sabhi</button>
     <button type="button" id="shCols" class="btn btn-outline btn-sm" title="Column add/remove (show/hide)">&#9636; Columns</button>
     <button type="button" id="shOrd31" class="btn btn-outline btn-sm" title="Column ka order badlo (◀ ▶)">&#8645; Order</button>
     <button type="button" id="shDelMany" class="btn btn-sm" disabled title="Tick ki hui rows delete karo" style="background:#fee2e2;color:#b91c1c;border:1px solid #fca5a5">&#128465; Delete (0)</button>
@@ -700,6 +701,22 @@
         if (d.ok){ toast18(d.updated + ' models recalc ho gaye' + (d.skipped ? ' (' + d.skipped + ' skip — panel/sheet data kam)' : '')); setTimeout(function(){ location.reload(); }, 900); }
         else toast18(d.error || 'Cut Calc fail', true);
       }).catch(function(){ btn.disabled = false; toast18('Cut Calc fail', true); });
+  });
+  /* v4.36: PRICE SABHI — RATE \u00d7 sq.inch se khaali PRICE auto-fill (party-rate inherit) */
+  document.getElementById('shPrice36').addEventListener('click', function(){
+    var btn = this;
+    if (!confirm('SABHI rows me PRICE auto-bhar do? (RATE \u00d7 sq.inch — RATE khaali ho to usi PARTY ka rate lega. Jo PRICE pehle se bhara hai wo NAHI badlega)')) return;
+    btn.disabled = true;
+    fetch('/api/products/sheet/price_fill?token=' + tok(), {method: 'POST'})
+      .then(function(r){ return r.json(); })
+      .then(function(d){
+        btn.disabled = false;
+        if (d.ok){
+          toast18(d.filled + ' rows me PRICE bhar gaya' + (d.skip_rate ? ' \u2022 ' + d.skip_rate + ' skip (RATE nahi mila)' : '') + (d.skip_sq ? ' \u2022 ' + d.skip_sq + ' skip (size data nahi)' : ''));
+          setTimeout(function(){ location.reload(); }, 1100);
+        }
+        else toast18(d.error || 'Price fill fail', true);
+      }).catch(function(){ btn.disabled = false; toast18('Price fill fail', true); });
   });
   /* ===== v4.31: HEADER RENAME (dblclick) + COLUMN ORDER (⇅ Order panel, ◀ ▶) ===== */
   var P31 = {{ prefs21|tojson }} || {};
