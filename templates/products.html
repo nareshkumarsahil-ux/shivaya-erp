@@ -129,6 +129,7 @@
     <button type="button" id="shAddCol" class="btn btn-sm" title="Apna naya column add karo" style="background:#dbeafe;color:#1d4ed8;border:1px solid #93c5fd">&#43; Column</button>
     <button type="button" id="shCalc27" class="btn btn-sm" title="SAB models ka CUTTING SIZE (4A/N/4B/N) + UPS Gang-engine se recalc karo (DB me fix)" style="background:#fef9c3;color:#a16207;border:1px solid #fde047">&#8635; Cut Calc</button>
     <button type="button" id="shCols" class="btn btn-outline btn-sm" title="Column add/remove (show/hide)">&#9636; Columns</button>
+    <button type="button" id="shOrd31" class="btn btn-outline btn-sm" title="Column ka order badlo (◀ ▶)">&#8645; Order</button>
     <button type="button" id="shDelMany" class="btn btn-sm" disabled title="Tick ki hui rows delete karo" style="background:#fee2e2;color:#b91c1c;border:1px solid #fca5a5">&#128465; Delete (0)</button>
     <div id="shColPanel" style="display:none;position:absolute;top:38px;left:0;z-index:60;background:#fff;border:1px solid #cbd5e1;border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.15);padding:10px 12px;min-width:190px;max-height:330px;overflow:auto"></div>
     <span class="muted small">Row H:</span>
@@ -698,6 +699,190 @@
         if (d.ok){ toast18(d.updated + ' models recalc ho gaye' + (d.skipped ? ' (' + d.skipped + ' skip — panel/sheet data kam)' : '')); setTimeout(function(){ location.reload(); }, 900); }
         else toast18(d.error || 'Cut Calc fail', true);
       }).catch(function(){ btn.disabled = false; toast18('Cut Calc fail', true); });
+  });
+  /* ===== v4.31: HEADER RENAME (dblclick) + COLUMN ORDER (⇅ Order panel, ◀ ▶) ===== */
+  var P31 = {{ prefs21|tojson }} || {};
+  var LBL31 = (typeof P31.colLabels === 'object' && P31.colLabels) || {};
+  var ORD31 = (typeof P31.colOrder === 'object' && P31.colOrder) || {};
+  var GRP31 = {pcb_len: ['pcb_len', 'pcb_w'], panel_len: ['panel_len', 'panel_w', 'pcs_panel'],
+               cutting_len: ['cutting_len', 'x_qty', 'cutting_w', 'y_qty']};
+  var LBLF31 = {party_name: 'PARTY', model_code: 'MODEL NO.', party_code: 'PARTY CODE', pcb_len: 'X', pcb_w: 'Y',
+                panel_len: 'L', panel_w: 'W', pcs_panel: 'PCS', cutting_len: '4A', x_qty: 'N (4a)', cutting_w: '4B',
+                y_qty: 'N (4b)', panels_sheet: 'UPS', cnc_tool: 'CNC/TOOL', per_sq_inch: 'PER SQ INCH',
+                sheet_thickness: 'MATERIAL', pcb_price: 'PRICE', fg_stock: 'FIN. STOCK', __del: 'DEL', sn: 'S.N',
+                grp_pcb_len: 'SINGLE PCB SIZE', grp_panel_len: 'SINGLE PANEL', grp_cutting_len: 'CUTTING SIZE'};
+  function tok31(){ return (document.cookie.match(/(?:^|; )token=([^;]*)/) || [])[1] || (window.T ? window.T() : ''); }
+  function save31(key, val){
+    var b = {}; b[key] = val;
+    fetch('/api/products/sheet/prefs?token=' + encodeURIComponent(tok31()), {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(b)});
+  }
+  var hr31 = document.querySelectorAll('#sheet97 thead tr');
+  var cg31 = document.getElementById('sheetCols');
+  /* --- label spans + dblclick rename --- */
+  var DEF31 = {};
+  document.querySelectorAll('#sheet97 thead th[data-f]').forEach(function(th){
+    var f = th.getAttribute('data-f');
+    if (!f || f === '__sel' || f === '__del' || f === 'sn') return;
+    var sp = document.createElement('span'); sp.className = 'thLbl31';
+    var txt = '';
+    Array.prototype.slice.call(th.childNodes).forEach(function(n){
+      if (n.nodeType === 3){ txt += n.nodeValue; th.removeChild(n); }
+    });
+    sp.textContent = txt.trim();
+    th.insertBefore(sp, th.firstChild);
+    var key = th.classList.contains('grp') ? 'grp_' + f : f;
+    DEF31[key] = sp.textContent;
+    if (LBL31[key]){
+      sp.textContent = LBL31[key];
+      var fb31r = th.querySelector('.fB23');
+      if (fb31r) fb31r.title = 'Filter: ' + LBL31[key];
+    }
+    th.title = 'DOUBLE-CLICK = naam badlo · ⇅ Order se position badlo';
+    th.addEventListener('dblclick', function(e){
+      if (e.target.closest('.fB23') || e.target.closest('.colGrip')) return;
+      var v = prompt('Header ka naya naam? (khaali chhodo = default wapas)', sp.textContent);
+      if (v === null) return;
+      v = v.trim().slice(0, 24);
+      if (!v){ delete LBL31[key]; sp.textContent = DEF31[key] || ''; }
+      else { LBL31[key] = v; sp.textContent = v; }
+      var fb = th.querySelector('.fB23');
+      if (fb) fb.title = 'Filter: ' + sp.textContent;
+      save31('colLabels', LBL31);
+      toast18('Header: ' + sp.textContent);
+    });
+  });
+  /* --- column order --- */
+  var TOP31 = (ORD31.top && ORD31.top.length) ? ORD31.top.slice() : [];
+  var LFS31 = (ORD31.grp && typeof ORD31.grp === 'object') ? JSON.parse(JSON.stringify(ORD31.grp)) : {};
+  if (!TOP31.length){
+    Array.prototype.forEach.call(hr31[0].children, function(th){
+      var f = th.getAttribute('data-f');
+      if (!f) return;
+      TOP31.push(th.classList.contains('grp') ? 'grp:' + f : f);
+    });
+  }
+  Object.keys(GRP31).forEach(function(g){ if (!LFS31[g]) LFS31[g] = GRP31[g].slice(); });
+  /* v4.31: TRUE default order (template ka static order — cc_ beech me; Reset isi par wapas) */
+  var CC31D = [];
+  cg31.querySelectorAll('col').forEach(function(c){
+    var f = c.getAttribute('data-f') || '';
+    if (f.indexOf('cc_') === 0) CC31D.push(f);
+  });
+  var DEFORD31 = ['__sel', 'sn', 'party_name', 'model_code', 'party_code', 'grp:pcb_len', 'grp:panel_len', 'grp:cutting_len',
+                  'panels_sheet', 'cnc_tool', 'per_sq_inch', 'sheet_thickness', 'pcb_price'].concat(CC31D).concat(['fg_stock', '__del']);
+  function tm31(){
+    var m = {};
+    document.querySelectorAll('#sheet97 thead th[data-f]').forEach(function(th){
+      var f = th.getAttribute('data-f');
+      if (!f) return;
+      var key = th.classList.contains('grp') ? 'grp:' + f : f;
+      (m[key] = m[key] || []).push(th);
+    });
+    return m;
+  }
+  function leaves31(){
+    var out = [];
+    TOP31.forEach(function(k){
+      if (k.indexOf('grp:') === 0){ (LFS31[k.slice(4)] || []).forEach(function(lf){ out.push(lf); }); }
+      else out.push(k);
+    });
+    return out;
+  }
+  function applyOrd31(){
+    var tm = tm31();
+    TOP31.forEach(function(k){ (tm[k] || []).forEach(function(th){ hr31[0].appendChild(th); }); });
+    leaves31().forEach(function(lf){
+      (tm[lf] || []).forEach(function(th){ if (th.parentNode === hr31[1]) hr31[1].appendChild(th); });
+      var col = cg31.querySelector('col[data-f="' + lf + '"]');
+      if (col) cg31.appendChild(col);
+    });
+    document.querySelectorAll('#sheet97 tbody tr').forEach(function(tr){
+      if (!tr.querySelector('td[data-f]')) return;
+      leaves31().forEach(function(lf){
+        tr.querySelectorAll('td[data-f="' + lf + '"]').forEach(function(td){ tr.appendChild(td); });
+      });
+    });
+  }
+  applyOrd31();
+  function saveOrd31(){ save31('colOrder', {top: TOP31, grp: LFS31}); }
+  function moveKey31(key, dir){
+    var i = TOP31.indexOf(key);
+    if (i >= 0){
+      var j = i + dir;
+      if (j < 0 || j >= TOP31.length) return;
+      TOP31.splice(j, 0, TOP31.splice(i, 1)[0]);
+    } else {
+      var done = false;
+      Object.keys(GRP31).forEach(function(g){
+        var t = LFS31[g], li = t.indexOf(key);
+        if (li >= 0){
+          var lj = li + dir;
+          if (lj < 0 || lj >= t.length) return;
+          t.splice(lj, 0, t.splice(li, 1)[0]); done = true;
+        }
+      });
+      if (!done) return;
+    }
+    applyOrd31(); saveOrd31(); buildOrd31();
+  }
+  function name31(k){
+    if (k.indexOf('grp:') === 0){ var a = k.slice(4); return LBL31['grp_' + a] || DEF31['grp_' + a] || LBLF31['grp_' + a] || a; }
+    return LBL31[k] || LBLF31[k] || k.toUpperCase();
+  }
+  var ordPan31 = document.createElement('div');
+  ordPan31.id = 'shOrdPanel';
+  ordPan31.style.cssText = 'display:none;position:fixed;z-index:9997;background:#fff;border:1px solid #cbd5e1;border-radius:12px;box-shadow:0 12px 34px rgba(0,0,0,.2);padding:10px 12px;max-height:70vh;overflow:auto;min-width:250px';
+  document.body.appendChild(ordPan31);
+  function buildOrd31(){
+    ordPan31.innerHTML = '';
+    var h = document.createElement('div');
+    h.style.cssText = 'font-weight:800;font-size:11.5px;color:#334155;margin-bottom:6px';
+    h.textContent = 'COLUMN ORDER (◀ aage · peeche ▶)';
+    ordPan31.appendChild(h);
+    function row(key, txt, ind){
+      var dv = document.createElement('div');
+      dv.style.cssText = 'display:flex;align-items:center;gap:6px;font-size:12px;padding:2px 0 2px ' + (ind ? '18px' : '0');
+      var sp = document.createElement('span');
+      sp.style.cssText = 'flex:1;color:#0f172a;font-weight:' + (ind ? '400' : '700');
+      sp.textContent = txt;
+      var mk = function(t, d){
+        var b = document.createElement('button');
+        b.type = 'button'; b.textContent = t;
+        b.style.cssText = 'cursor:pointer;border:1px solid #cbd5e1;background:#f8fafc;border-radius:6px;width:24px;padding:1px 0;font-size:11px';
+        b.addEventListener('click', function(){ moveKey31(key, d); });
+        return b;
+      };
+      dv.appendChild(sp); dv.appendChild(mk('◀', -1)); dv.appendChild(mk('▶', 1));
+      ordPan31.appendChild(dv);
+    }
+    TOP31.forEach(function(k){
+      row(k, name31(k), 0);
+      if (k.indexOf('grp:') === 0) (LFS31[k.slice(4)] || []).forEach(function(lf){ row(lf, name31(lf), 1); });
+    });
+    var rst = document.createElement('button');
+    rst.type = 'button'; rst.textContent = 'Order Reset';
+    rst.style.cssText = 'margin-top:8px;width:100%;padding:4px 0;border-radius:8px;border:1px solid #cbd5e1;background:#f1f5f9;cursor:pointer;font-weight:700;font-size:11.5px';
+    rst.addEventListener('click', function(){
+      TOP31 = DEFORD31.slice(); LFS31 = {};
+      Object.keys(GRP31).forEach(function(g){ LFS31[g] = GRP31[g].slice(); });
+      applyOrd31();
+      saveOrd31(); buildOrd31();
+      toast18('Column order default wapas');
+    });
+    ordPan31.appendChild(rst);
+  }
+  var ob31 = document.getElementById('shOrd31');
+  if (ob31) ob31.addEventListener('click', function(e){
+    e.stopPropagation();
+    if (ordPan31.style.display === 'block'){ ordPan31.style.display = 'none'; return; }
+    var r = ob31.getBoundingClientRect();
+    ordPan31.style.left = Math.min(window.innerWidth - 280, r.left) + 'px';
+    ordPan31.style.top = (r.bottom + 6) + 'px';
+    buildOrd31();
+    ordPan31.style.display = 'block';
+  });
+  document.addEventListener('click', function(e){
+    if (ordPan31.style.display === 'block' && !ordPan31.contains(e.target) && e.target.id !== 'shOrd31') ordPan31.style.display = 'none';
   });
   document.getElementById('shAddCol').addEventListener('click', function(){
     var nm = prompt('Naye column ka naam? (jaise: GST / REMARK / BATCH)');

@@ -4910,7 +4910,7 @@ def sheet_prefs():
     if not isinstance(doc, dict) or "align" not in doc:
         doc = {"align": doc if isinstance(doc, dict) else {}}   # v4.18 purana flat-align doc
     # v4.21: align + colw + rowh + rowh_def — ek hi prefs doc (top-level keys merge)
-    for k in ("align", "colw", "rowh", "colhide"):
+    for k in ("align", "colw", "rowh", "colhide", "colLabels", "colOrder"):   # v4.31: header rename + column order
         if k in j and isinstance(j[k], dict):
             if not j[k]:
                 doc[k] = {}   # v4.21: khaali dict = CLEAR (merge-nop nahi — Reset kaam kare)
