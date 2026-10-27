@@ -626,6 +626,25 @@ function merge208(i, text){
   toast(filled.length ? ('\u2705 RE-READ: ' + filled.join(' + ') + ' mil gaya') : 'RE-READ: naya data nahi mila — phir dabao', !filled.length);
 }
 function selLine(i){ SEL = (SEL === i) ? -1 : i; renderInbox(); }   /* v3.95: click = editor khula/band */
+/* v4.26: MODEL NO likhte hi SHEET MASTER se PARTY MODEL + THICKNESS + PRICE auto-fetch */
+document.getElementById('inbox').addEventListener('input', function(e){
+  var id = e.target.id || '';
+  if (id.indexOf('ce_m') !== 0) return;
+  var i = id.slice(4);
+  var v = e.target.value.trim();
+  var msg = document.getElementById('ce_msg' + i);
+  if (!v){ if (msg) msg.textContent = ''; return; }
+  var hits = MODELS.filter(function(mo){ return POnorm(mo.model_code || mo.name) === POnorm(v); });
+  if (hits.length !== 1){ if (msg) msg.textContent = hits.length ? 'Ye MODEL ' + hits.length + ' master me mila \u2014 sahi wala chuno' : ''; return; }
+  var m = hits[0], note = [];
+  var pmI = document.getElementById('ce_pm' + i);
+  if (m.party_code && pmI && !pmI.value.trim()){ pmI.value = m.party_code; note.push('PARTY MODEL'); }
+  var thI = document.getElementById('ce_th' + i);
+  if (m.sheet_thickness && thI && !thI.value.trim()){ thI.value = m.sheet_thickness; note.push('THICKNESS'); }
+  var rI = document.getElementById('ce_r' + i);
+  if (m.pcb_price && rI && !rI.value.trim()){ rI.value = m.pcb_price; note.push('PRICE'); }
+  if (msg) msg.textContent = '\u2714 Size Master: ' + (m.model_code || m.name) + (m.party_name ? ' \u00b7 ' + m.party_name : '') + (note.length ? ' \u2014 ' + note.join(' + ') + ' master se auto' : ' \u2014 match mila');
+});
 function closeEdit(i){ if (SEL === i) SEL = -1; renderInbox(); }
 /* ---------- v3.95: chip-editor SAVE — isi window me update (window nahi khulti) ---------- */
 function gv_(id){ var e = document.getElementById(id); return e ? e.value.trim() : ''; }

@@ -141,6 +141,7 @@
     /* v4.16: slim-rows — style ek baar (2358+ rows = chhota page, Vercel-safe) */
     #sheet97 th{border:1px solid #cbd5e1;padding:5px 6px}
     #sheet97 td{border:1px solid #e2e8f0;padding:4px 6px}
+  #sheet97 td.sc{cursor:cell}   /* v4.30: editable cell — click karo, value badlo, Enter = save */
     #sheet97 td.sn{text-align:center;color:#94a3b8}
     #sheet97 td.sc{cursor:cell;min-width:44px}
     #sheet97 td.fs{text-align:center;font-weight:800;color:#cbd5e1}
@@ -894,8 +895,8 @@ function pmArea(){
   var pl = parseFloat((document.getElementById('pm_panel_len')||{}).value) || 0;
   var pw = parseFloat((document.getElementById('pm_panel_w')||{}).value) || 0;
   var pcs = parseInt((document.getElementById('pm_pcs_panel')||{}).value) || 0;
-  if (cl > 0 && cw > 0 && pcs > 0) return ((cl / 25.4) * (cw / 25.4)) / pcs;
-  if (pl > 0 && pw > 0 && pcs > 0) return ((pl / 25.4) * (pw / 25.4)) / pcs;
+  if (pl > 0 && pw > 0 && pcs > 0) return ((pl / 25.4) * (pw / 25.4)) / pcs;   /* v4.29: SINGLE PANEL default */
+  if (cl > 0 && cw > 0 && pcs > 0) return ((cl / 25.4) * (cw / 25.4)) / pcs;   /* fallback: CUTTING PANEL */
   return 0;
 }
 function pmPrice(){

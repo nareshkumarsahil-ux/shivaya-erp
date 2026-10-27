@@ -35,6 +35,7 @@
           <option value="{{ m.id }}"
                   data-pcbl="{{ m.pcb_len|gfmt }}" data-pcbw="{{ m.pcb_w|gfmt }}"
                   data-cutl="{{ m.cutting_len|gfmt }}" data-cutw="{{ m.cutting_w|gfmt }}"
+                  data-plen="{{ m.panel_len|gfmt }}" data-pwid="{{ m.panel_w|gfmt }}" data-pcs1="{{ m.pcs_panel or 0 }}"
                   data-pcs="{{ (m.pcs_panel or 0) * (m.gang_x or 1) * (m.gang_y or 1) }}" data-rate="{{ m.per_sq_inch|gfmt }}">{{ m.name }}</option>
           {% endfor %}
         </select>
@@ -230,9 +231,18 @@ function pccModelFill(){
   if (!o || !o.value) { var _we = document.getElementById('pccPdfWrap'); if (_we) _we.style.display = 'none'; return; }
   _pccPdfs(o.value);
   var g = function(a){ return parseFloat(o.getAttribute(a)) || 0; };
-  document.getElementById('pccLen').value = (g('data-cutl') || g('data-pcbl')) || '';
-  document.getElementById('pccWid').value = (g('data-cutw') || g('data-pcbw')) || '';
-  document.getElementById('pccPcs').value = (g('data-cutl') > 0 ? g('data-pcs') : '') || '';
+  /* v4.29: SINGLE PANEL default (L x W / SINGLE-PANEL PCBs) — nahi milta to CUTTING PANEL (4A x 4B / total PCBs) */
+  var _L29 = '', _W29 = '', _P29 = '';
+  if (g('data-plen') > 0 && g('data-pwid') > 0 && g('data-pcs1') > 0) {
+    _L29 = g('data-plen'); _W29 = g('data-pwid'); _P29 = g('data-pcs1');
+  } else if (g('data-cutl') > 0 && g('data-cutw') > 0 && g('data-pcs') > 0) {
+    _L29 = g('data-cutl'); _W29 = g('data-cutw'); _P29 = g('data-pcs');
+  } else {
+    _L29 = g('data-cutl') || g('data-pcbl'); _W29 = g('data-cutw') || g('data-pcbw');
+  }
+  document.getElementById('pccLen').value = _L29 || '';
+  document.getElementById('pccWid').value = _W29 || '';
+  document.getElementById('pccPcs').value = _P29 || '';
   document.getElementById('pccValRate').value = (g('data-rate') > 0 ? g('data-rate') : '');
   document.getElementById('pccValPrice').value = '';
   pccLastVal = 'rate';

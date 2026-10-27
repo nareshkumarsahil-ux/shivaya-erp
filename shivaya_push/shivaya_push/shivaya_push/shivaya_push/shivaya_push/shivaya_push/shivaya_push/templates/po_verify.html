@@ -13,6 +13,11 @@
   .vwin-h{background:#1e3a8a;color:#fff;font-weight:800;font-size:12px;padding:7px 10px;cursor:grab;display:flex;align-items:center;gap:8px;border-radius:8px 8px 0 0;user-select:none}
   .vwin-h:active{cursor:grabbing}
   .vwin-h .vx{margin-left:auto;cursor:pointer;background:#ffffff22;border:0;color:#fff;font-weight:800;border-radius:5px;padding:1px 8px;font-size:12px}
+  /* v4.24: zoom controls (floating windows) */
+  .vzoom{display:inline-flex;align-items:center;gap:3px;margin-left:6px;background:#ffffff18;border-radius:6px;padding:1px 4px}
+  .vzoom button{cursor:pointer;border:0;background:#ffffff30;color:#fff;font-weight:800;border-radius:4px;padding:0 7px;font-size:12px;line-height:1.5}
+  .vzoom button:hover{background:#ffffff55}
+  .vzoom .vzp{font-size:10.5px;font-weight:800;color:#fff;min-width:38px;text-align:center;cursor:pointer}
   .vwin-b{overflow:auto;flex:1;background:#f8fafc;border-radius:0 0 9px 9px;position:relative}
   .vwin-b img{max-width:100%;display:block}
   .vwin-b canvas{max-width:100%;display:block;margin:auto}
@@ -116,6 +121,43 @@ function closeWin(id){ document.getElementById(id).classList.remove('open'); }
 document.querySelectorAll('.vwin').forEach(function(w){
   w.addEventListener('mousedown', function(){ w.style.zIndex = ++zTop; });
 });
+/* v4.24: ZOOM IN/OUT — har .vwin (same-design window) ke header me controls */
+function zoomApply24(w, z){
+  var body = w.querySelector('.vwin-b');
+  if (!body) return;
+  z = Math.max(0.4, Math.min(4, z));
+  body._zoom24 = z;
+  var zp = w.querySelector('.vzp');
+  if (zp) zp.textContent = Math.round(z * 100) + '%';
+  if (typeof body._zoomPaint24 === 'function') body._zoomPaint24(z);
+  else {
+    var im = body.querySelector('img');
+    if (im) im.style.width = Math.round(100 * z) + '%';
+  }
+}
+function initZoom24(){
+  document.querySelectorAll('.vwin').forEach(function(w){
+    var h = w.querySelector('.vwin-h');
+    if (!h || h.querySelector('.vzoom')) return;
+    var bar = document.createElement('span');
+    bar.className = 'vzoom';
+    bar.innerHTML = '<button type="button" data-z="out" title="Zoom out (chhota)">\u2212</button>' +
+                    '<b class="vzp" title="Double-click = fit (100%)">100%</b>' +
+                    '<button type="button" data-z="in" title="Zoom in (bada)">\u002b</button>';
+    h.insertBefore(bar, h.querySelector('.vx'));
+    bar.querySelectorAll('button').forEach(function(b){
+      b.addEventListener('click', function(e){
+        e.stopPropagation();
+        var body = w.querySelector('.vwin-b');
+        var cur = body._zoom24 || 1;
+        zoomApply24(w, b.getAttribute('data-z') === 'in' ? cur * 1.25 : cur / 1.25);
+      });
+    });
+    var zp = bar.querySelector('.vzp');
+    zp.addEventListener('dblclick', function(e){ e.stopPropagation(); zoomApply24(w, 1); });
+  });
+}
+initZoom24();
 function dragWin(e, id){
   var w = document.getElementById(id);
   var r = w.getBoundingClientRect(), ox = e.clientX - r.left, oy = e.clientY - r.top;
@@ -185,11 +227,12 @@ function renderInto(bodyId, url, mime){
   var box = document.getElementById(bodyId);
   if (!box) return;
   var isPdf = String(mime).indexOf('pdf') !== -1;
-  if (!isPdf) {  // image -> seedha <img> (inline)
+  if (!isPdf) {  // image -> seedha <img> (inline); v4.24: zoom img-width se
     var im = document.createElement('img');
     im.src = url;
     im.onerror = function(){ box.innerHTML = linkFall(url); };
     box.appendChild(im);
+    box._zoomPaint24 = function(z){ im.style.width = Math.round(100 * z) + '%'; };
     return;
   }
   loadPdfJs(function(){
@@ -197,11 +240,14 @@ function renderInto(bodyId, url, mime){
     pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
     pdfjsLib.getDocument(url).promise.then(function(pdf){
       var cur = 1;
-      function paint(n){
+      /* v4.24: zoom — fit-scale x user-zoom (0.4x..4x), page repaint hote hi */
+      box._zoomPaint24 = function(z){ paint(cur, z || 1); };
+      function paint(n, zm){
+        zm = zm || box._zoom24 || 1;
         pdf.getPage(n).then(function(pg){
           box.querySelectorAll('canvas').forEach(function(c){ c.remove(); });
-          var sc = Math.min(1.6, (box.clientWidth - 24) / pg.getViewport({scale:1}).width);
-          var vp = pg.getViewport({scale: Math.max(.5, sc)});
+          var fit = Math.min(1.6, (box.clientWidth - 24) / pg.getViewport({scale:1}).width);
+          var vp = pg.getViewport({scale: Math.max(.3, Math.min(6, fit * zm))});
           var cv = document.createElement('canvas');
           cv.width = vp.width; cv.height = vp.height;
           box.appendChild(cv);

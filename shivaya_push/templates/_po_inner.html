@@ -162,6 +162,9 @@ var token = new URLSearchParams(location.search).get('token') || (function(){ tr
 if (token) { try { localStorage.setItem('jcToken', token); } catch(e){} }
 function T(){ return token; }
 var LINES = [], SEL = -1, FILES = [], dup = false;
+/* v4.28: tab/page badal ke wapas aao to PO ka kaam wapas mile (localStorage draft) */
+var PODRAFT28 = 'shivayaPOdraft28';
+function poDraftSave28(){ try { if (LINES.length) localStorage.setItem(PODRAFT28, JSON.stringify(LINES)); } catch(e){} }
 
 function toast(m, err){
   var t = document.getElementById('toast');
@@ -444,6 +447,7 @@ function renderInbox(){
     MODELS.map(function(m){ return '<option value="' + esc(m.model_code || m.name) + '">'; }).join('') + '</datalist>';
   var done = LINES.filter(function(l){ return l.saved; }).length;
   document.getElementById('stepBar').textContent = 'S.No. ' + (SEL >= 0 ? (SEL + 1) : '—') + ' / ' + LINES.length + ' · saved ' + done + ' · baki ' + (LINES.length - done);
+  poDraftSave28();   /* v4.28: har render par draft save */
 }
 function addLine(){
   LINES.push({sno: LINES.length + 1, model: '', party_model: '', qty: '', rate: '', note: ''});
@@ -851,7 +855,7 @@ function fileOnly(){ toast('File upload ho chuki hai — library me safe hai. (J
 function delLine(i){
   var l = LINES[i]; if (!l) return;
   if (!window.confirm('Line #' + (l.sno || (i + 1)) + ' (' + (l.model || '\u2014') + ') hatani hai?')) return;
-  var done = function(){ LINES.splice(i, 1); renderInbox(); };
+  var done = function(){ LINES.splice(i, 1); if (!LINES.length){ try { localStorage.removeItem(PODRAFT28); } catch(e){} } renderInbox(); };
   if (l.oid) {
     fetch('/api/po/discard/' + l.oid + '?token=' + encodeURIComponent(T()), { method: 'POST' })
       .then(function(r){ return r.json(); })
@@ -928,4 +932,12 @@ function reprocess(fid){
 }
 loadFolder();
 renderInbox();
+/* v4.28: wapas aaye to adhoora kaam wapas — draft restore (PO lines + saved-flags) */
+try {
+  var _d28 = JSON.parse(localStorage.getItem(PODRAFT28) || 'null');
+  if (Array.isArray(_d28) && _d28.length && !LINES.length){
+    LINES = _d28; SEL = -1; renderInbox();
+    toast('\u21bb Purana kaam wapas mil gaya \u2014 ' + LINES.length + ' lines (draft). Sab hatane ke liye har line ka \u2715 dabao.');
+  }
+} catch(e){}
 </script>

@@ -2718,17 +2718,21 @@ def products():
     models_total = len(rows)
     models_top = rows[:400]
     models = [dict(_r) for _r in rows]   # v4.27: dict — cut-calc attach hoga
+    _ensure_cut_manual30()
     for _m in models:
-        _c27 = _model_cut_calc(_m)
+        _c27 = None if _m.get("cut_manual") else _model_cut_calc(_m)   # v4.30: manual edit -> stored values hi
         _m["_c4a"] = _c27["cutting_len"] if _c27 else None
         _m["_cn4a"] = _c27["x_qty"] if _c27 else None
         _m["_c4b"] = _c27["cutting_w"] if _c27 else None
         _m["_cn4b"] = _c27["y_qty"] if _c27 else None
         _m["_cups"] = _c27["ups"] if _c27 else None
         _m["_cpps"] = _c27["pps"] if _c27 else None
-        # v4.28: PRICE <-> PER SQ INCH (Cut List wala formula) — sq.inch/PCB = SINGLE PANEL area (inch) / unit PCBs
-        if _c27 and _c27["ups"] and (_m.get("panel_len") or 0) > 0 and (_m.get("panel_w") or 0) > 0:
-            _sq28 = round(((float(_m["panel_len"]) / 25.4) * (float(_m["panel_w"]) / 25.4)) / _c27["ups"], 3)
+        # v4.29: PRICE <-> PER SQ INCH — DEFAULT SINGLE PANEL (L x W inch / SINGLE-PANEL ke PCBs);
+        # SINGLE PANEL nahi milta to CUTTING PANEL (4A x 4B inch / UPS) — user rule (SCPL-480 fix)
+        if (_m.get("panel_len") or 0) > 0 and (_m.get("panel_w") or 0) > 0 and (int(_m.get("pcs_panel") or 0)) > 0:
+            _sq28 = round(((float(_m["panel_len"]) / 25.4) * (float(_m["panel_w"]) / 25.4)) / float(_m["pcs_panel"]), 3)
+        elif _c27 and _c27["ups"] and (_c27["cutting_len"] or 0) > 0 and (_c27["cutting_w"] or 0) > 0:
+            _sq28 = round(((float(_c27["cutting_len"]) / 25.4) * (float(_c27["cutting_w"]) / 25.4)) / float(_c27["ups"]), 3)
         else:
             _sq28 = 0
         _m["_csq"] = _sq28
@@ -4823,6 +4827,13 @@ def product_sheet_edit(pid):
     """v3.97: SHEET cell-edit — sirf whitelist fields, kuch invent nahi. v4.18: har edit LOG (UNDO)."""
     j = request.get_json(silent=True) or {}
     # v4.23: ROW- placeholder row me MODEL NO. bhara to model ka naam bhi wahi ho jaye (PO-match ke liye)
+    # v4.30: CUTTING SIZE/UPS manual edit -> model ka Engine-override ON (reload par bhi yahi dikhega)
+    if any(k in _CUT_GROUP30 for k in (j or {})):
+        _ensure_cut_manual30()
+        try:
+            db.execute("UPDATE product_models SET cut_manual=1 WHERE id=?", (pid,))
+        except Exception:
+            pass
     mc = str(j.get("model_code") or "").strip()
     if mc:
         m0 = db.query("SELECT name FROM product_models WHERE id=?", (pid,), one=True)
@@ -4955,6 +4966,19 @@ def sheet_delete_many():
     return jsonify(ok=True, deleted=len(deleted), blocked=blocked, msg=msg)
 
 
+def _ensure_cut_manual30():
+    """v4.30: cut_manual flag column (PRAGMA self-heal) — manual edit ka Engine-override."""
+    try:
+        _h30 = {r["name"] for r in db.query("PRAGMA table_info(product_models)")}
+        if "cut_manual" not in _h30:
+            db.execute("ALTER TABLE product_models ADD COLUMN cut_manual INTEGER DEFAULT 0")
+    except Exception:
+        pass
+
+
+_CUT_GROUP30 = ("cutting_len", "cutting_w", "x_qty", "y_qty", "panels_sheet")
+
+
 @app.route("/api/products/sheet/calc_cut", methods=["POST"])
 @login_required
 @admin_required
@@ -4967,7 +4991,7 @@ def sheet_calc_cut97():
         if not c or not c["x_qty"] or not c["y_qty"] or not c["ups"]:
             skip += 1
             continue
-        db.execute("UPDATE product_models SET cutting_len=?, cutting_w=?, x_qty=?, y_qty=?, panels_sheet=? WHERE id=?",
+        db.execute("UPDATE product_models SET cutting_len=?, cutting_w=?, x_qty=?, y_qty=?, panels_sheet=?, cut_manual=0 WHERE id=?",
                    (c["cutting_len"], c["cutting_w"], c["x_qty"], c["y_qty"], c["pps"], m["id"]))
         upd += 1
     return jsonify(ok=True, updated=upd, skipped=skip)
