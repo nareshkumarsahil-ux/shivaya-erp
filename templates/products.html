@@ -165,7 +165,7 @@
     #sheet97 tbody tr[data-id]{height:28px}
     </style>
     <table class="stable" id="sheet97" style="border-collapse:collapse;width:100%;font-size:11.5px;background:#fff">
-      <colgroup id="sheetCols"><col data-f="__sel"><col data-f="sn"><col data-f="party_name"><col data-f="model_code"><col data-f="party_code"><col data-f="pcb_len"><col data-f="pcb_w"><col data-f="panel_len"><col data-f="panel_w"><col data-f="pcs_panel"><col data-f="cutting_len"><col data-f="x_qty"><col data-f="cutting_w"><col data-f="y_qty"><col data-f="panels_sheet"><col data-f="cnc_tool"><col data-f="per_sq_inch"><col data-f="sheet_thickness"><col data-f="pcb_price">{% for cc in custom_cols %}<col data-f="cc_{{ cc.id }}">{% endfor %}<col data-f="fg_stock"><col data-f="__del"></colgroup>
+      <colgroup id="sheetCols"><col data-f="__sel"><col data-f="sn"><col data-f="party_name"><col data-f="model_code"><col data-f="party_code"><col data-f="pcb_len"><col data-f="pcb_w"><col data-f="panel_len"><col data-f="panel_w"><col data-f="pcs_panel"><col data-f="actual_len"><col data-f="actual_w"><col data-f="actual_ups"><col data-f="cutting_len"><col data-f="x_qty"><col data-f="cutting_w"><col data-f="y_qty"><col data-f="panels_sheet"><col data-f="cnc_tool"><col data-f="per_sq_inch"><col data-f="sheet_thickness"><col data-f="pcb_price">{% for cc in custom_cols %}<col data-f="cc_{{ cc.id }}">{% endfor %}<col data-f="fg_stock"><col data-f="__del"></colgroup>
       <thead>
         <tr style="background:#eef2ff;position:sticky;top:0;z-index:2">
           <th rowspan="2" data-f="__sel" title="Multiple select karke delete karo"><input type="checkbox" id="selAll" style="cursor:pointer"></th>
@@ -175,6 +175,7 @@
           <th rowspan="2" data-f="party_code">PARTY CODE</th>
           <th class="grp" colspan="2" data-f="pcb_len">SINGLE PCB SIZE</th>
           <th class="grp" colspan="3" data-f="panel_len">SINGLE PANEL</th>
+          <th class="grp" colspan="3" data-f="actual_len">ACTUAL PANEL SIZE</th>
           <th class="grp" colspan="4" data-f="cutting_len">CUTTING SIZE</th>
           <th rowspan="2" data-f="panels_sheet">UPS</th>
           <th rowspan="2" data-f="cnc_tool">CNC/TOOL</th>
@@ -190,18 +191,21 @@
           <th data-f="pcb_w">Y</th>
           <th data-f="panel_len">L</th>
           <th data-f="panel_w">W</th>
-          <th data-f="pcs_panel">PCS</th>
-          <th data-f="cutting_len">4a</th>
-          <th data-f="x_qty">N</th>
-          <th data-f="cutting_w">4b</th>
-          <th data-f="y_qty">N</th>
+          <th data-f="pcs_panel">UPS</th>
+          <th data-f="actual_len">L</th>
+          <th data-f="actual_w">W</th>
+          <th data-f="actual_ups">UPS</th>
+          <th data-f="cutting_len">48</th>
+          <th data-f="x_qty">P1</th>
+          <th data-f="cutting_w">40</th>
+          <th data-f="y_qty">P2</th>
         </tr>
       </thead>
       <tbody>
-        {% set NF18 = ['pcb_len','pcb_w','panel_len','panel_w','pcs_panel','cutting_len','x_qty','cutting_w','y_qty','panels_sheet','per_sq_inch','pcb_price','sheet_thickness'] %}
+        {% set NF18 = ['pcb_len','pcb_w','panel_len','panel_w','pcs_panel','actual_len','actual_w','actual_ups','cutting_len','x_qty','cutting_w','y_qty','panels_sheet','per_sq_inch','pcb_price','sheet_thickness'] %}
         {% for m in models %}<tr data-id="{{ m.id }}"><td class="sel" data-f="__sel"><input type="checkbox" class="selCK" data-id="{{ m.id }}" style="cursor:pointer"></td><td class="sn" data-f="sn">{{ loop.index }}</td>{% for f, val in [('party_name', m.party_name or m.party or ''), ('model_code', m.model_code or ''), ('party_code', m.party_code or ''),
                             ('pcb_len', m.pcb_len or ''), ('pcb_w', m.pcb_w or ''),
-                            ('panel_len', m.panel_len or ''), ('panel_w', m.panel_w or ''), ('pcs_panel', m.pcs_panel or ''),
+                            ('panel_len', m.panel_len or ''), ('panel_w', m.panel_w or ''), ('pcs_panel', m.pcs_panel or ''), ('actual_len', m.actual_len or ''), ('actual_w', m.actual_w or ''), ('actual_ups', m.actual_ups or ''),
                             ('cutting_len', m._c4a if m._c4a is not none else (m.cutting_len or '')), ('x_qty', m._cn4a if m._cn4a is not none else (m.x_qty or '')), ('cutting_w', m._c4b if m._c4b is not none else (m.cutting_w or '')), ('y_qty', m._cn4b if m._cn4b is not none else (m.y_qty or '')),
                             ('panels_sheet', m._cups if m._cups is not none else (m.panels_sheet or '')), ('cnc_tool', m.cnc_tool or ''),
                             ('per_sq_inch', m.per_sq_inch or m._crate or ''), ('sheet_thickness', m.sheet_thickness or ''), ('pcb_price', m.pcb_price or m._cprice or '')] %}<td class="sc" data-f="{{ f }}"{% if f in ('per_sq_inch', 'pcb_price') and m._csq %} data-sq="{{ m._csq }}"{% endif %}>{{ '' if val is none else (val|numfmt if f in NF18 else val) }}</td>{% endfor %}{% for c in m._ccr %}<td class="sc" data-f="cc_{{ c.id }}"{% if c.span > 1 %} colspan="{{ c.span }}" style="text-align:center;font-weight:800;background:#fefce8" title="MERGED — double-click = alag karo"{% endif %}>{{ m['cc_' ~ c.id] }}</td>{% endfor %}<td class="fs{{ ' z' if (m.fg_stock or 0) > 0 else '' }}" data-f="fg_stock">{{ m.fg_stock or 0 }}</td><td class="del" data-f="__del"><button type="button" class="mdel97" data-id="{{ m.id }}" title="Is model ko SHEET se hatao">&#128465;</button></td></tr>
@@ -224,8 +228,8 @@
   /* ===== v4.18: UNDO + column align + party filter + search (Excel jaisa) ===== */
   var ALIGN18 = {{ align_prefs|tojson }} || {};
   var LBL18 = {party_name:'PARTY', model_code:'MODEL NO.', party_code:'PARTY CODE', pcb_len:'X', pcb_w:'Y',
-               panel_len:'L', panel_w:'W', pcs_panel:'PCS', cutting_len:'4a', x_qty:'N (4a)', cutting_w:'4b',
-               y_qty:'N (4b)', panels_sheet:'UPS', cnc_tool:'CNC/TOOL', per_sq_inch:'PER SQ INCH',
+               panel_len:'L', panel_w:'W', pcs_panel:'UPS', actual_len:'L', actual_w:'W', actual_ups:'UPS',
+               cutting_len:'48', x_qty:'P1', cutting_w:'40', y_qty:'P2', panels_sheet:'UPS', cnc_tool:'CNC/TOOL', per_sq_inch:'PER SQ INCH',
                sheet_thickness:'MATERIAL', pcb_price:'PRICE', fg_stock:'FIN. STOCK'};
   function toast18(msg, bad){
     var t = document.getElementById('shToast');
@@ -723,12 +727,15 @@
   var LBL31 = (typeof P31.colLabels === 'object' && P31.colLabels) || {};
   var ORD31 = (typeof P31.colOrder === 'object' && P31.colOrder) || {};
   var GRP31 = {pcb_len: ['pcb_len', 'pcb_w'], panel_len: ['panel_len', 'panel_w', 'pcs_panel'],
+               actual_len: ['actual_len', 'actual_w', 'actual_ups'],
                cutting_len: ['cutting_len', 'x_qty', 'cutting_w', 'y_qty']};
   var LBLF31 = {party_name: 'PARTY', model_code: 'MODEL NO.', party_code: 'PARTY CODE', pcb_len: 'X', pcb_w: 'Y',
-                panel_len: 'L', panel_w: 'W', pcs_panel: 'PCS', cutting_len: '4A', x_qty: 'N (4a)', cutting_w: '4B',
-                y_qty: 'N (4b)', panels_sheet: 'UPS', cnc_tool: 'CNC/TOOL', per_sq_inch: 'PER SQ INCH',
+                panel_len: 'L', panel_w: 'W', pcs_panel: 'UPS', actual_len: 'L', actual_w: 'W', actual_ups: 'UPS',
+                cutting_len: '48', x_qty: 'P1', cutting_w: '40', y_qty: 'P2', panels_sheet: 'UPS',
+                cnc_tool: 'CNC/TOOL', per_sq_inch: 'PER SQ INCH',
                 sheet_thickness: 'MATERIAL', pcb_price: 'PRICE', fg_stock: 'FIN. STOCK', __del: 'DEL', sn: 'S.N',
-                grp_pcb_len: 'SINGLE PCB SIZE', grp_panel_len: 'SINGLE PANEL', grp_cutting_len: 'CUTTING SIZE'};
+                grp_pcb_len: 'SINGLE PCB SIZE', grp_panel_len: 'SINGLE PANEL', grp_actual_len: 'ACTUAL PANEL SIZE',
+                grp_cutting_len: 'CUTTING SIZE'};
   function tok31(){ return (document.cookie.match(/(?:^|; )token=([^;]*)/) || [])[1] || (window.T ? window.T() : ''); }
   function save31(key, val){
     var b = {}; b[key] = val;
@@ -780,13 +787,24 @@
     });
   }
   Object.keys(GRP31).forEach(function(g){ if (!LFS31[g]) LFS31[g] = GRP31[g].slice(); });
+  /* v4.37: naye columns purane saved colOrder me bhi a jayen (DEFORD31 position par insert) */
+  DEFORD31.forEach(function(k){
+    if (TOP31.indexOf(k) < 0){
+      var at = -1;
+      for (var q = DEFORD31.indexOf(k) - 1; q >= 0; q--){
+        var ti = TOP31.indexOf(DEFORD31[q]);
+        if (ti >= 0){ at = ti + 1; break; }
+      }
+      TOP31.splice(at < 0 ? TOP31.length : at, 0, k);
+    }
+  });
   /* v4.31: TRUE default order (template ka static order — cc_ beech me; Reset isi par wapas) */
   var CC31D = [];
   cg31.querySelectorAll('col').forEach(function(c){
     var f = c.getAttribute('data-f') || '';
     if (f.indexOf('cc_') === 0) CC31D.push(f);
   });
-  var DEFORD31 = ['__sel', 'sn', 'party_name', 'model_code', 'party_code', 'grp:pcb_len', 'grp:panel_len', 'grp:cutting_len',
+  var DEFORD31 = ['__sel', 'sn', 'party_name', 'model_code', 'party_code', 'grp:pcb_len', 'grp:panel_len', 'grp:actual_len', 'grp:cutting_len',
                   'panels_sheet', 'cnc_tool', 'per_sq_inch', 'sheet_thickness', 'pcb_price'].concat(CC31D).concat(['fg_stock', '__del']);
   function tm31(){
     var m = {};

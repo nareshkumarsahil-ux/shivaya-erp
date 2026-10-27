@@ -2785,6 +2785,7 @@ def products():
     _w, _prm = [], []
     # v4.32: EXCEL JAISI SHEETS — sheet_id par filter + tabs ka data
     _ensure_sheet31()
+    _ensure_actual37()
     db.execute("CREATE TABLE IF NOT EXISTS sheet_prefs (k TEXT PRIMARY KEY, v TEXT DEFAULT '')")
     _doc32 = {}
     _r32 = db.query("SELECT v FROM sheet_prefs WHERE k='align'", one=True)
@@ -4830,9 +4831,11 @@ _SHEET_FIELDS = {"model_code": str, "name": str, "party_code": str, "party_name"
                  "pcb_len": float, "pcb_w": float, "panel_len": float, "panel_w": float,
                  "pcs_panel": int, "cutting_len": float, "cutting_w": float,
                  "x_qty": int, "y_qty": int, "panels_sheet": int, "sheets": int,
-                 "sheet_thickness": str, "per_sq_inch": float, "pcb_price": float, "cnc_tool": str}
+                 "sheet_thickness": str, "per_sq_inch": float, "pcb_price": float, "cnc_tool": str,
+                 "actual_len": float, "actual_w": float, "actual_ups": int}  # v4.37: ACTUAL PANEL SIZE
 _SHEET_LABELS = {"model_code": "MODEL NO.", "name": "TYPE", "party_code": "PARTY CODE", "party_name": "PARTY",
-                 "pcb_len": "X", "pcb_w": "Y", "panel_len": "L", "panel_w": "W", "pcs_panel": "PCS",
+                 "pcb_len": "X", "pcb_w": "Y", "panel_len": "L", "panel_w": "W", "pcs_panel": "UPS",
+                 "actual_len": "ACTUAL L", "actual_w": "ACTUAL W", "actual_ups": "ACTUAL UPS",  # v4.37
                  "cutting_len": "4a", "cutting_w": "4b", "x_qty": "N (4a)", "y_qty": "N (4b)",
                  "panels_sheet": "UPS", "sheets": "SHEETS", "sheet_thickness": "MATERIAL",
                  "per_sq_inch": "PER SQ INCH", "pcb_price": "PRICE", "cnc_tool": "CNC/TOOL"}
@@ -4856,32 +4859,37 @@ def _numfmt18(v):
 @login_required
 @admin_required
 def products_sheet_download():
-    """v4.17: SHEET download — user ki Excel ka EXACT naya format (2-row group header:
-    SINGLE PCB SIZE (X,Y) / SINGLE PANEL (L,W,PCS) / CUTTING SIZE (4a,N,4b,N) / UPS /
-    CNC/TOOL / PER SQ INCH / MATERIAL / PRICE). Re-upload isi tarah round-trip hota hai."""
+    """v4.17 -> v4.37: SHEET download — user ki Excel ka EXACT naya format (2-row group header:
+    SINGLE PCB SIZE (X,Y) / SINGLE PANEL (L,W,UPS) / ACTUAL PANEL SIZE (L,W,UPS) /
+    CUTTING SIZE (48,P1,40,P2) / UPS / CNC/TOOL / PER SQ INCH / MATERIAL / PRICE)."""
+    _ensure_actual37()
     from openpyxl import Workbook
     from io import BytesIO as _BIO
     rows = db.query("SELECT * FROM product_models ORDER BY id")
     wb = Workbook()
     ws = wb.active
     ws.title = "SIZE SHEET"
-    grp = ["", "", "", "", "SINGLE PCB SIZE", "", "SINGLE PANEL", "", "", "CUTTING SIZE", "", "", "", "", "", "", "", ""]
-    sub = ["S.N.", "PARTY", "MODEL NO.", "PARTY CODE", "X", "Y", "L", "W", "PCS", "4a", "N", "4b", "N",
-           "UPS", "CNC/TOOL", "PER SQ INCH", "MATERIAL", "PRICE"]
+    grp = ["", "", "", "", "SINGLE PCB SIZE", "", "SINGLE PANEL", "", "", "ACTUAL PANEL SIZE", "", "",
+           "CUTTING SIZE", "", "", "", "UPS", "CNC/TOOL", "PER SQ INCH", "MATERIAL", "PRICE"]
+    sub = ["S.N.", "PARTY", "MODEL NO.", "PARTY CODE", "X", "Y", "L", "W", "UPS", "L", "W", "UPS",
+           "48", "P1", "40", "P2", "UPS", "CNC/TOOL", "PER SQ INCH", "MATERIAL", "PRICE"]
     ws.append(grp)
     ws.append(sub)
     from openpyxl.styles import Font, Alignment
-    for c in ("E1", "G1", "J1"):
+    for c in ("E1", "G1", "J1", "M1"):
         ws[c].font = Font(bold=True)
         ws[c].alignment = Alignment(horizontal="center")
     ws.merge_cells("E1:F1")
     ws.merge_cells("G1:I1")
-    ws.merge_cells("J1:M1")
+    ws.merge_cells("J1:L1")
+    ws.merge_cells("M1:P1")
     for _i, m in enumerate(rows, 1):
         ws.append([_i, m["party_name"] or m["party"] or "", m["model_code"] or m["name"] or "", m["party_code"] or "",
                    m["pcb_len"] if m["pcb_len"] is not None else "", m["pcb_w"] if m["pcb_w"] is not None else "",
                    m["panel_len"] if m["panel_len"] is not None else "", m["panel_w"] if m["panel_w"] is not None else "",
                    m["pcs_panel"] if m["pcs_panel"] is not None else "",
+                   m["actual_len"] if m["actual_len"] is not None else "", m["actual_w"] if m["actual_w"] is not None else "",
+                   m["actual_ups"] if m["actual_ups"] is not None else "",
                    m["cutting_len"] if m["cutting_len"] is not None else "", m["x_qty"] if m["x_qty"] is not None else "",
                    m["cutting_w"] if m["cutting_w"] is not None else "", m["y_qty"] if m["y_qty"] is not None else "",
                    m["panels_sheet"] if m["panels_sheet"] is not None else "",
@@ -5127,6 +5135,20 @@ def _ensure_sheet31():
 
 
 _CUT_GROUP30 = ("cutting_len", "cutting_w", "x_qty", "y_qty", "panels_sheet")
+
+
+def _ensure_actual37():
+    """v4.37: ACTUAL PANEL SIZE (L/W/UPS) columns — PRAGMA self-heal (user Excel layout)."""
+    try:
+        _h37 = {r["name"] for r in db.query("PRAGMA table_info(product_models)")}
+        if "actual_len" not in _h37:
+            db.execute("ALTER TABLE product_models ADD COLUMN actual_len REAL DEFAULT 0")
+        if "actual_w" not in _h37:
+            db.execute("ALTER TABLE product_models ADD COLUMN actual_w REAL DEFAULT 0")
+        if "actual_ups" not in _h37:
+            db.execute("ALTER TABLE product_models ADD COLUMN actual_ups INTEGER DEFAULT 0")
+    except Exception:
+        pass
 
 
 @app.route("/api/products/sheet/calc_cut", methods=["POST"])
