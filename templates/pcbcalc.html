@@ -74,6 +74,7 @@
             <div class="field" style="width:230px"><label>NOTE / PARTY (history ke liye, optional)</label><input name="party" id="pccParty" placeholder="e.g. ALLIED sample rate"></div>
             <button class="btn btn-outline btn-sm" type="button" onclick="pccClear()" title="Sab khaali">🧹 Clear</button>
             <button class="btn btn-sm" type="submit" style="background:#16a34a">💾 SAVE TO HISTORY</button>
+            <button class="btn btn-sm" type="button" id="pccModelUpd33" style="background:#4338ca" title="RATE + PRICE upar chune model ke SIZE MASTER me likh dega">&#128190; MODEL UPDATE</button>
           </div>
           <div class="muted small" style="margin-top:8px">💡 PRICE edit karoge to <b>RATE khud naya niklega</b> — aur RATE badlaoge to PRICE. Dono taraf chalta hai.</div>
         </div>
@@ -244,6 +245,35 @@ function pccModelFill(){
   document.getElementById('pccWid').value = _W29 || '';
   document.getElementById('pccPcs').value = _P29 || '';
   document.getElementById('pccValRate').value = (g('data-rate') > 0 ? g('data-rate') : '');
+  /* v4.33: MODEL UPDATE — RATE+PRICE master me (history ke alawa asli save) */
+  var _upd33 = document.getElementById('pccModelUpd33');
+  if (_upd33) _upd33.addEventListener('click', function(){
+    var sel = document.getElementById('pccModel');
+    var mid = sel ? sel.value : '';
+    if (!mid){ toast33('Pehle MODEL SE BHARO — model chuno', true); return; }
+    var rate = parseFloat(document.getElementById('pccValRate').value) || 0;
+    var price = parseFloat(document.getElementById('pccValPrice').value) || 0;
+    if (rate <= 0 && price <= 0){ toast33('RATE ya PRICE me se koi ek bharo', true); return; }
+    _upd33.disabled = true;
+    var t33 = (document.cookie.match(/(?:^|; )token=([^;]*)/) || [])[1] || '';
+    fetch('/api/products/sheet/calc_update?token=' + encodeURIComponent(t33), {method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({model_id: mid, rate: rate, price: price})})
+      .then(function(r){ return r.json(); })
+      .then(function(d){
+        _upd33.disabled = false;
+        if (d.ok) toast33('MODEL UPDATE: ' + d.model + ' \u2014 RATE ' + d.rate + ' + PRICE ' + d.price + ' SIZE MASTER me save');
+        else toast33(d.error || 'Update fail', true);
+      }).catch(function(){ _upd33.disabled = false; toast33('Network fail', true); });
+  });
+  function toast33(msg, bad){
+    var t = document.getElementById('pccToast33');
+    if (!t){ t = document.createElement('div'); t.id = 'pccToast33';
+      t.style.cssText = 'position:fixed;top:14px;right:14px;z-index:9999;padding:10px 14px;border-radius:10px;font-size:12.5px;font-weight:600;box-shadow:0 6px 18px rgba(0,0,0,.18)';
+      document.body.appendChild(t); }
+    t.style.background = bad ? '#fee2e2' : '#dcfce7'; t.style.color = bad ? '#b91c1c' : '#15803d';
+    t.textContent = msg; t.style.display = 'block';
+    clearTimeout(t._h); t._h = setTimeout(function(){ t.style.display = 'none'; }, 4500);
+  }
   document.getElementById('pccValPrice').value = '';
   pccLastVal = 'rate';
   pccCalc(); pccDisp();

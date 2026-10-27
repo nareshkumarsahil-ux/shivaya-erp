@@ -5095,6 +5095,32 @@ def sheet_ops32():
     return jsonify(ok=True, sheets=sheets)
 
 
+@app.route("/api/products/sheet/calc_update", methods=["POST"])
+@login_required
+@admin_required
+def sheet_calc_update33():
+    """v4.33: PCB CALCULATOR -> MODEL UPDATE — RATE (per_sq_inch) + PRICE (pcb_price) seedha SIZE MASTER me."""
+    j = request.get_json(silent=True) or {}
+    try:
+        mid = int(j.get("model_id") or 0)
+    except (TypeError, ValueError):
+        mid = 0
+    if not mid:
+        return jsonify(ok=False, error="Pehle MODEL SE BHARO — kisi model ke saath hi update hota hai.")
+    m = db.query("SELECT id, name FROM product_models WHERE id=?", (mid,), one=True)
+    if not m:
+        return jsonify(ok=False, error="Model nahi mila.")
+    try:
+        rate = float(j.get("rate") or 0)
+        price = float(j.get("price") or 0)
+    except (TypeError, ValueError):
+        return jsonify(ok=False, error="RATE/PRICE number honi chahiye.")
+    if rate <= 0 and price <= 0:
+        return jsonify(ok=False, error="RATE ya PRICE me se koi ek bharo.")
+    db.execute("UPDATE product_models SET per_sq_inch=?, pcb_price=? WHERE id=?", (rate, price, mid))
+    return jsonify(ok=True, model=m["name"], rate=round(rate, 3), price=round(price, 2))
+
+
 @app.route("/api/products/sheet/custom_col", methods=["POST"])
 @login_required
 @admin_required
