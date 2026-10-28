@@ -104,7 +104,7 @@
       <div class="panel-head"><h3><span class="badge b-blue">2</span> PRODUCT SELECT <span class="muted small" style="font-weight:400">— select karte hi saari details yahin aa jayengi</span></h3></div>
       <div class="panel-body">
         <div class="field">
-          <label>FINISHED PRODUCT — <b style="color:#b91c1c">zaroori</b> (isi se saari details auto aati hai)</label>
+          <label>FINISHED PRODUCT — <b style="color:#b91c1c">zaroori</b> (type karke model no / naam dhoondo — select karte hi saari details auto)</label>
           <select name="product_id" id="prodSel" required>
             <option value="">— Select product —</option>
             {% for m in models %}
@@ -319,7 +319,19 @@
 
 <script>
 /* ---- product select → saari details + thickness ---- */
+
 var selM = {};  // current model data
+(function(){
+  var f = document.getElementById('jcForm');
+  if (!f) return;
+  f.addEventListener('submit', function(ev){
+    var ps = document.getElementById('prodSel');
+    if (ps && ps.dataset.wasRequired === '1' && !ps.value) {
+      ev.preventDefault();
+      alert('FINISHED PRODUCT chuno — type karke model no / naam likho, match par click karo.');
+    }
+  });
+})();
 document.getElementById('prodSel').addEventListener('change', function(){
   var o = this.options[this.selectedIndex];
   var box = document.getElementById('prodDetails');

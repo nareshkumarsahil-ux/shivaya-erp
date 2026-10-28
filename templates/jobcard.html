@@ -176,9 +176,9 @@
       <div class="field"><label>MODEL</label>
         <select name="model" id="jc_model">
           <option value="">— Select model —</option>
-          {% for m in models %}{% if m.model_code %}
-          <option value="{{ m.model_code }}" {{'selected' if jc.model == m.model_code}}>{{ m.model_code }}</option>
-          {% endif %}{% endfor %}
+          {% for m in models %}
+          <option value="{{ m.model_code or m.name }}" {{'selected' if jc.model == (m.model_code or m.name)}}>{{ m.model_code or '(no code)' }} · {{ m.name }}</option>
+          {% endfor %}
           {% if md_extra %}<option value="{{ jc.model }}" selected>{{ jc.model }} (custom)</option>{% endif %}
         </select>
       </div>
@@ -965,6 +965,7 @@ function doApplyFlow(side, mat){
   });
 });
 
+
 /* ---- party model dropdown: finished product autofill ---- */
 function applyPartyModelFill(opt){
   if (!opt || !opt.getAttribute('data-pcbx')) return;
@@ -1037,6 +1038,8 @@ function applyPartyModelFill(opt){
       if (msel.options[i].value === code) { msel.selectedIndex = i; break; }
     }
   }
+  /* v4.46: sheets bhi auto (ceil(qty_panel / panels_per_sheet)) */
+  if (typeof jcAutoSheets === 'function') jcAutoSheets();
   autoQty();
   calcPcbPrice();
   if (document.getElementById('printArea').style.display === 'block') syncPreview();
@@ -1057,7 +1060,7 @@ document.getElementById('jc_party_model').addEventListener('change', function(){
     var pm = document.getElementById('jc_party_model');
     if (!code || !pm) return;
     for (var i = 0; i < pm.options.length; i++) {
-      if ((pm.options[i].getAttribute('data-code') || '') === code) {
+      if ((pm.options[i].getAttribute('data-code') || '') === code || pm.options[i].value === code) {
         pm.selectedIndex = i;
         applyPartyModelFill(pm.options[i]);
         break;
@@ -1406,7 +1409,17 @@ function recomputeBom(){
   });
 }
 document.getElementById('jc_qty_panel').addEventListener('input', autoQty);
+document.getElementById('jc_qty_panel').addEventListener('input', function(){ jcAutoSheets(); });
+document.getElementById('jc_panels_per_sheet').addEventListener('input', function(){ jcAutoSheets(); });
 document.getElementById('jc_pcs_panel').addEventListener('input', autoQty);
+/* v4.46: LOAD-TIME PASS — purana order khula to TOTAL PANEL/SHEET turant auto (event ka intezar nahi) */
+(function(){
+  var qp = parseInt(val('jc_qty_pcs')) || 0, pp = parseInt(val('jc_pcs_panel')) || 0;
+  var pel = document.getElementById('jc_qty_panel');
+  if (qp > 0 && pp > 0 && pel && !(parseInt(pel.value) > 0)) pel.value = String(Math.ceil(qp / pp));
+  jcAutoSheets();
+  if (typeof jcCalcStrip === 'function') jcCalcStrip();
+})();
 var jcQ = document.getElementById('jc_qty_pcs');
 if (jcQ) jcQ.addEventListener('input', recomputeBom);
 autoQty();

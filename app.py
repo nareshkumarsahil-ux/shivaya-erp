@@ -7771,6 +7771,9 @@ def jobcard(order_id):
         _sets.append("total_qty=?"); _vals.append(qty_pcs)
     if qty_pcs > 0 and _jc_pps > 0 and _jc_pan != math.ceil(qty_pcs / _jc_pps):
         _sets.append("qty_panel=?"); _vals.append(math.ceil(qty_pcs / _jc_pps))
+    # v4.46: TOTAL SHEET bhi auto — ceil(qty_panel / panels_per_sheet) (blank ho to)
+    if (jc["sheets"] or 0) <= 0 and (jc["panels_per_sheet"] or 0) > 0 and _jc_pan > 0:
+        _sets.append("sheets=?"); _vals.append(math.ceil(_jc_pan / jc["panels_per_sheet"]))
     if _sets:
         _vals.append(order_id)
         db.execute(f"UPDATE jobcard SET {', '.join(_sets)} WHERE order_id=?", tuple(_vals))
