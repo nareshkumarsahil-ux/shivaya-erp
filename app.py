@@ -592,6 +592,296 @@ def kanban_col(process):
     return 5
 
 
+
+@app.route("/products/pcbflow_export")
+@login_required
+@admin_required
+def products_pcbflow_export():
+    """v4.47: SIZE MASTER -> PCBFLOW ka import-format Excel (model, party, x_size, x_fit,
+    y_size, y_fit, ups, product_type, material, process, po_price, v_groove, serial, remarks).
+    Ye file seedha PCBFlow ke Size Master IMPORT me upload hoti hai — wahan mapping khud ho jati hai."""
+    _ensure_actual37()
+    from openpyxl import Workbook
+    from io import BytesIO as _BIO47
+    rows = db.query("SELECT * FROM product_models ORDER BY name")
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "masters"
+    ws.append(["model", "party", "x_size", "x_fit", "y_size", "y_fit", "ups",
+               "product_type", "material", "process", "po_price", "v_groove", "serial", "remarks"])
+    _n47 = 0
+    for m in rows:
+        _mcode = (m["model_code"] or "").strip() or (m["name"] or "").strip()
+        if not _mcode:
+            continue
+        ws.append([
+            _mcode,
+            (m["party_name"] or m["party"] or "").strip() or None,
+            float(m["cutting_len"] or 0) or float(m["panel_len"] or 0) or None,
+            int(m["x_qty"] or 0) or None,
+            float(m["cutting_w"] or 0) or float(m["panel_w"] or 0) or None,
+            int(m["y_qty"] or 0) or None,
+            int(m["pcs_panel"] or 0) or None,
+            (m["shape"] or "").strip() or None,
+            (m["sheet_thickness"] or "").strip() or None,
+            (m["cnc_tool"] or "").strip() or None,
+            float(m["pcb_price"] or 0) or None,
+            "",
+            m["id"],
+            (m["note"] or "").strip() or None,
+        ])
+        _n47 += 1
+    out = _BIO47()
+    wb.save(out)
+    return Response(out.getvalue(), mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    headers={"Content-Disposition": f"attachment; filename=PCBFLOW_SIZE_MASTER_{_today_ist().isoformat()}.xlsx"})
+
+
+_PCFLOW_ORDER_ALIASES = {
+    "model": ["model", "modelno", "modelnumber"],
+    "qty": ["qty", "requiredqty", "requiredpcs", "requiredquantity", "requiredpo", "pcs"],
+    "party": ["party", "partyname"],
+    "order_no": ["orderno", "ordernumber"],
+    "po_no": ["pono", "partypo", "partypono"],
+    "odate": ["orderdate", "orderd", "orderdt", "date"],
+    "delivery": ["deliverydate", "delivery", "duedate", "expdelivery"],
+}
+
+
+def _pcflow_norm_hdr(h):
+    return re.sub(r"[^a-z0-9]", "", str(h or "").lower())
+
+
+@app.route("/orders/pcbflow_import", methods=["POST"])
+@login_required
+@admin_required
+def orders_pcflow_import():
+    """v4.47: PCBFLOW ka job-card/order Excel -> ERP job orders (SIZE MASTER se model auto-join)."""
+    from openpyxl import load_workbook
+    fl = request.files.get("pcbflow_file")
+    if not fl or not fl.filename:
+        flash("PCBFLOW file nahi mili — Excel choose karke IMPORT dabao.", "error")
+        return redirect_with_token(url_for("orders"))
+    try:
+        wb = load_workbook(fl, data_only=True, read_only=True)
+    except Exception:
+        flash("Ye file Excel nahi khul rahi — PCBFLOW ka .xlsx export hi daalo.", "error")
+        return redirect_with_token(url_for("orders"))
+    ws = wb.active
+    try:
+        rows = list(ws.iter_rows(values_only=True))
+    except Exception:
+        rows = []
+    if not rows:
+        flash("File khali hai.", "error")
+        return redirect_with_token(url_for("orders"))
+    _hidx = None
+    for i, r in enumerate(rows[:6]):
+        cells = [_pcflow_norm_hdr(c) for c in r if c is not None]
+        if any(c in ("model", "modelno", "modelnumber") for c in cells):
+            _hidx = i
+            break
+    if _hidx is None:
+        flash("Model wala column nahi mila — PCBFLOW ka export xlsx hi daalo.", "error")
+        return redirect_with_token(url_for("orders"))
+    hdr = [_pcflow_norm_hdr(c) for c in rows[_hidx]]
+    col = {}
+    for key, aliases in _PCFLOW_ORDER_ALIASES.items():
+        # pass 1: exact alias match
+        for j, h in enumerate(hdr):
+            if h and h in aliases:
+                col[key] = j
+                break
+        if key in col:
+            continue
+        # pass 2 (v4.47): fuzzy — PCBFlow ke lambе headers jaise 'requiredpcbquantity' bhi pakdo
+        _kw = {"model": ["model"], "qty": ["qty", "quantity", "pcs"], "party": ["party"],
+               "order_no": ["orderno", "ordernumber"], "po_no": ["pono", "partypono"],
+               "odate": ["orderdate"], "delivery": ["deliverydate", "duedate", "expdelivery"]}
+        for j, h in enumerate(hdr):
+            if h and any(k in h for k in _kw.get(key, [])):
+                col[key] = j
+                break
+    if "model" not in col or "qty" not in col:
+        flash("Model + Qty columns nahi mile — PCBFLOW export me dono hote hai, file check karo.", "error")
+        return redirect_with_token(url_for("orders"))
+    made, skip_no_model, skip_dup = [], [], []
+    _skip_qty = 0
+    for r in rows[_hidx + 1:]:
+        if r is None:
+            continue
+        _mv = r[col["model"]] if col["model"] < len(r) else None
+        _model = str(_mv or "").strip()
+        if not _model:
+            continue
+        _qv = r[col["qty"]] if col["qty"] < len(r) else None
+        try:
+            _qty = int(float(_qv or 0))
+        except (TypeError, ValueError):
+            _qty = 0
+        if _qty <= 0:
+            _skip_qty += 1
+            continue
+        pmodel = db.query("SELECT * FROM product_models WHERE LOWER(TRIM(model_code))=? OR LOWER(TRIM(name))=?",
+                          (_model.lower(), _model.lower()), one=True)
+        if not pmodel:
+            skip_no_model.append(_model)
+            continue
+        _party = str(r[col["party"]] or "").strip() if col.get("party") is not None and col["party"] < len(r) else ""
+        if not _party:
+            _party = (pmodel["party_name"] or pmodel["party"] or "").strip()
+        _deld = ""
+        if col.get("delivery") is not None and col["delivery"] < len(r) and r[col["delivery"]]:
+            _deld = str(r[col["delivery"]])[:10]
+        dup = db.query("SELECT o.id FROM orders o JOIN jobcard j ON j.order_id=o.id "
+                       "WHERE j.party_model=? AND o.qty=? AND o.status='pending' LIMIT 1",
+                       (pmodel["name"], _qty), one=True)
+        if dup:
+            skip_dup.append(_model)
+            continue
+        count = db.query("SELECT COUNT(*) c FROM orders", one=True)["c"]
+        prod_display = f"{pmodel['name']} - {pmodel['model_code'] or ''}".strip(" -")
+        new_id = db.execute(
+            "INSERT INTO orders (order_no, party, board, product, qty, value, current_process, status, progress, priority, delivery_date, operator, started_qty, finished_qty, created_on, qty_panel, pcs_panel) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            (f"#{count + 1}", _party or "-", "Single Side",
+             f"{prod_display} · {_qty} pcs", _qty,
+             round(float(pmodel["pcb_price"] or 0) * _qty, 2),
+             PROCESS_STEPS[0], "pending", 0, "normal", _deld, "", 0, 0, _now_dt(),
+             math.ceil(_qty / pmodel["pcs_panel"]) if pmodel["pcs_panel"] else 0,
+             pmodel["pcs_panel"] or 0))
+        db.execute(
+            "INSERT OR IGNORE INTO jobcard (order_id, party_model, model, odate, exp_delivery, price, total_qty, "
+            "actual_pcb_x, actual_pcb_y, panel_x, panel_y, panels_per_sheet, sheets, pcs_panel, sheet_len, sheet_w) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            (new_id, pmodel["name"], pmodel["model_code"] or "", _now_dt(), _deld,
+             float(pmodel["pcb_price"] or 0), _qty,
+             pmodel["pcb_len"], pmodel["pcb_w"], pmodel["panel_len"], pmodel["panel_w"],
+             pmodel["panels_sheet"], pmodel["sheets"], pmodel["pcs_panel"],
+             pmodel["sheet_len"], pmodel["sheet_w"]))
+        made.append(f"{_model} x{_qty}")
+    msg = f"PCBFLOW IMPORT: {len(made)} job order ban gaye" + (": " + ", ".join(made[:8]) if made else "")
+    if skip_no_model:
+        msg += f" | {len(skip_no_model)} SKIP (SIZE MASTER me model nahi mila: {', '.join(skip_no_model[:5])})"
+    if skip_dup:
+        msg += f" | {len(skip_dup)} SKIP (pending duplicate)"
+    if _skip_qty:
+        msg += f" | {_skip_qty} rows qty khali"
+    flash(msg, "success" if made else "error")
+    return redirect_with_token(url_for("orders"))
+
+
+
+@app.route("/orders/pcbflow_cfg", methods=["POST"])
+@login_required
+@admin_required
+def orders_pcflow_cfg():
+    """v4.48: PCBFLOW SETUP — base/username/password save (ek baar), phir PCBFLOW SE pull button."""
+    db.execute("CREATE TABLE IF NOT EXISTS pcbflow_cfg (k TEXT PRIMARY KEY, v TEXT DEFAULT '')")
+    for _k in ("base", "user", "pw"):
+        _v = (request.form.get("pcflow_" + _k) or "").strip()
+        if _k == "base":
+            _v = _v or "https://pcbflow.vercel.app"
+            if not _v.startswith("http"):
+                _v = "https://" + _v
+        if _v:
+            db.execute("INSERT INTO pcbflow_cfg (k, v) VALUES (?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v", (_k, _v))
+    flash("PCBFLOW SETUP save — ab PCBFLOW SE button dabao, job cards seedha yahan aa jayenge.", "success")
+    return redirect_with_token(url_for("orders"))
+
+
+@app.route("/orders/pcbflow_pull", methods=["POST"])
+@login_required
+@admin_required
+def orders_pcflow_pull():
+    """v4.48: PCBFLOW SE — PCBFlow ke job cards DIRECT pull (koi file nahi):
+    login -> /api/state -> orders[] -> model SIZE MASTER se join -> ERP job orders.
+    Dedupe: har PCBFlow card ka apna id pcflow_sync me — dobara pull par skip."""
+    db.execute("CREATE TABLE IF NOT EXISTS pcbflow_cfg (k TEXT PRIMARY KEY, v TEXT DEFAULT '')")
+    db.execute("CREATE TABLE IF NOT EXISTS pcflow_sync (jf_id TEXT PRIMARY KEY, order_id INTEGER, imported_on TEXT)")
+    cfg = {r["k"]: (r["v"] or "") for r in db.query("SELECT k, v FROM pcbflow_cfg")}
+    base = (cfg.get("base") or "https://pcbflow.vercel.app").rstrip("/")
+    _u48, _p48 = cfg.get("user") or "", cfg.get("pw") or ""
+    if not _u48 or not _p48:
+        flash("Pehle PCBFLOW SETUP me username + password daalo (Job Orders page par PCBFLOW SETUP panel hai).", "error")
+        return redirect_with_token(url_for("orders"))
+    import requests as _req48
+    try:
+        _s48 = _req48.Session()
+        _r48 = _s48.post(base + "/api/login", json={"username": _u48, "password": _p48}, timeout=25)
+        _tok48 = (_r48.json() or {}).get("token") or "" if _r48.status_code == 200 else ""
+        if not _tok48:
+            flash("PCBFLOW login fail — SETUP me username/password check karo.", "error")
+            return redirect_with_token(url_for("orders"))
+        _r2_48 = _s48.get(base + "/api/state", headers={"Authorization": "Bearer " + _tok48}, timeout=25)
+        if _r2_48.status_code != 200:
+            flash("PCBFLOW state nahi mili (" + str(_r2_48.status_code) + ") — ek baar aur dabao (cold-start hota hai).", "error")
+            return redirect_with_token(url_for("orders"))
+        _pf_orders = (_r2_48.json() or {}).get("orders") or []
+    except Exception:
+        flash("PCBFLOW se baat nahi hui (slow/cold-start) — thoda ruk ke ek baar aur dabao.", "error")
+        return redirect_with_token(url_for("orders"))
+    made, skip_no_model, skip_dup = [], [], []
+    _qty_empty48 = 0
+    for _o48 in _pf_orders:
+        if not isinstance(_o48, dict):
+            continue
+        _jf48 = str(_o48.get("id") or "").strip()
+        if not _jf48:
+            continue
+        if db.query("SELECT 1 x FROM pcflow_sync WHERE jf_id=?", (_jf48,), one=True):
+            skip_dup.append("#" + str(_o48.get("order_no") or _jf48[:8]))
+            continue
+        _snap48 = _o48.get("master_snapshot") or {}
+        _model48 = str(_snap48.get("model") or _o48.get("model") or "").strip()
+        try:
+            _qty48 = int(float(_o48.get("required_qty") or 0))
+        except (TypeError, ValueError):
+            _qty48 = 0
+        if not _model48 or _qty48 <= 0:
+            _qty_empty48 += 1
+            continue
+        pmodel = db.query("SELECT * FROM product_models WHERE LOWER(TRIM(model_code))=? OR LOWER(TRIM(name))=?",
+                          (_model48.lower(), _model48.lower()), one=True)
+        if not pmodel:
+            skip_no_model.append(_model48)
+            continue
+        _party48 = str(_snap48.get("party") or _o48.get("party") or "").strip() or (pmodel["party_name"] or pmodel["party"] or "").strip() or "-"
+        _deld48 = str(_o48.get("due_date") or _o48.get("delivery_date") or "")[:10]
+        count = db.query("SELECT COUNT(*) c FROM orders", one=True)["c"]
+        prod_display = f"{pmodel['name']} - {pmodel['model_code'] or ''}".strip(" -")
+        new_id = db.execute(
+            "INSERT INTO orders (order_no, party, board, product, qty, value, current_process, status, progress, priority, delivery_date, operator, started_qty, finished_qty, created_on, qty_panel, pcs_panel) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            (f"#{count + 1}", _party48, "Single Side",
+             f"{prod_display} · {_qty48} pcs", _qty48,
+             round(float(pmodel["pcb_price"] or 0) * _qty48, 2),
+             PROCESS_STEPS[0], "pending", 0, "normal", _deld48, "", 0, 0, _now_dt(),
+             math.ceil(_qty48 / pmodel["pcs_panel"]) if pmodel["pcs_panel"] else 0,
+             pmodel["pcs_panel"] or 0))
+        db.execute(
+            "INSERT OR IGNORE INTO jobcard (order_id, party_model, model, odate, exp_delivery, price, total_qty, "
+            "actual_pcb_x, actual_pcb_y, panel_x, panel_y, panels_per_sheet, sheets, pcs_panel, sheet_len, sheet_w) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            (new_id, pmodel["name"], pmodel["model_code"] or "", _now_dt(), _deld48,
+             float(pmodel["pcb_price"] or 0), _qty48,
+             pmodel["pcb_len"], pmodel["pcb_w"], pmodel["panel_len"], pmodel["panel_w"],
+             pmodel["panels_sheet"], pmodel["sheets"], pmodel["pcs_panel"],
+             pmodel["sheet_len"], pmodel["sheet_w"]))
+        db.execute("INSERT OR IGNORE INTO pcflow_sync (jf_id, order_id, imported_on) VALUES (?,?,?)",
+                   (_jf48, new_id, _today_ist().isoformat()))
+        made.append(f"{_model48} x{_qty48}")
+    msg = f"PCBFLOW SE {len(made)} job card aaye" + (": " + ", ".join(made[:8]) if made else "")
+    if skip_dup:
+        msg += f" | {len(skip_dup)} pehle aa chuke (skip)"
+    if skip_no_model:
+        msg += f" | {len(skip_no_model)} SKIP (SIZE MASTER me model nahi: {', '.join(skip_no_model[:5])} — pehle SIZE MASTER me banao)"
+    if _qty_empty48:
+        msg += f" | {_qty_empty48} rows model/qty khali"
+    flash(msg, "success" if made else "error")
+    return redirect_with_token(url_for("orders"))
+
+
 @app.route("/orders", methods=["GET", "POST"])
 @login_required
 def orders():

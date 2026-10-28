@@ -13,6 +13,17 @@
 </div>
 {% endif %}
 
+{% if current_user_role == 'admin' %}
+<details class="panel no-print" style="border-left:4px solid #10b981;margin-bottom:10px">
+  <summary style="padding:10px 14px;font-weight:800;cursor:pointer;color:#047857">&#128279; PCBFLOW SETUP (ek baar karo — phir PCBFLOW SE button job cards khud kheench lega, file ki zaroorat nahi)</summary>
+  <form method="post" action="/orders/pcbflow_cfg" class="panel-body" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
+    <div class="field" style="flex:1;min-width:200px"><label>PCBFLOW LINK</label><input name="pcflow_base" value="https://pcbflow.vercel.app" placeholder="https://pcbflow.vercel.app"></div>
+    <div class="field" style="flex:1;min-width:140px"><label>PCBFLOW USERNAME</label><input name="pcflow_user" autocomplete="off"></div>
+    <div class="field" style="flex:1;min-width:140px"><label>PCBFLOW PASSWORD</label><input type="password" name="pcflow_pw" autocomplete="new-password"></div>
+    <button class="btn btn-sm" type="submit" style="background:#10b981;color:#fff;font-weight:800">SAVE SETUP</button>
+  </form>
+</details>
+{% endif %}
 <div class="toolbar no-print">
   <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
     <a class="tab {{'active' if filt=='active'}}" href="/orders?filter=active">Active orders</a>
@@ -26,6 +37,13 @@
       <button class="btn btn-outline btn-sm" type="submit">Search</button>
     </form>
     {% if current_user_role == 'admin' %}
+    <form method="post" action="/orders/pcbflow_pull" style="display:flex">
+      <button class="btn btn-outline btn-sm" type="submit" style="background:#eff6ff;color:#1d4ed8;border-color:#3b82f6;font-weight:800" title="PCBFLOW se naye job cards SEEDHA kheencho (SETUP ek baar karna hota hai)">&#11015;&#65039; PCBFLOW SE</button>
+    </form>
+    <form method="post" action="/orders/pcbflow_import" enctype="multipart/form-data" style="display:flex;gap:8px;align-items:center">
+      <input type="file" name="pcbflow_file" accept=".xlsx" required style="font-size:12px;max-width:200px">
+      <button class="btn btn-outline btn-sm" type="submit" style="background:#ecfdf5;color:#047857;border-color:#10b981;font-weight:800">&#128279; PCBFLOW IMPORT</button>
+    </form>
     <a class="btn" href="/po" style="background:#16a34a;color:#fff;font-weight:800">📄 PO se Job Card</a>
     {% endif %}
   </div>

@@ -59,6 +59,7 @@
     {% if A or 'purchases' in P %}<a href="/purchases" class="{{'active' if active=='purchases'}}">🛒 Purchases (Stock In)</a>{% endif %}
     {% if A or 'cutlist' in P %}<a href="/cutlist" class="{{'active' if active=='cutlist'}}">✂️ Cut List Optimizer</a>{% endif %}
     {% if A or 'pcbcalc' in P %}<a href="/pcbcalc" class="{{'active' if active=='pcbcalc'}}">💰 PCB Cost Calculator</a>{% endif %}
+    <a href="https://pcbflow.vercel.app" target="_blank" rel="noopener">&#128279; PCBFLOW &#8599;</a>
     {% if A or 'inventory' in P %}<a href="/inventory" class="{{'active' if active=='inventory'}}">🗄️ Inventory</a>{% endif %}
     {% if A or 'billing' in P %}<a href="/billing" class="{{'active' if active=='billing'}}">🧾 Billing</a>{% endif %}
     {% if A or 'proforma' in P %}<a href="/proforma" class="{{'active' if active=='proforma'}}">📄 Proforma (PI)</a>{% endif %}
@@ -86,7 +87,7 @@
     <div class="saved-note"><span class="dot"></span> All changes saved</div>
     <a href="/my-password" style="display:flex;align-items:center;gap:6px;font:700 12px Segoe UI,Arial;color:#cbd5e1;text-decoration:none;padding:6px 8px;border-radius:8px" onmouseover="this.style.background='rgba(255,255,255,.08)'" onmouseout="this.style.background='none'">🔑 Mera Password</a>
     <div class="user-chip">👤 {{ current_user_name }}<span class="role">{{ current_user_role|upper }}</span></div>
-    <div class="ver-chip" title="App version — agar ye purana dikhe to naya ZIP deploy nahi hua">🛰 App v4.46</div>
+    <div class="ver-chip" title="App version — agar ye purana dikhe to naya ZIP deploy nahi hua">🛰 App v4.48</div>
     <div style="display:flex;gap:8px;justify-content:space-between;align-items:center">
       <a class="logout" href="/switch-user" title="Doosre user ke naam par switch karo (login dobara nahi)" style="font-size:11.5px">🔄 Switch</a>
       <a class="logout" href="/logout">Logout ↩</a>
