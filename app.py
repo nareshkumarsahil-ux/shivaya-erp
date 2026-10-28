@@ -1237,9 +1237,31 @@ def compute_layout(p):
                 if panels > mixed_panels:
                     mixed_panels, mixed_n, mixed_m = panels, n, m
 
-    if mixed_panels > normal_panels and mixed_panels > rotated_panels:
+    # v4.44: mixed COLUMNS (vertical strips) — 300x400 on 1000x1200 = 10 (400+300+300 strips)
+    per_cn = int(sheet_w // cutting_w) if cutting_w > 0 else 0
+    per_cr = int(sheet_w // cutting_len) if cutting_len > 0 else 0
+    max_c = int(sheet_len // cutting_len) if cutting_len > 0 else 0
+    max_d = int(sheet_len // cutting_w) if cutting_w > 0 else 0
+    mixedc_panels = mixedc_c = mixedc_d = 0
+    for _c44 in range(max_c + 1):
+        for _d44 in range(max_d + 1):
+            if _c44 == 0 and _d44 == 0:
+                continue
+            _w44 = _c44 * cutting_len + _d44 * cutting_w
+            if _w44 <= sheet_len + 1e-9:
+                _p44 = _c44 * per_cn + _d44 * per_cr
+                if _p44 > mixedc_panels:
+                    mixedc_panels, mixedc_c, mixedc_d = _p44, _c44, _d44
+    mixed_T = 0
+    if mixed_panels > normal_panels and mixed_panels > rotated_panels and mixed_panels >= mixedc_panels:
         best = "mixed"
         panels_per_sheet = mixed_panels
+    elif mixedc_panels > normal_panels and mixedc_panels > rotated_panels:
+        best = "mixed"
+        panels_per_sheet = mixedc_panels
+        mixed_panels = mixedc_panels
+        mixed_n, mixed_m, per_normal, per_rot = mixedc_c, mixedc_d, per_cn, per_cr
+        mixed_T = 1
     elif rotated_panels > normal_panels:
         best, panels_per_sheet = "rotated", rotated_panels
     else:
@@ -1287,7 +1309,7 @@ def compute_layout(p):
         "nx": nx, "ny": ny, "normal_panels": normal_panels,
         "rx": rx, "ry": ry, "rotated_panels": rotated_panels,
         "per_normal": per_normal, "per_rot": per_rot,
-        "mixed_n": mixed_n, "mixed_m": mixed_m, "mixed_panels": mixed_panels,
+        "mixed_n": mixed_n, "mixed_m": mixed_m, "mixed_panels": mixed_panels, "mixed_T": mixed_T,
         "best": best, "grid_x": grid_x, "grid_y": grid_y,
         "cell_len": cell_len, "cell_w": cell_w,
         "gang_len": gang_len, "gang_w": gang_w,
@@ -1328,8 +1350,13 @@ def _model_cut_calc(m):
     # v4.42: P1 hamesha cutting-len (48) side ka count, P2 cutting-w (40) — rotated fit me grid swap
     _gx42, _gy42 = int(r.get("grid_x") or 0), int(r.get("grid_y") or 0)
     _best42 = r.get("best") or ""
-    _xq42 = (_gy42 if _best42 == "rotated" else _gx42)
-    _yq42 = (_gx42 if _best42 == "rotated" else _gy42)
+    if _best42 == "mixed":
+        # v4.45: MIXED layout — P1 = normal panels, P2 = rotated panels (10 = 6 + 4R)
+        _xq42 = int(r.get("mixed_n") or 0) * int(r.get("per_normal") or 0)
+        _yq42 = int(r.get("mixed_m") or 0) * int(r.get("per_rot") or 0)
+    else:
+        _xq42 = (_gy42 if _best42 == "rotated" else _gx42)
+        _yq42 = (_gx42 if _best42 == "rotated" else _gy42)
     return {"cutting_len": float(r.get("cutting_len") or 0),
             "cutting_w": float(r.get("cutting_w") or 0),
             "x_qty": _xq42, "y_qty": _yq42,
@@ -1798,7 +1825,23 @@ def svg_sheet_preview(r):
     kx, ky = r["kerf_x"] * scale, r["kerf_y"] * scale
     s = [f'<svg viewBox="0 0 {W} {H}" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;display:block">']
     s.append(f'<rect x="{x0:.1f}" y="{y0:.1f}" width="{S:.1f}" height="{T:.1f}" fill="#fffdf5" stroke="#b3ac99" stroke-width="2"/>')
-    if r["best"] == "mixed":
+    if r["best"] == "mixed" and r.get("mixed_T"):
+        # v4.44: mixed COLUMNS — vertical strips (normal strips pehle, phir rotated)
+        x = x0
+        for _col in range(r["mixed_n"]):
+            cl44, cw44 = r["cutting_len"] * scale, r["cutting_w"] * scale
+            for i in range(r["per_normal"]):
+                _svg_gang(s, x, y0 + i * cw44, cl44, cw44, gx, gy, kx, ky, "#d2e8e9", "#16324f", 1.4)
+            x += cl44
+        for _col in range(r["mixed_m"]):
+            cl44b, cw44b = r["cutting_w"] * scale, r["cutting_len"] * scale
+            for i in range(r["per_rot"]):
+                _svg_gang(s, x, y0 + i * cw44b, cl44b, cw44b, gx, gy, kx, ky, "#e4f2f3", "#2ba7b5", 1.4)
+            x += cl44b
+        cap = (f"Sheet {sl:.2f}\u00d7{sw:.2f} mm \u00b7 {r['mixed_n']}\u00d7 col of {r['per_normal']} + "
+               f"{r['mixed_m']}\u00d7 col of {r['per_rot']} = {r['panels_per_sheet']} panels \u00b7 "
+               f"{r['pcs_per_sheet']} PCS \u00b7 {r['wastage']}% waste")
+    elif r["best"] == "mixed":
         # normal rows (amber) then rotated rows (blue)
         y = y0
         for _row in range(r["mixed_n"]):
@@ -1972,7 +2015,12 @@ def svg_sheet_layout_preview(r):
     s.append(f'<rect x="{x0:.1f}" y="{y0:.1f}" width="{S:.1f}" height="{T:.1f}" fill="#fffdf5" stroke="#b3ac99" stroke-width="2"/>')
     # v2.62 \u2014 axis-wise USE + WASTE breakdown (red strips + USE/WASTE labels)
     kx_m, ky_m = r["kerf_x"], r["kerf_y"]
-    if r["best"] == "mixed":
+    if r["best"] == "mixed" and r.get("mixed_T"):
+        used_x = r["mixed_n"] * r["cutting_len"] + r["mixed_m"] * r["cutting_w"]
+        _un44 = r["per_normal"] * r["cutting_w"] if r["mixed_n"] else 0
+        _ur44 = r["per_rot"] * r["cutting_len"] if r["mixed_m"] else 0
+        used_y = max(_un44, _ur44) if (_un44 or _ur44) else 0
+    elif r["best"] == "mixed":
         _un = r["per_normal"] * r["cutting_len"] if r["per_normal"] and r["mixed_n"] else 0
         _ur = r["per_rot"] * r["cutting_w"] if r["per_rot"] and r["mixed_m"] else 0
         used_x = max(_un, _ur)
@@ -2049,7 +2097,31 @@ def svg_sheet_layout_preview(r):
             _nx, _ny = cx + cl / 2 + 3.5, cy + cw / 2
             s.append(f'<text x="{_nx:.1f}" y="{_ny:.1f}" transform="rotate(-90 {_nx:.1f} {_ny:.1f})" text-anchor="middle" font-size="10" font-weight="800" fill="{stroke}" font-family="Segoe UI,Arial">#{num}</text>')
 
-    if r["best"] == "mixed":
+    if r["best"] == "mixed" and r.get("mixed_T"):
+        num = 1
+        x = x0
+        for _col in range(r["mixed_n"]):
+            cl44, cw44 = r["cutting_len"] * scale, r["cutting_w"] * scale
+            for i in range(r["per_normal"]):
+                _panel_cell(x, y0 + i * cw44, cl44, cw44, num, "#eef2ff", "#6366f1", r["gang_len"], r["gang_w"])
+                num += 1
+            x += cl44
+        cl244, cw244 = r["cutting_w"] * scale, r["cutting_len"] * scale
+        for _col in range(r["mixed_m"]):
+            for i in range(r["per_rot"]):
+                _panel_cell(x, y0 + i * cw244, cl244, cw244, num, "#fdf4ff", "#c026d3", r["gang_w"], r["gang_len"], rot=True)
+                num += 1
+            x += cl244
+        if r["gang_active"]:
+            cap = (f"1 SHEET {sl:.0f}x{sw:.0f} mm \u2190 GANG PANEL {r['gang_len']:g}x{r['gang_w']:g} mm \u00b7 {r['pcs_unit']} PCB \u2192 "
+                   f"CUTTING PANEL {r['cutting_len']:g}x{r['cutting_w']:g} mm (CNC margin ke baad) = "
+                   f"{r['panels_per_sheet']} CUTTING PANELS "
+                   f"({r['mixed_n']}x col {r['per_normal']} + {r['mixed_m']}x col {r['per_rot']}) = {r['pcs_per_sheet']} PCB")
+        else:
+            cap = (f"1 SHEET {sl:.0f}x{sw:.0f} mm \u2190 PANEL {r['panel_len']:g}x{r['panel_w']:g} mm = "
+                   f"{r['panels_per_sheet']} PANELS "
+                   f"({r['mixed_n']}x col {r['per_normal']} + {r['mixed_m']}x col {r['per_rot']}) = {r['pcs_per_sheet']} PCS")
+    elif r["best"] == "mixed":
         num = 1
         y = y0
         cl, cw = r["cutting_len"] * scale, r["cutting_w"] * scale
@@ -2068,11 +2140,11 @@ def svg_sheet_layout_preview(r):
             cap = (f"1 SHEET {sl:.0f}x{sw:.0f} mm \u2190 GANG PANEL {r['gang_len']:g}x{r['gang_w']:g} mm \u00b7 {r['pcs_unit']} PCB \u2192 "
                    f"CUTTING PANEL {r['cutting_len']:g}x{r['cutting_w']:g} mm (CNC margin ke baad) = "
                    f"{r['panels_per_sheet']} CUTTING PANELS "
-                   f"({r['mixed_n']}x row {r['per_normal']} + {r['mixed_m']}x row {r['per_rot']}) = {r['pcs_per_sheet']} PCB")
+                   f"({r['mixed_n']}x {'col' if r.get('mixed_T') else 'row'} {r['per_normal']} + {r['mixed_m']}x {'col' if r.get('mixed_T') else 'row'} {r['per_rot']}) = {r['pcs_per_sheet']} PCB")
         else:
             cap = (f"1 SHEET {sl:.0f}x{sw:.0f} mm \u2190 PANEL {r['panel_len']:g}x{r['panel_w']:g} mm = "
                    f"{r['panels_per_sheet']} PANELS "
-                   f"({r['mixed_n']}x row {r['per_normal']} + {r['mixed_m']}x row {r['per_rot']}) = {r['pcs_per_sheet']} PCS")
+                   f"({r['mixed_n']}x {'col' if r.get('mixed_T') else 'row'} {r['per_normal']} + {r['mixed_m']}x {'col' if r.get('mixed_T') else 'row'} {r['per_rot']}) = {r['pcs_per_sheet']} PCS")
     else:
         cl, cw = r["cell_len"] * scale, r["cell_w"] * scale
         num = 1
@@ -2265,8 +2337,13 @@ def cutlist():
             _ensure_actual37()   # v4.38: ACTUAL PANEL SIZE columns guaranteed (self-heal)
             # v4.40: P1 hamesha CUTTING-LEN (48) wali side ka count, P2 CUTTING-W (40) wali —
             # rotated fit me engine grid_x ko sheet-len par cutting_w footprint ke saath ginta hai, isliye swap
-            _xq40 = (result["grid_y"] if (result.get("best") == "rotated") else result["grid_x"])
-            _yq40 = (result["grid_x"] if (result.get("best") == "rotated") else result["grid_y"])
+            if result.get("best") == "mixed":
+                # v4.45: MIXED layout — P1 = normal panels ka total, P2 = rotated panels ka total
+                _xq40 = int(result.get("mixed_n") or 0) * int(result.get("per_normal") or 0)
+                _yq40 = int(result.get("mixed_m") or 0) * int(result.get("per_rot") or 0)
+            else:
+                _xq40 = (result["grid_y"] if (result.get("best") == "rotated") else result["grid_x"])
+                _yq40 = (result["grid_x"] if (result.get("best") == "rotated") else result["grid_y"])
             # PCB PRICE + PER SQ.INCH — AREA = PANEL (cutting) size ÷ PCS/panel (PCB size nahi)
             pm_price = pm_rs = None
             cl_price = (f.get("pcb_price") or "").strip()
@@ -2315,7 +2392,7 @@ def cutlist():
                         "panel_len=?, panel_w=?, cutting_len=?, cutting_w=?, kerf_x=?, kerf_y=?, orientation=?, "
                         "pcs_panel=?, panels_sheet=?, actual_len=?, actual_w=?, actual_ups=?, sheets=?, "
                         "x_qty=?, y_qty=?, cnc_margin_x=?, cnc_margin_y=?, "
-                        "pcb_price=?, per_sq_inch=?, gaps_x=?, gaps_y=?, sheet_thickness=?, note=?, "
+                        "pcb_price=?, per_sq_inch=?, gaps_x=?, gaps_y=?, pgaps_x=?, pgaps_y=?, sheet_thickness=?, note=?, "
                         "pcb_code=COALESCE(NULLIF(?, ''), pcb_code), party_code=COALESCE(NULLIF(?, ''), party_code), "
                         "party_name=COALESCE(NULLIF(?, ''), party_name), "
                         "model_code=COALESCE(NULLIF(?, ''), model_code), shape=? WHERE id=?",
@@ -2333,6 +2410,8 @@ def cutlist():
                          up_price, up_rs,
                          ",".join(f"{g:g}" for g in result["gaps_x"]),
                          ",".join(f"{g:g}" for g in result["gaps_y"]),
+                         ",".join(f"{g:g}" for g in result["pgaps_x"]) if result.get("pgaps_x") else "",
+                         ",".join(f"{g:g}" for g in result["pgaps_y"]) if result.get("pgaps_y") else "",
                          (f.get("sheet_thickness") or "").strip(), (f.get("note_desc") or "").strip(),
                          (f.get("pcb_code") or "").strip(), (f.get("party_code") or "").strip(),
                          (f.get("party_name") or "").strip(),
@@ -2364,8 +2443,9 @@ def cutlist():
                     "cutting_len, cutting_w, kerf_x, kerf_y, orientation, pcs_panel, panels_sheet, "
                     "actual_len, actual_w, actual_ups, sheets, "
                     "x_qty, y_qty, cnc_margin_x, cnc_margin_y, pcb_price, per_sq_inch, gaps_x, gaps_y, "
+                    "pgaps_x, pgaps_y, "
                     "sheet_thickness, note, pcb_code, party_code, party_name, model_code, shape, created_on) "
-                    "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                     (name, result["pcb_len"], result["pcb_w"], result["pcbs_x"], result["pcbs_y"],
                      result["gap_x"], result["gap_y"],
                      result["border_l"], result["border_r"], result["border_t"], result["border_b"],
@@ -2380,6 +2460,8 @@ def cutlist():
                      pm_price or 0, pm_rs or 0,
                      ",".join(f"{g:g}" for g in result["gaps_x"]),
                      ",".join(f"{g:g}" for g in result["gaps_y"]),
+                     ",".join(f"{g:g}" for g in result["pgaps_x"]) if result.get("pgaps_x") else "",
+                     ",".join(f"{g:g}" for g in result["pgaps_y"]) if result.get("pgaps_y") else "",
                      (f.get("sheet_thickness") or "").strip(), (f.get("note_desc") or "").strip(),
                      (f.get("pcb_code") or "").strip(), (f.get("party_code") or "").strip(),
                      (f.get("party_name") or "").strip(), _mc,
@@ -2543,6 +2625,7 @@ def cutlist():
     # GET
     q = request.args
     if load_model_id:
+        _ensure_actual37()   # v4.45: pgaps columns load se pehle guaranteed (purana db bhi)
         try:
             model = db.query("SELECT * FROM product_models WHERE id=?", (int(load_model_id),), one=True)
             if model:
@@ -2554,7 +2637,8 @@ def cutlist():
                 for k in FIELD_KEYS:
                     val = model[k] if k in model.keys() and model[k] is not None else ""
                     # 0 values ko KHAALI chhodo — '0.0' likha user ko blank hi dikhna chahiye
-                    if val in (0, 0.0) or str(val) in ("0", "0.0"):
+                    # v4.45: pgaps exception — '0'/'0,2,0' joint gaps KEEMAT ke hain, blank nahi
+                    if k not in ("pgaps_x", "pgaps_y") and (val in (0, 0.0) or str(val) in ("0", "0.0")):
                         val = ""
                     fields[k] = str(val)
                 has_pcb = (model["pcb_len"] or 0) > 0 and (model["pcb_w"] or 0) > 0
@@ -5183,6 +5267,11 @@ def _ensure_actual37():
             db.execute("ALTER TABLE product_models ADD COLUMN actual_w REAL DEFAULT 0")
         if "actual_ups" not in _h37:
             db.execute("ALTER TABLE product_models ADD COLUMN actual_ups INTEGER DEFAULT 0")
+        # v4.45: PANEL-TO-PANEL joint gaps (gang) ka round-trip — SCPL-480 jaisa 0,2,0 load par wapas
+        if "pgaps_x" not in _h37:
+            db.execute("ALTER TABLE product_models ADD COLUMN pgaps_x TEXT DEFAULT ''")
+        if "pgaps_y" not in _h37:
+            db.execute("ALTER TABLE product_models ADD COLUMN pgaps_y TEXT DEFAULT ''")
     except Exception:
         pass
 

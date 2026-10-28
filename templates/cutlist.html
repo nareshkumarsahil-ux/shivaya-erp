@@ -924,8 +924,25 @@ function computeLive(){
       }
     }
 
+  /* v4.44: mixed COLUMNS (vertical strips) — 300x400 on 1000x1200 = 10 */
+  var perCN = Math.floor(sw / gw);
+  var perCR = Math.floor(sw / gl);
+  var maxC = gl > 0 ? Math.floor(sl / gl) : 0;
+  var maxD = gw > 0 ? Math.floor(sl / gw) : 0;
+  var mixedC = 0, cC = 0, cD = 0;
+  for (var c44 = 0; c44 <= maxC; c44++)
+    for (var d44 = 0; d44 <= maxD; d44++) {
+      if (c44 === 0 && d44 === 0) continue;
+      var w44 = c44 * gl + d44 * gw;
+      if (w44 <= sl + 1e-9) {
+        var p44 = c44 * perCN + d44 * perCR;
+        if (p44 > mixedC) { mixedC = p44; cC = c44; cD = d44; }
+      }
+    }
+  var mT = 0;
   var best, pps;
-  if (mixed > normal && mixed > rotated) { best = 'mixed'; pps = mixed; }
+  if (mixed > normal && mixed > rotated && mixed >= mixedC) { best = 'mixed'; pps = mixed; }
+  else if (mixedC > normal && mixedC > rotated) { best = 'mixed'; pps = mixedC; mixed = mixedC; mN = cC; mM = cD; perN = perCN; perR = perCR; mT = 1; }
   else if (rotated > normal) { best = 'rotated'; pps = rotated; }
   else { best = 'normal'; pps = normal; }
 
@@ -967,8 +984,8 @@ function computeLive(){
   sl2.style.display = 'block';
   var gangPre = gangActive ? '<b>GANG ' + fmtNum(gangL) + ' × ' + fmtNum(gangW) + ' mm · ' + pcsUnit + ' PCB \u2192 CUT ' + fmtNum(gl) + '×' + fmtNum(gw) + ' mm</b> · ' : '';
   if (best === 'mixed') {
-    sl2.innerHTML = '→ ' + gangPre + '<b>Mixed: ' + mN + ' × row of ' + perN + ' (normal) + ' + mM +
-                    ' × row of ' + perR + ' (rotated) = ' + pps + ' panels/sheet · ' + pcsSheet + ' PCS</b>';
+    sl2.innerHTML = '→ ' + gangPre + '<b>Mixed ' + (mT ? 'Cols' : 'Rows') + ': ' + mN + ' × ' + (mT ? 'col' : 'row') + ' of ' + perN + ' (normal) + ' + mM +
+                    ' × ' + (mT ? 'col' : 'row') + ' of ' + perR + ' (rotated) = ' + pps + ' panels/sheet · ' + pcsSheet + ' PCS</b>';
   } else {
     sl2.innerHTML = '→ ' + gangPre + '<b>Sheet Length: ' + gx2 + ' panels · Sheet Width: ' + gy2 +
                     ' panels · Total: ' + pps + ' panels/sheet · ' + pcsSheet + ' PCS/sheet</b>';
@@ -981,7 +998,7 @@ function computeLive(){
   document.getElementById('statWaste').textContent = waste + '%';
   document.getElementById('statWaste').style.color = (waste <= 35) ? '#16a34a' : '#d97706';
   document.getElementById('statLayout').textContent =
-    (best === 'mixed') ? 'Mixed Rows (Best)' : (best === 'rotated') ? 'Rotated 90°' : 'Normal';
+    (best === 'mixed') ? (mT ? 'Mixed Cols (Best)' : 'Mixed Rows (Best)') : (best === 'rotated') ? 'Rotated 90°' : 'Normal';
   var bpl = document.getElementById('bestPanelsLabel');
   if (bpl) bpl.textContent = '🏆 BEST LAYOUT (' + pps + ' PANELS)';
 
@@ -1054,7 +1071,7 @@ function computeLive(){
     var slh = document.getElementById('sheetLayoutHead');
     if (slh) slh.textContent = gangActive ? '📐 GANG PANEL IN SHEET — 1 SHEET ME KITNE GANG PANELS' : '📐 PANEL IN SHEET — 1 SHEET ME KITNE PANELS';
     document.getElementById('svgSheetLayout').innerHTML =
-      svgSheetLayout(sl, sw, cl, cw, gx2, gy2, gx, gy, kx, ky, pps, best, mN, mM, perN, perR, gl, gw, pcsUnit, shape, pcbL, pcbW, px, py, gangL, gangW);
+      svgSheetLayout(sl, sw, cl, cw, gx2, gy2, gx, gy, kx, ky, pps, best, mN, mM, perN, perR, gl, gw, pcsUnit, shape, pcbL, pcbW, px, py, gangL, gangW, mT);
     _zApply('svgSheetLayout');
   }
 
@@ -1273,7 +1290,15 @@ function svgSheet(sl, sw, cl, cw, gx2, gy2, gx, gy, kx, ky, pps, waste, best, mN
           s += '<rect x="' + (cx + a*(p+Kx)).toFixed(1) + '" y="' + (cy + b*(q+Ky)).toFixed(1) + '" width="' + p.toFixed(1) + '" height="' + q.toFixed(1) + '" fill="#e4f2f3" stroke="#2ba7b5" stroke-width="0.7"/>';
     }
   }
-  if (best === 'mixed') {
+  if (best === 'mixed' && mT) {
+    var x = x0;
+    var Cl1 = gl * scale, Cw1 = gw * scale;
+    for (i = 0; i < mN; i++) { for (j = 0; j < perN; j++) gangCell(x, y0 + j * Cw1, Cl1, Cw1, '#dcfce7', '#16a34a'); x += Cl1; }
+    var Cl2 = gw * scale, Cw2 = gl * scale;
+    for (i = 0; i < mM; i++) { for (j = 0; j < perR; j++) gangCell(x, y0 + j * Cw2, Cl2, Cw2, '#bfdbfe', '#2563eb'); x += Cl2; }
+    s += '<text x="' + (W/2) + '" y="' + (H-6) + '" text-anchor="middle" font-size="12.5" fill="#8a8f98" font-family="Segoe UI,Arial"><tspan fill="#16a34a" font-weight="700">Normal cols</tspan> · <tspan fill="#2563eb" font-weight="700">Rotated cols</tspan> — ' +
+         mN + '× col of ' + perN + ' + ' + mM + '× col of ' + perR + ' = ' + pps + ' panels · ' + waste + '% waste</text>';
+  } else if (best === 'mixed') {
     var y = y0;
     var Cl = gl * scale, Cw = gw * scale;
     for (i = 0; i < mN; i++) {
@@ -1307,7 +1332,7 @@ function svgSheet(sl, sw, cl, cw, gx2, gy2, gx, gy, kx, ky, pps, waste, best, mN
 /* ---- 📐 PANEL IN SHEET (live mirror) — gang ho to CUTTING PANEL fit, warna PANEL ----
    Poori sheet ke andar numbered panels + har panel ka andar single-PCB grid + caption
    batata hai kaunsa panel fit hua (size ke saath) aur 1 sheet me kitne aate hai. ---- */
-function svgSheetLayout(sl, sw, cl, cw, gx2, gy2, gx, gy, kx, ky, pps, best, mN, mM, perN, perR, gl, gw, pcsUnit, shape, pcbL, pcbW, px, py, ggl, ggw){
+function svgSheetLayout(sl, sw, cl, cw, gx2, gy2, gx, gy, kx, ky, pps, best, mN, mM, perN, perR, gl, gw, pcsUnit, shape, pcbL, pcbW, px, py, ggl, ggw, mT){
     /* v3.59 fix \u2014 ggl/ggw = GANG PANEL mm (margin NAHI); purane caller ke liye cutting par fallback */
     var _GGL = (typeof ggl === 'number' && ggl > 0) ? ggl : gl, _GGW = (typeof ggw === 'number' && ggw > 0) ? ggw : gw;
   shape = shape || 'rect';   /* v3.21 — sheet layout me bhi PCB shape same */
@@ -1319,7 +1344,10 @@ function svgSheetLayout(sl, sw, cl, cw, gx2, gy2, gx, gy, kx, ky, pps, best, mN,
   cl = cl * scale; cw = cw * scale;
   /* v2.62 \u2014 axis-wise USE + WASTE (mm) \u2014 sheet ke andar kitna use hua, kitna jali */
   var clMM = cl / scale, cwMM = cw / scale, uxMM = 0, uyMM = 0;
-  if (best === 'mixed') {
+  if (best === 'mixed' && mT) {
+    uxMM = mN * gl + mM * gw;
+    uyMM = Math.max(mN ? perN * gw : 0, mM ? perR * gl : 0);
+  } else if (best === 'mixed') {
     var _un = (perN && mN) ? perN * gl : 0;
     var _ur = (perR && mM) ? perR * gw : 0;
     uxMM = Math.max(_un, _ur);
@@ -1393,7 +1421,13 @@ function svgSheetLayout(sl, sw, cl, cw, gx2, gy2, gx, gy, kx, ky, pps, best, mN,
     }
   }
   var cap, num, y, i;
-  if (best === 'mixed') {
+  if (best === 'mixed' && mT) {
+    num = 1; var xT = x0;
+    for (var cN = 0; cN < mN; cN++) { for (i = 0; i < perN; i++) { cell(xT, y0 + i*cw, cl, cw, num, '#eef2ff', '#6366f1'); num++; } xT += cl; }
+    for (var cM = 0; cM < mM; cM++) { for (i = 0; i < perR; i++) { cell(xT, y0 + i*cl, cw, cl, num, '#fdf4ff', '#c026d3', true); num++; } xT += cw; }
+    cap = '1 SHEET ' + fmtNum(sl) + 'x' + fmtNum(sw) + ' mm \u2190 ' + (gang ? 'GANG PANEL ' + fmtNum(_GGL) + 'x' + fmtNum(_GGW) + ' mm \u00b7 ' + pcsUnit + ' PCB \u2192 CUTTING PANEL ' + fmtNum(gl) + 'x' + fmtNum(gw) + ' mm (CNC margin ke baad)' : ptype + ' ' + fmtNum(cl) + 'x' + fmtNum(cw) + ' mm') +
+          ' = ' + pps + (gang ? ' CUTTING PANELS (' : ' ' + ptype + 'S (') + mN + 'x col ' + perN + ' + ' + mM + 'x col ' + perR + ') = ' + fmtNum(pps * pcsUnit) + (gang ? ' PCB' : ' PCS');
+  } else if (best === 'mixed') {
     num = 1; y = y0;
     for (var rN = 0; rN < mN; rN++) { for (i = 0; i < perN; i++) { cell(x0 + i*cl, y, cl, cw, num, '#eef2ff', '#6366f1'); num++; } y += cw; }
     var cl2 = cw, cw2 = cl;
