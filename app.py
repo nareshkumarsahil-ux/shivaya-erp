@@ -1320,10 +1320,17 @@ def _model_cut_calc(m):
     _gq = max(1, int(m.get("gang_y") or 1))
     _pp = int(m.get("pcs_panel") or 0)
     _unit = _pp * _gp * _gq if _pp else int(r.get("pcs_unit") or 0)
+    # v4.42: P1 hamesha cutting-len (48) side ka count, P2 cutting-w (40) — rotated fit me grid swap
+    _gx42, _gy42 = int(r.get("grid_x") or 0), int(r.get("grid_y") or 0)
+    _best42 = r.get("best") or ""
+    _xq42 = (_gy42 if _best42 == "rotated" else _gx42)
+    _yq42 = (_gx42 if _best42 == "rotated" else _gy42)
     return {"cutting_len": float(r.get("cutting_len") or 0),
             "cutting_w": float(r.get("cutting_w") or 0),
-            "x_qty": int(r.get("grid_x") or 0), "y_qty": int(r.get("grid_y") or 0),
-            "ups": _unit, "pps": int(r.get("panels_per_sheet") or 0)}
+            "x_qty": _xq42, "y_qty": _yq42,
+            "ups": _unit, "pps": int(r.get("panels_per_sheet") or 0),
+            "best": _best42,
+            "panels_sheet": int(r.get("panels_per_sheet") or 0)}
 
 
 def svg_panel_preview(r):
@@ -5177,7 +5184,7 @@ def _ensure_actual37():
 def sheet_calc_cut97():
     """v4.27 — SAB models ka CUTTING SIZE (4A/N/4B/N) + UPS GANG engine se recalc,
     DB write-back (PO/jobcard bhi sahi panels_sheet uthayenge). Data kam wale skip."""
-    upd, skip = 0, 0
+    upd, skip, rot = 0, 0, 0
     for m in db.query("SELECT * FROM product_models"):
         c = _model_cut_calc(dict(m))
         if not c or not c["x_qty"] or not c["y_qty"] or not c["ups"]:
@@ -5185,8 +5192,10 @@ def sheet_calc_cut97():
             continue
         db.execute("UPDATE product_models SET cutting_len=?, cutting_w=?, x_qty=?, y_qty=?, panels_sheet=?, cut_manual=0 WHERE id=?",
                    (c["cutting_len"], c["cutting_w"], c["x_qty"], c["y_qty"], c["pps"], m["id"]))
+        if c.get("best") == "rotated":
+            rot += 1
         upd += 1
-    return jsonify(ok=True, updated=upd, skipped=skip)
+    return jsonify(ok=True, updated=upd, skipped=skip, rotated=rot)
 
 
 @app.route("/api/products/sheet/sheet_ops", methods=["POST"])

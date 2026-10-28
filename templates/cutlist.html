@@ -116,7 +116,16 @@
 <div class="grid2 cl-main">
   <!-- ============ LEFT: stats + previews (v3.62 swap — preview ko zyada space) ============ -->
   <div class="clColPrev">
-    <div class="cards cl-stats" style="grid-template-columns:repeat(auto-fill,minmax(130px,1fr))">
+    <style>
+      /* v4.41: 6 stat boxes CHHOTE + EK LINE me — preview upar aur bada dikhega */
+      .cl-stats{grid-template-columns:repeat(6,minmax(0,1fr))!important;gap:8px;margin-bottom:10px}
+      .cl-stats .stat{padding:7px 10px;border-radius:9px}
+      .cl-stats .stat .top{margin-bottom:2px}
+      .cl-stats .stat .lbl{font-size:9.5px;letter-spacing:.2px}
+      .cl-stats .stat .num{font-size:15px}
+      @media(max-width:1000px){.cl-stats{grid-template-columns:repeat(3,minmax(0,1fr))!important}}
+    </style>
+    <div class="cards cl-stats">
       <div class="stat"><div class="top"><span class="lbl">Panels/Sheet</span></div><div class="num" id="statPPS">0</div></div>
       <div class="stat"><div class="top"><span class="lbl">Total Panels</span></div><div class="num" id="statTP">0</div></div>
       <div class="stat"><div class="top"><span class="lbl">PCS/Sheet</span></div><div class="num" id="statPCS">0</div></div>

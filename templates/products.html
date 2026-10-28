@@ -702,7 +702,7 @@
       .then(function(r){ return r.json(); })
       .then(function(d){
         btn.disabled = false;
-        if (d.ok){ toast18(d.updated + ' models recalc ho gaye' + (d.skipped ? ' (' + d.skipped + ' skip — panel/sheet data kam)' : '')); setTimeout(function(){ location.reload(); }, 900); }
+        if (d.ok){ toast18(d.updated + ' models recalc ho gaye' + (d.rotated ? ' \u2022 ' + d.rotated + ' ROTATED fit (P1=48 side, P2=40 side sahi pair)' : '') + (d.skipped ? ' (' + d.skipped + ' skip — panel/sheet data kam)' : '')); setTimeout(function(){ location.reload(); }, 900); }
         else toast18(d.error || 'Cut Calc fail', true);
       }).catch(function(){ btn.disabled = false; toast18('Cut Calc fail', true); });
   });
