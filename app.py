@@ -1091,6 +1091,7 @@ FIELD_KEYS = ["pcb_len", "pcb_w", "pcbs_x", "pcbs_y", "gap_x", "gap_y",
               "gang_x", "gang_y", "sheet_len", "sheet_w", "kerf_x", "kerf_y", "sheets", "use",
               "panel_len", "panel_w", "panel_base_len", "panel_base_w",
               "per_sq_inch", "pcb_price", "gaps_x", "gaps_y", "pgaps_x", "pgaps_y", "order_qty",
+              "cut_ov_len", "cut_ov_w",
               "pcb_code", "party_code", "party_name", "model_code", "shape", "sheet_thickness"]
 DEFAULTS = {"pcb_len": "40", "pcb_w": "50", "pcbs_x": "10", "pcbs_y": "5",
             "gap_x": "0", "gap_y": "0",
@@ -1198,6 +1199,10 @@ def compute_layout(p):
         gang_len, gang_w = panel_len, panel_w
     # CUTTING SIZE = GANG + 2×CNC MARGIN — sirf PANEL IN SHEET me yahi fit/show hota hai
     cutting_len, cutting_w = _cut_add(gang_len, gang_w)
+    # v4.43: MASTER CUTTING SIZE LOCK — SIZE MASTER ka saved cutting AS-IS (Load par CNC margin dobara nahi)
+    _ov43l, _ov43w = _f(p, "cut_ov_len"), _f(p, "cut_ov_w")
+    if _ov43l > 0 and _ov43w > 0:
+        cutting_len, cutting_w = _ov43l, _ov43w
 
     def fits(unit_l, unit_w):
         if unit_l <= 0 or unit_w <= 0:
@@ -2554,6 +2559,10 @@ def cutlist():
                     fields[k] = str(val)
                 has_pcb = (model["pcb_len"] or 0) > 0 and (model["pcb_w"] or 0) > 0
                 fields["use"] = "1" if has_pcb else ""
+                # v4.43: MASTER CUTTING SIZE LOCK — load par sheet layout me saved cutting hi dikhe
+                if (model["cutting_len"] or 0) > 0 and (model["cutting_w"] or 0) > 0:
+                    fields["cut_ov_len"] = f"{model['cutting_len']:g}"
+                    fields["cut_ov_w"] = f"{model['cutting_w']:g}"
                 # PCBs grid khaali ho par PCS/Panel (UP) ho -> 1 row mein count set karo
                 if (model["pcbs_x"] or 0) <= 0 and (model["pcbs_y"] or 0) <= 0 and (model["pcs_panel"] or 0) > 0:
                     fields["pcbs_x"] = str(model["pcs_panel"])

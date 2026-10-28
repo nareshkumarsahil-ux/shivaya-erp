@@ -397,6 +397,24 @@
           <div class="field" style="flex:1"><label>NO. OF SHEETS</label><input type="number" name="sheets" id="sheets" value="{{ fields.sheets }}" min="1"></div>
           <div class="field" style="flex:1"><label>ORDER QTY (PANELS)</label><input type="number" name="order_qty" id="order_qty" value="{{ fields.get('order_qty') or '' }}" min="0" placeholder="jaise 350"></div>
         </div>
+        <label class="small" style="display:flex;align-items:center;gap:6px;margin-bottom:12px;cursor:pointer">
+          <input type="checkbox" id="cutLockChk" {{ 'checked' if fields.get('cut_ov_len') }} style="accent-color:var(--amber)">
+          <b>&#128274; MASTER CUTTING SIZE LOCK</b>
+          <span class="muted">Sheet layout me wahi cutting size rahega jo SIZE MASTER me saved hai — CNC margin dobara nahi judta (Load par khud ON).</span>
+        </label>
+        <input type="hidden" name="cut_ov_len" id="cut_ov_len" value="{{ fields.get('cut_ov_len') or '' }}">
+        <input type="hidden" name="cut_ov_w" id="cut_ov_w" value="{{ fields.get('cut_ov_w') or '' }}">
+        <script>
+        (function(){
+          var ck = document.getElementById('cutLockChk'), hl = document.getElementById('cut_ov_len'), hw = document.getElementById('cut_ov_w');
+          if (!ck || !hl || !hw) return;
+          function sync(){
+            if (ck.checked){ if (!hl.value || !hw.value){ hl.value = hl.dataset.v || ''; hw.value = hw.dataset.v || ''; } }
+            else { hl.dataset.v = hl.value; hw.dataset.v = hw.value; hl.value = ''; hw.value = ''; }
+          }
+          ck.addEventListener('change', sync);
+        })();
+        </script>
         <div class="result-line" id="liveSheetLine" style="display:none"></div>
         <div style="display:flex;gap:10px;margin-top:14px">
           <button class="btn" type="submit" name="action" value="calculate">⚙️ Calculate / Refresh</button>
